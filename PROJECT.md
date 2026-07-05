@@ -24,14 +24,14 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 - **Windows/macOS Docker Desktop path is untested** end-to-end (the CLI itself runs on Windows; the stack has only been e2e-tested on Linux).
 - **BYO-homeserver mode is implemented but not yet tested** against a real external homeserver.
 - **The memory service has no authentication**, so it is never exposed publicly; remote agents get Matrix but need an SSH tunnel (or to run on the hub server) for shared memory.
-- **Agents are poll-based.** Nothing pushes messages to an agent; each agent checks rooms on wake-up or on a schedule its operator configures. A wake-on-mention notifier is on the roadmap.
+- **Agents are poll-based by default.** Each agent checks rooms on wake-up or on a schedule its operator configures. For event-driven behavior, `hearth notify <agent> --exec "<command>"` long-polls the server and fires a command (e.g. a headless agent session) the moment the agent is @-mentioned — see docs/AGENT-ONBOARDING.md.
 
 ## Roadmap
 
 1. E2E-test the Docker Desktop (Windows/macOS) and BYO-homeserver paths.
 2. Publish the CLI as `npx create-hearth` for one-command install.
 3. Memory-service authentication → expose it safely, giving remote agents shared memory.
-4. Wake-on-mention notifier so agent collaboration is event-driven rather than poll-based.
+4. Notifier hardening: run `hearth notify` as a managed service, multi-agent watch, direct-message triggers.
 5. Native packaged installers.
 
 ## Layout

@@ -439,6 +439,71 @@ Then: hearth agent add <name>, hearth user add <name>, hearth status.`);
   }
 }
 
+// Long-poll /sync as the agent; when someone mentions it, run a command.
+// This is what turns the "mailbox" into a "phone that rings".
+async function cmdNotify(name, rest) {
+  const agentEnv = readEnvFile(path.join(SECRETS, "agents", `${name}.env`));
+  if (!agentEnv.MATRIX_ACCESS_TOKEN) die(`no credentials for '${name}' — run: hearth agent add ${name}`);
+  const execIdx = rest.indexOf("--exec");
+  const command = execIdx >= 0 ? rest.slice(execIdx + 1).join(" ") : null;
+
+  const base = agentEnv.MATRIX_HOMESERVER_URL.replace(/\/$/, "");
+  const uid = agentEnv.MATRIX_USER_ID;
+  const localpart = uid.slice(1).split(":")[0];
+  const mentionRe = new RegExp(`@${localpart}\\b`, "i");
+
+  async function syncOnce(since) {
+    const url = new URL(`${base}/_matrix/client/v3/sync`);
+    if (since) {
+      url.searchParams.set("since", since);
+      url.searchParams.set("timeout", "30000");
+    } else {
+      // First sync: only fetch a token so we react to NEW messages, not history.
+      url.searchParams.set("filter", JSON.stringify({ room: { timeline: { limit: 1 } } }));
+    }
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${agentEnv.MATRIX_ACCESS_TOKEN}` } });
+    if (!res.ok) throw new Error(`sync HTTP ${res.status}`);
+    return res.json();
+  }
+
+  console.log(`👂 ${uid} listening for mentions ("@${localpart}") — Ctrl+C to stop`);
+  if (command) console.log(`   on mention → ${command}`);
+  let since = (await syncOnce(null)).next_batch;
+  for (;;) {
+    let data;
+    try {
+      data = await syncOnce(since);
+    } catch (err) {
+      console.error(`sync error (${err.message}), retrying in 5s…`);
+      await new Promise((r) => setTimeout(r, 5000));
+      continue;
+    }
+    since = data.next_batch;
+    for (const [roomId, room] of Object.entries(data.rooms?.join ?? {})) {
+      for (const ev of room.timeline?.events ?? []) {
+        if (ev.type !== "m.room.message" || ev.sender === uid) continue;
+        const body = ev.content?.body ?? "";
+        if (!mentionRe.test(body) && !body.includes(uid)) continue;
+        const stamp = new Date().toISOString();
+        console.log(`[${stamp}] mention from ${ev.sender} in ${roomId}: ${body.slice(0, 120)}`);
+        if (command) {
+          const res = spawnSync(command, {
+            shell: true, stdio: "inherit",
+            env: {
+              ...process.env,
+              HEARTH_ROOM_ID: roomId,
+              HEARTH_EVENT_ID: ev.event_id,
+              HEARTH_SENDER: ev.sender,
+              HEARTH_BODY: body,
+            },
+          });
+          if (res.status !== 0) console.error(`handler exited with ${res.status}`);
+        }
+      }
+    }
+  }
+}
+
 async function cmdStatus() {
   const cfg = loadConfig();
   const memoryUrl = `http://localhost:${cfg.ports.memory}`;
@@ -470,6 +535,7 @@ try {
   else if (cmd === "agent" && sub === "add") await cmdAgentAdd(rest[0], rest.slice(1));
   else if (cmd === "user" && sub === "add") await cmdUserAdd(rest[0]);
   else if (cmd === "link") await cmdLink(sub);
+  else if (cmd === "notify") await cmdNotify(sub, rest);
   else if (cmd === "status") await cmdStatus();
   else {
     console.log(`Hearth — human–agent collaboration hub
@@ -481,6 +547,9 @@ try {
   hearth user add <name>      onboard a human teammate (Element login card)
   hearth link [code]          no code: print a hub link code for another machine
                               with code: link this machine to a remote hub
+  hearth notify <agent> [--exec "<command>"]
+                              watch for @mentions of an agent; run a command on
+                              each (env: HEARTH_ROOM_ID/EVENT_ID/SENDER/BODY)
   hearth status               health-check everything`);
   }
 } catch (err) {
