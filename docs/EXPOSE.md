@@ -1,0 +1,60 @@
+# Exposing Hearth to your team (reverse proxy + TLS)
+
+By default Hearth binds to loopback: only the machine running it can reach anything. To let teammates use the hub from anywhere, publish **Element** and the **Matrix API** through a TLS reverse proxy. The overlay in `docker-compose.expose.yml` does this for [Traefik](https://traefik.io) (docker provider + Let's Encrypt), the most common self-host setup.
+
+**What gets exposed:** Element (web UI) and Conduit (Matrix API — token-authenticated).
+**What stays private:** the memory service and dashboard. They have no authentication; reach them via SSH tunnel (`ssh -L 8010:localhost:8010 you@server`). Agents that need shared memory must run on the server or through a tunnel.
+
+## Prerequisites
+
+- A server running Docker with Traefik already routing (entrypoint `websecure` on 443, a Let's Encrypt certresolver, `providers.docker` enabled).
+- Two DNS A records pointing at the server (next section).
+
+## DNS setup
+
+In your registrar's DNS panel (e.g. Hostinger hPanel → Domains → your domain → DNS Zone), add two A records pointing at your server's public IP:
+
+| Type | Name | Points to | TTL |
+|---|---|---|---|
+| A | `hearth` | `<your server IP>` | default |
+| A | `hearth-matrix` | `<your server IP>` | default |
+
+This gives you `hearth.example.com` (Element, the address teammates open) and `hearth-matrix.example.com` (the Matrix API that Element and remote agents talk to). Any two names work — just use them consistently in the steps below.
+
+Notes:
+- Propagation is usually minutes but can take up to an hour. Check with `nslookup hearth.example.com` (or `getent hosts` on Linux).
+- No restart is needed after DNS lands: Traefik requests the Let's Encrypt certificates automatically on the first request to each hostname.
+- If your provider offers a wildcard (`*.example.com`), that also works and no per-name records are needed.
+
+## Steps
+
+1. **Pick the server name before first boot.** It becomes the domain part of every user ID (`@jane:hearth.example.com`) and cannot be changed later without wiping the homeserver data. Answer the `hearth init` server-name prompt with your public domain (e.g. `hearth.example.com`).
+
+2. **Add to `.env`:**
+
+   ```ini
+   HEARTH_EXPOSE=1
+   HEARTH_PUBLIC_ELEMENT_HOST=hearth.example.com
+   HEARTH_PUBLIC_MATRIX_HOST=hearth-matrix.example.com
+   HEARTH_CERTRESOLVER=letsencrypt        # your Traefik certresolver name
+   HEARTH_HOMESERVER_URL=https://hearth-matrix.example.com
+   ```
+
+   Also set `homeserverUrl` in `hearth.config.json` to the same public Matrix URL so agent/user onboarding prints public addresses.
+
+3. **Point Element at the public API** in `config/element-config.json`:
+
+   ```json
+   "m.homeserver": { "base_url": "https://hearth-matrix.example.com", "server_name": "hearth.example.com" }
+   ```
+
+4. **Start:** `node cli/hearth.mjs up` — with `HEARTH_EXPOSE=1` it layers the overlay automatically. Traefik requests certificates on first hit; give it a minute after DNS propagates.
+
+5. **Verify:** `https://hearth-matrix.example.com/_matrix/client/versions` returns JSON; `https://hearth.example.com` shows Element. Then `hearth setup` and onboard people with `hearth user add`.
+
+## Security notes
+
+- Port bindings stay on 127.0.0.1 even when exposed — Traefik reaches containers over the Docker network, so nothing bypasses TLS.
+- Registration is token-gated (`HEARTH_REGISTRATION_TOKEN`); only the CLI (which knows the token) can create accounts. Don't share the token.
+- Federation is disabled by default; your hub is not reachable by other Matrix servers.
+- If you use a different proxy (Caddy, nginx), replicate the two routes: public host → `conduit:6167` and public host → `element:80`; the overlay file shows exactly what's needed.

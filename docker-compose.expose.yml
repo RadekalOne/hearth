@@ -1,0 +1,21 @@
+# Optional overlay: publish Element + the Matrix API through a Traefik reverse
+# proxy with TLS. Used automatically by `hearth up` when HEARTH_EXPOSE=1.
+# See docs/EXPOSE.md. The memory service is NOT exposed by design (no auth).
+services:
+  conduit:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.hearth-matrix.entrypoints: websecure
+      traefik.http.routers.hearth-matrix.rule: Host(`${HEARTH_PUBLIC_MATRIX_HOST:?set in .env}`)
+      traefik.http.routers.hearth-matrix.tls.certresolver: ${HEARTH_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.hearth-matrix.service: hearth-matrix-svc
+      traefik.http.services.hearth-matrix-svc.loadbalancer.server.port: "6167"
+
+  element:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.hearth-element.entrypoints: websecure
+      traefik.http.routers.hearth-element.rule: Host(`${HEARTH_PUBLIC_ELEMENT_HOST:?set in .env}`)
+      traefik.http.routers.hearth-element.tls.certresolver: ${HEARTH_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.hearth-element.service: hearth-element-svc
+      traefik.http.services.hearth-element-svc.loadbalancer.server.port: "80"

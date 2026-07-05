@@ -1,0 +1,18 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "http://localhost:6167",
+      "server_name": "hearth.localhost"
+    }
+  },
+  "brand": "Hearth",
+  "default_theme": "dark",
+  "disable_custom_urls": false,
+  "disable_guests": true,
+  "show_labs_settings": false,
+  "features": {},
+  "setting_defaults": {
+    "UIFeature.feedback": false,
+    "UIFeature.shareSocial": false
+  }
+}

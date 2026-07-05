@@ -1,0 +1,51 @@
+name: hearth
+
+services:
+  # Local Matrix homeserver (default mode). Skipped in bring-your-own mode:
+  # the CLI sets COMPOSE_PROFILES=local-homeserver only when mode=local.
+  conduit:
+    image: matrixconduit/matrix-conduit:latest
+    profiles: ["local-homeserver"]
+    restart: unless-stopped
+    ports:
+      # Loopback-only by default: nothing is internet-exposed unless you opt in
+      # by setting HEARTH_BIND_ADDRESS=0.0.0.0 (put it behind TLS/auth first).
+      - "${HEARTH_BIND_ADDRESS:-127.0.0.1}:${HEARTH_MATRIX_PORT:-6167}:6167"
+    environment:
+      CONDUIT_CONFIG: ""   # empty = configure entirely from env vars
+      CONDUIT_SERVER_NAME: ${HEARTH_SERVER_NAME:-hearth.localhost}
+      CONDUIT_ADDRESS: 0.0.0.0
+      CONDUIT_PORT: "6167"
+      CONDUIT_DATABASE_BACKEND: rocksdb
+      CONDUIT_DATABASE_PATH: /var/lib/matrix-conduit
+      CONDUIT_ALLOW_REGISTRATION: "true"
+      CONDUIT_REGISTRATION_TOKEN: ${HEARTH_REGISTRATION_TOKEN:?run 'hearth init' first}
+      CONDUIT_ALLOW_FEDERATION: "false"
+      CONDUIT_MAX_REQUEST_SIZE: "20000000"
+      CONDUIT_TRUSTED_SERVERS: '["matrix.org"]'
+    volumes:
+      - conduit-data:/var/lib/matrix-conduit
+
+  element:
+    image: vectorim/element-web:latest
+    profiles: ["local-homeserver"]
+    restart: unless-stopped
+    ports:
+      - "${HEARTH_BIND_ADDRESS:-127.0.0.1}:${HEARTH_ELEMENT_PORT:-8009}:80"
+    volumes:
+      - ./config/element-config.json:/app/config.json:ro
+
+  memory:
+    build: ./mcp/memory
+    restart: unless-stopped
+    ports:
+      - "${HEARTH_BIND_ADDRESS:-127.0.0.1}:${HEARTH_MEMORY_PORT:-8010}:8010"
+    environment:
+      HEARTH_HOMESERVER_URL: ${HEARTH_HOMESERVER_URL:-http://conduit:6167}
+      HEARTH_DATA_DIR: /data
+    volumes:
+      - memory-data:/data
+
+volumes:
+  conduit-data:
+  memory-data:

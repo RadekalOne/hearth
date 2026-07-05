@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth — Dashboard</title>
+<style>
+  :root { --bg:#16130f; --card:#221d17; --line:#3a3128; --text:#ede4d8; --dim:#a89a88; --accent:#e8853b; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; padding:2rem; max-width:960px; margin:0 auto; }
+  h1 { font-size:1.4rem; margin-bottom:.25rem; } h1 span { color:var(--accent); }
+  .sub { color:var(--dim); margin-bottom:1.5rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem; }
+  .card h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-bottom:.5rem; }
+  .big { font-size:1.6rem; font-weight:600; }
+  .ok { color:#7fc97f; } .bad { color:#e05d5d; }
+  input { width:100%; background:var(--card); border:1px solid var(--line); border-radius:8px; color:var(--text); padding:.6rem .8rem; font:inherit; margin-bottom:1rem; }
+  input:focus { outline:none; border-color:var(--accent); }
+  .drawer { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.8rem 1rem; margin-bottom:.6rem; }
+  .drawer .meta { font-size:.78rem; color:var(--dim); margin-bottom:.3rem; }
+  .drawer .meta b { color:var(--accent); font-weight:600; }
+  .drawer pre { white-space:pre-wrap; font:inherit; }
+  .tags { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .tag { background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:.1rem .6rem; font-size:.78rem; color:var(--dim); }
+</style>
+</head>
+<body>
+<h1>🔥 <span>Hearth</span> Dashboard</h1>
+<p class="sub">Human–agent collaboration hub</p>
+
+<div class="grid">
+  <div class="card"><h2>Homeserver</h2><div class="big" id="hs">…</div></div>
+  <div class="card"><h2>Memory service</h2><div class="big" id="mem">…</div></div>
+  <div class="card"><h2>Drawers</h2><div class="big" id="count">…</div></div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem"><h2>Wings</h2><div class="tags" id="wings">…</div></div>
+
+<input id="q" placeholder="Search memory… (Enter to search, empty shows recent)">
+<div id="results"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function render(entries) {
+  $("results").innerHTML = entries.map((e) => `
+    <div class="drawer">
+      <div class="meta"><b>${esc(e.wing || "?")}</b> / ${esc(e.room || "?")}
+        · ${esc(e.added_by || "")} · ${esc((e.created_at || "").slice(0, 16))}
+        ${e.distance !== undefined ? `· d=${e.distance}` : ""}</div>
+      <pre>${esc(e.content || "")}</pre>
+    </div>`).join("") || '<p class="sub">No results.</p>';
+}
+
+async function refresh() {
+  try {
+    const h = await (await fetch("/health")).json();
+    $("hs").textContent = h.homeserver;
+    $("hs").className = "big " + (h.homeserver === "ok" ? "ok" : "bad");
+    $("mem").textContent = h.memory;
+    $("mem").className = "big " + (h.memory === "ok" ? "ok" : "bad");
+    $("count").textContent = h.drawers;
+    const s = await (await fetch("/api/status")).json();
+    $("wings").innerHTML = Object.entries(s.wings)
+      .map(([w, n]) => `<span class="tag">${esc(w)} · ${n}</span>`).join("") || "empty";
+  } catch { $("mem").textContent = "unreachable"; $("mem").className = "big bad"; }
+}
+
+async function recent() {
+  const r = await (await fetch("/api/recent")).json();
+  render(r.entries);
+}
+
+$("q").addEventListener("keydown", async (ev) => {
+  if (ev.key !== "Enter") return;
+  const q = $("q").value.trim();
+  if (!q) return recent();
+  const r = await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json();
+  render(r.results);
+});
+
+refresh(); recent(); setInterval(refresh, 15000);
+</script>
+</body>
+</html>

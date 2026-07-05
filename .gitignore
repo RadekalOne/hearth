@@ -1,0 +1,7 @@
+.env
+hearth.config.json
+secrets/
+node_modules/
+__pycache__/
+*.pyc
+data/

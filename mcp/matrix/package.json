@@ -1,0 +1,11 @@
+{
+  "name": "hearth-matrix-mcp",
+  "version": "0.1.0",
+  "description": "MCP server giving any agent a Matrix identity on a Hearth hub",
+  "type": "module",
+  "bin": { "hearth-matrix-mcp": "index.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  }
+}
