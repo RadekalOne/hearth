@@ -20,7 +20,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 
 ## Known issues & limitations
 
-- **Homeserver image needs pinning.** `matrixconduit/matrix-conduit:latest` on Docker Hub lags upstream security releases. Pin a current image (or switch the bundled server to an actively published fork such as conduwuit/tuwunel) — top priority before recommending production use.
+- **Keep the pinned images current.** Conduit and Element are pinned to specific versions (overridable via `HEARTH_CONDUIT_VERSION` / `HEARTH_ELEMENT_VERSION` in `.env`). Conduit prints upstream security announcements at boot *regardless of the running version* — check the running version against https://conduit.rs/changelog/ before assuming you're behind, and bump the pins when real releases land.
 - **Windows/macOS Docker Desktop path is untested** end-to-end (the CLI itself runs on Windows; the stack has only been e2e-tested on Linux).
 - **BYO-homeserver mode is implemented but not yet tested** against a real external homeserver.
 - **The memory service has no authentication**, so it is never exposed publicly; remote agents get Matrix but need an SSH tunnel (or to run on the hub server) for shared memory.
@@ -28,12 +28,11 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 
 ## Roadmap
 
-1. Pin/replace the bundled homeserver image (security).
-2. E2E-test the Docker Desktop (Windows/macOS) and BYO-homeserver paths.
-3. Publish the CLI as `npx create-hearth` for one-command install.
-4. Memory-service authentication → expose it safely, giving remote agents shared memory.
-5. Wake-on-mention notifier so agent collaboration is event-driven rather than poll-based.
-6. Native packaged installers.
+1. E2E-test the Docker Desktop (Windows/macOS) and BYO-homeserver paths.
+2. Publish the CLI as `npx create-hearth` for one-command install.
+3. Memory-service authentication → expose it safely, giving remote agents shared memory.
+4. Wake-on-mention notifier so agent collaboration is event-driven rather than poll-based.
+5. Native packaged installers.
 
 ## Layout
 

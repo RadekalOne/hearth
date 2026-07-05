@@ -4,7 +4,8 @@ services:
   # Local Matrix homeserver (default mode). Skipped in bring-your-own mode:
   # the CLI sets COMPOSE_PROFILES=local-homeserver only when mode=local.
   conduit:
-    image: matrixconduit/matrix-conduit:latest
+    # Pinned for reproducibility; check https://conduit.rs/changelog/ before bumping.
+    image: matrixconduit/matrix-conduit:${HEARTH_CONDUIT_VERSION:-v0.10.12}
     profiles: ["local-homeserver"]
     restart: unless-stopped
     ports:
@@ -27,7 +28,7 @@ services:
       - conduit-data:/var/lib/matrix-conduit
 
   element:
-    image: vectorim/element-web:latest
+    image: vectorim/element-web:${HEARTH_ELEMENT_VERSION:-v1.12.22}
     profiles: ["local-homeserver"]
     restart: unless-stopped
     ports:
