@@ -30,6 +30,9 @@ HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 # When set, /api/* and /mcp require a bearer token (the admin token or a minted
 # agent token). When unset, the service runs open — safe only on loopback.
 ADMIN_TOKEN = os.environ.get("HEARTH_MEMORY_ADMIN_TOKEN", "")
+# Optional: a Matrix access token (any account joined to the standard rooms)
+# lets the dashboard observe agent activity via /api/agents.
+MATRIX_TOKEN = os.environ.get("HEARTH_MATRIX_TOKEN", "")
 TOKENS_PATH = os.path.join(DATA_DIR, "memory-tokens.json")
 
 
@@ -323,6 +326,103 @@ def api_recent(limit: int = 20):
         reverse=True,
     )[: max(1, min(limit, 100))]
     return {"entries": entries}
+
+
+def _parse_usage(body: str) -> dict:
+    """Parse a [USAGE] message: key=value pairs, e.g.
+    [USAGE] provider=anthropic period=daily used=120k limit=500k"""
+    fields = {}
+    for part in body.split():
+        if "=" in part:
+            k, _, v = part.partition("=")
+            fields[k.strip().lower()] = v.strip()
+
+    def num(s):
+        try:
+            s = s.lower().replace(",", "")
+            mult = 1
+            if s.endswith("k"):
+                mult, s = 1_000, s[:-1]
+            elif s.endswith("m"):
+                mult, s = 1_000_000, s[:-1]
+            return float(s) * mult
+        except (ValueError, AttributeError):
+            return None
+
+    used, limit = num(fields.get("used", "")), num(fields.get("limit", ""))
+    if used is not None and limit:
+        fields["pct"] = round(100 * used / limit, 1)
+    return fields
+
+
+@app.get("/api/agents")
+async def api_agents():
+    """Aggregate live agent activity from the Matrix rooms + memory writes."""
+    if not (MATRIX_TOKEN and HOMESERVER_URL):
+        raise HTTPException(503, "activity observer not configured — set HEARTH_MATRIX_TOKEN")
+    base = HOMESERVER_URL.rstrip("/")
+    headers = {"Authorization": f"Bearer {MATRIX_TOKEN}"}
+    events, room_names = [], {}
+    async with httpx.AsyncClient(timeout=15) as client:
+        rooms = (await client.get(f"{base}/_matrix/client/v3/joined_rooms", headers=headers)).json().get("joined_rooms", [])
+        for rid in rooms:
+            try:
+                name = (await client.get(f"{base}/_matrix/client/v3/rooms/{rid}/state/m.room.name", headers=headers)).json().get("name", rid)
+            except Exception:
+                name = rid
+            room_names[rid] = name
+            try:
+                msgs = (await client.get(f"{base}/_matrix/client/v3/rooms/{rid}/messages",
+                                         headers=headers, params={"dir": "b", "limit": 100})).json()
+            except Exception:
+                continue
+            for e in msgs.get("chunk", []):
+                if e.get("type") == "m.room.message":
+                    events.append({"room": name, "sender": e["sender"],
+                                   "body": e.get("content", {}).get("body", ""),
+                                   "ts": e.get("origin_server_ts", 0)})
+
+    agents: dict[str, dict] = {}
+    for ev in sorted(events, key=lambda x: x["ts"]):
+        a = agents.setdefault(ev["sender"], {
+            "id": ev["sender"], "name": ev["sender"].split(":")[0].lstrip("@"),
+            "last_seen": 0, "messages": 0, "current_task": None, "blocked": None,
+            "last_status": None, "usage": [], "daily": {},
+        })
+        a["last_seen"] = max(a["last_seen"], ev["ts"])
+        a["messages"] += 1
+        day = datetime.fromtimestamp(ev["ts"] / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        a["daily"][day] = a["daily"].get(day, 0) + 1
+        body = ev["body"].strip()
+        tag = body[1:body.index("]")].upper() if body.startswith("[") and "]" in body[:12] else ""
+        text = {"body": body[:280], "room": ev["room"], "ts": ev["ts"]}
+        if tag == "CLAIM":
+            a["current_task"], a["blocked"] = text, None
+        elif tag == "HANDOFF":
+            a["current_task"] = None
+        elif tag == "BLOCKED":
+            a["blocked"] = text
+        elif tag == "USAGE":
+            a["usage"] = [u for u in a["usage"] if u.get("provider") != _parse_usage(body).get("provider")]
+            a["usage"].append({**_parse_usage(body), "ts": ev["ts"]})
+        elif tag == "STATUS":
+            a["last_status"] = text
+            if "done" in body[:40].lower():
+                a["current_task"], a["blocked"] = None, None
+
+    # Memory contribution counts per agent + wing activity.
+    got = drawers.get(include=["metadatas"], limit=10000)
+    drawer_counts, wing_counts = {}, {}
+    for meta in got["metadatas"]:
+        drawer_counts[meta.get("added_by", "?")] = drawer_counts.get(meta.get("added_by", "?"), 0) + 1
+        if not meta.get("imported"):
+            wing_counts[meta.get("wing", "?")] = wing_counts.get(meta.get("wing", "?"), 0) + 1
+    for a in agents.values():
+        a["drawers"] = drawer_counts.get(a["name"], 0)
+
+    return {"generated_at": _now(),
+            "agents": sorted(agents.values(), key=lambda a: -a["last_seen"]),
+            "wing_activity": dict(sorted(wing_counts.items(), key=lambda x: -x[1])[:12])}
 
 
 @app.get("/")

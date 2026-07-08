@@ -49,6 +49,8 @@ services:
       HEARTH_DATA_DIR: /data
       # When set (hearth init does), /api and /mcp require bearer tokens.
       HEARTH_MEMORY_ADMIN_TOKEN: ${HEARTH_MEMORY_ADMIN_TOKEN:-}
+      # Optional: Matrix token of any room member — powers the agent dashboard.
+      HEARTH_MATRIX_TOKEN: ${HEARTH_MATRIX_TOKEN:-}
     volumes:
       - memory-data:/data
 

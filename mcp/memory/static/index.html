@@ -5,94 +5,188 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hearth — Dashboard</title>
 <style>
-  :root { --bg:#16130f; --card:#221d17; --line:#3a3128; --text:#ede4d8; --dim:#a89a88; --accent:#e8853b; }
+  :root { --bg:#16130f; --card:#221d17; --line:#3a3128; --text:#ede4d8; --dim:#a89a88; --accent:#e8853b;
+          --ok:#7fc97f; --warn:#e8c53b; --bad:#e05d5d; --c1:#e8853b; --c2:#7fc97f; --c3:#6fa8dc; --c4:#c27ba0; --c5:#e8c53b; --c6:#9a86c4; }
   * { box-sizing:border-box; margin:0; }
-  body { background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; padding:2rem; max-width:960px; margin:0 auto; }
-  h1 { font-size:1.4rem; margin-bottom:.25rem; } h1 span { color:var(--accent); }
-  .sub { color:var(--dim); margin-bottom:1.5rem; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+  body { background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; padding:2rem; max-width:1100px; margin:0 auto; }
+  h1 { font-size:1.4rem; } h1 span { color:var(--accent); }
+  h2.sec { font-size:.85rem; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:1.6rem 0 .7rem; }
+  .sub { color:var(--dim); }
+  .topbar { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
+  .topbar .grow { flex:1; min-width:220px; }
+  button { background:var(--accent); color:#16130f; border:0; border-radius:8px; padding:.55rem 1rem; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; }
+  .agents { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem; }
   .card h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-bottom:.5rem; }
   .big { font-size:1.6rem; font-weight:600; }
-  .ok { color:#7fc97f; } .bad { color:#e05d5d; }
-  input { width:100%; background:var(--card); border:1px solid var(--line); border-radius:8px; color:var(--text); padding:.6rem .8rem; font:inherit; margin-bottom:1rem; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  input { width:100%; background:var(--card); border:1px solid var(--line); border-radius:8px; color:var(--text); padding:.6rem .8rem; font:inherit; }
   input:focus { outline:none; border-color:var(--accent); }
+  .agent-head { display:flex; align-items:center; gap:.55rem; margin-bottom:.55rem; }
+  .dot { width:10px; height:10px; border-radius:50%; flex:none; }
+  .agent-name { font-weight:700; font-size:1.05rem; }
+  .agent-meta { margin-left:auto; font-size:.75rem; color:var(--dim); text-align:right; }
+  .field { font-size:.85rem; margin:.35rem 0; }
+  .field b { color:var(--dim); font-weight:600; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; display:block; }
+  .field span { display:block; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+  .gauge { margin:.45rem 0; }
+  .gauge .lbl { display:flex; justify-content:space-between; font-size:.75rem; color:var(--dim); margin-bottom:.2rem; }
+  .bar { height:8px; background:var(--bg); border:1px solid var(--line); border-radius:99px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:99px; }
   .drawer { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.8rem 1rem; margin-bottom:.6rem; }
   .drawer .meta { font-size:.78rem; color:var(--dim); margin-bottom:.3rem; }
   .drawer .meta b { color:var(--accent); font-weight:600; }
   .drawer pre { white-space:pre-wrap; font:inherit; }
-  .tags { display:flex; flex-wrap:wrap; gap:.4rem; }
-  .tag { background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:.1rem .6rem; font-size:.78rem; color:var(--dim); }
+  svg text { fill:var(--dim); font:11px system-ui; }
+  .legend { display:flex; flex-wrap:wrap; gap:.9rem; font-size:.78rem; color:var(--dim); margin-top:.4rem; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:.3rem; }
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:800px){ .charts { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
-<h1>🔥 <span>Hearth</span> Dashboard</h1>
-<p class="sub">Human–agent collaboration hub</p>
-<input id="tok" type="password" placeholder="Access token (admin or agent) — required if auth is enabled" style="margin-bottom:1rem">
-
+<div class="topbar">
+  <h1>🔥 <span>Hearth</span> Dashboard</h1>
+  <span class="sub" id="stamp"></span>
+  <span class="grow"></span>
+  <button id="refresh">↻ Refresh</button>
+</div>
+<input id="tok" type="password" placeholder="Access token (admin or agent) — required if auth is enabled" style="margin-bottom:1.1rem">
 
 <div class="grid">
   <div class="card"><h2>Homeserver</h2><div class="big" id="hs">…</div></div>
   <div class="card"><h2>Memory service</h2><div class="big" id="mem">…</div></div>
   <div class="card"><h2>Drawers</h2><div class="big" id="count">…</div></div>
+  <div class="card"><h2>Active agents (24h)</h2><div class="big" id="active">…</div></div>
 </div>
 
-<div class="card" style="margin-bottom:1.5rem"><h2>Wings</h2><div class="tags" id="wings">…</div></div>
+<h2 class="sec">Agents</h2>
+<div class="agents" id="agents"><p class="sub">Loading…</p></div>
 
+<h2 class="sec">Charts</h2>
+<div class="charts">
+  <div class="card"><h2>Messages per day (last 7 days)</h2><div id="chart-activity"></div><div class="legend" id="legend-activity"></div></div>
+  <div class="card"><h2>Memory writes by project (non-archive)</h2><div id="chart-wings"></div></div>
+</div>
+
+<h2 class="sec">Memory search</h2>
 <input id="q" placeholder="Search memory… (Enter to search, empty shows recent)">
-<div id="results"></div>
+<div id="results" style="margin-top:.7rem"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (s) => s.replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const COLORS = ["--c1","--c2","--c3","--c4","--c5","--c6"].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
 
 $("tok").value = localStorage.getItem("hearth-token") || "";
-$("tok").addEventListener("change", () => { localStorage.setItem("hearth-token", $("tok").value); recent(); refresh(); });
+$("tok").addEventListener("change", () => { localStorage.setItem("hearth-token", $("tok").value); refreshAll(); });
 async function afetch(url) {
   const headers = $("tok").value ? { Authorization: `Bearer ${$("tok").value}` } : {};
   const res = await fetch(url, { headers });
-  if (res.status === 401) { $("results").innerHTML = '<p class="sub">401 — enter a valid access token above.</p>'; throw new Error("unauthorized"); }
+  if (res.status === 401) throw new Error("401 — enter a valid access token above");
   return res;
+}
+
+const ago = (ts) => {
+  if (!ts) return "never";
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  if (m < 1440) return `${Math.round(m / 60)}h ago`;
+  return `${Math.round(m / 1440)}d ago`;
+};
+
+function gauge(u) {
+  const pct = u.pct ?? null;
+  const color = pct === null ? "var(--dim)" : pct < 70 ? "var(--ok)" : pct < 90 ? "var(--warn)" : "var(--bad)";
+  const label = [u.provider, u.period].filter(Boolean).join(" · ") || "usage";
+  const detail = u.used && u.limit ? `${u.used} / ${u.limit}` : "self-reported";
+  return `<div class="gauge"><div class="lbl"><span>${esc(label)}</span><span>${esc(detail)}${pct !== null ? ` (${pct}%)` : ""} · ${ago(u.ts)}</span></div>
+    <div class="bar"><i style="width:${Math.min(pct ?? 0, 100)}%;background:${color}"></i></div></div>`;
+}
+
+function agentCard(a) {
+  const fresh = Date.now() - a.last_seen;
+  const dot = fresh < 3600e3 ? "var(--ok)" : fresh < 86400e3 ? "var(--warn)" : "var(--bad)";
+  return `<div class="card">
+    <div class="agent-head"><span class="dot" style="background:${dot}"></span>
+      <span class="agent-name">${esc(a.name)}</span>
+      <span class="agent-meta">last seen ${ago(a.last_seen)}<br>${a.messages} msgs · ${a.drawers} drawers</span></div>
+    ${a.blocked ? `<div class="field"><b class="bad">Blocked</b><span>${esc(a.blocked.body)}</span></div>` : ""}
+    <div class="field"><b>Working on</b><span>${a.current_task ? esc(a.current_task.body) + ` <i class="sub">(${ago(a.current_task.ts)})</i>` : '<i class="sub">nothing claimed</i>'}</span></div>
+    <div class="field"><b>Last status</b><span>${a.last_status ? esc(a.last_status.body) + ` <i class="sub">(${ago(a.last_status.ts)})</i>` : '<i class="sub">—</i>'}</span></div>
+    ${(a.usage || []).map(gauge).join("") || '<div class="gauge"><div class="lbl"><span>usage</span><span>not reported — agent posts [USAGE] to #agent-logs</span></div><div class="bar"></div></div>'}
+  </div>`;
+}
+
+function barChart(el, days, series) {
+  // series: [{name, color, values(per day)}]
+  const W = 460, H = 170, pad = 26, bw = Math.max(4, (W - pad * 2) / (days.length * (series.length + 1)));
+  const max = Math.max(1, ...series.flatMap(s => s.values));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%">`;
+  days.forEach((d, di) => {
+    series.forEach((s, si) => {
+      const v = s.values[di], h = (v / max) * (H - pad * 2);
+      const x = pad + di * ((W - pad * 2) / days.length) + si * bw;
+      svg += `<rect x="${x}" y="${H - pad - h}" width="${bw - 1}" height="${h}" fill="${s.color}" rx="1.5"><title>${s.name} ${d}: ${v}</title></rect>`;
+    });
+    svg += `<text x="${pad + di * ((W - pad * 2) / days.length) + (series.length * bw) / 2}" y="${H - 8}" text-anchor="middle">${d.slice(5)}</text>`;
+  });
+  svg += `<text x="4" y="${pad}">${max}</text></svg>`;
+  el.innerHTML = svg;
+}
+
+function hbarChart(el, entries) {
+  const max = Math.max(1, ...entries.map(([, v]) => v));
+  el.innerHTML = entries.map(([k, v]) =>
+    `<div class="gauge"><div class="lbl"><span>${esc(k)}</span><span>${v}</span></div>
+     <div class="bar"><i style="width:${(v / max) * 100}%;background:var(--accent)"></i></div></div>`).join("") || '<p class="sub">no activity yet</p>';
+}
+
+async function refreshAll() {
+  $("stamp").textContent = "refreshing…";
+  try {
+    const h = await (await fetch("/health")).json();
+    $("hs").textContent = h.homeserver; $("hs").className = "big " + (h.homeserver === "ok" ? "ok" : "bad");
+    $("mem").textContent = h.memory; $("mem").className = "big " + (h.memory === "ok" ? "ok" : "bad");
+    $("count").textContent = h.drawers;
+
+    const data = await (await afetch("/api/agents")).json();
+    const agents = data.agents.filter(a => a.messages > 0);
+    $("active").textContent = agents.filter(a => Date.now() - a.last_seen < 86400e3).length;
+    $("agents").innerHTML = agents.map(agentCard).join("");
+
+    const days = [...Array(7)].map((_, i) => new Date(Date.now() - (6 - i) * 86400e3).toISOString().slice(0, 10));
+    const top = agents.slice(0, 6);
+    const series = top.map((a, i) => ({ name: a.name, color: COLORS[i % COLORS.length], values: days.map(d => a.daily[d] || 0) }));
+    barChart($("chart-activity"), days, series);
+    $("legend-activity").innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("");
+    hbarChart($("chart-wings"), Object.entries(data.wing_activity));
+    $("stamp").textContent = `updated ${new Date().toLocaleTimeString()} · auto-refresh 10 min`;
+  } catch (err) {
+    $("stamp").textContent = err.message;
+  }
+  try { recent(); } catch {}
 }
 
 function render(entries) {
   $("results").innerHTML = entries.map((e) => `
-    <div class="drawer">
-      <div class="meta"><b>${esc(e.wing || "?")}</b> / ${esc(e.room || "?")}
-        · ${esc(e.added_by || "")} · ${esc((e.created_at || "").slice(0, 16))}
-        ${e.distance !== undefined ? `· d=${e.distance}` : ""}</div>
-      <pre>${esc(e.content || "")}</pre>
-    </div>`).join("") || '<p class="sub">No results.</p>';
+    <div class="drawer"><div class="meta"><b>${esc(e.wing || "?")}</b> / ${esc(e.room || "?")}
+      · ${esc(e.added_by || "")} · ${esc((e.created_at || "").slice(0, 16))}
+      ${e.distance !== undefined ? `· d=${e.distance}` : ""}</div><pre>${esc(e.content || "")}</pre></div>`).join("") || '<p class="sub">No results.</p>';
 }
-
-async function refresh() {
-  try {
-    const h = await (await fetch("/health")).json();
-    $("hs").textContent = h.homeserver;
-    $("hs").className = "big " + (h.homeserver === "ok" ? "ok" : "bad");
-    $("mem").textContent = h.memory;
-    $("mem").className = "big " + (h.memory === "ok" ? "ok" : "bad");
-    $("count").textContent = h.drawers;
-    const s = await (await afetch("/api/status")).json();
-    $("wings").innerHTML = Object.entries(s.wings)
-      .map(([w, n]) => `<span class="tag">${esc(w)} · ${n}</span>`).join("") || "empty";
-  } catch { $("mem").textContent = "unreachable"; $("mem").className = "big bad"; }
-}
-
-async function recent() {
-  const r = await (await afetch("/api/recent")).json();
-  render(r.entries);
-}
-
+async function recent() { render((await (await afetch("/api/recent")).json()).entries); }
 $("q").addEventListener("keydown", async (ev) => {
   if (ev.key !== "Enter") return;
   const q = $("q").value.trim();
   if (!q) return recent();
-  const r = await (await afetch(`/api/search?q=${encodeURIComponent(q)}`)).json();
-  render(r.results);
+  render((await (await afetch(`/api/search?q=${encodeURIComponent(q)}`)).json()).results);
 });
-
-refresh(); recent(); setInterval(refresh, 15000);
+$("refresh").addEventListener("click", refreshAll);
+refreshAll();
+setInterval(refreshAll, 600000); // 10 minutes
 </script>
 </body>
 </html>
