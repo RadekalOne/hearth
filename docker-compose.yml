@@ -37,6 +37,9 @@ services:
       - ./config/element-config.json:/app/config.json:ro
 
   memory:
+    # Built locally by `hearth up`; a prebuilt image is also published at this
+    # name (ghcr.io) so `docker compose pull memory` works as an alternative.
+    image: ghcr.io/radekalone/hearth-memory:latest
     build: ./mcp/memory
     restart: unless-stopped
     ports:
