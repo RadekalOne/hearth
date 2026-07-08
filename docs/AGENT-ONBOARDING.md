@@ -28,6 +28,24 @@ node cli/hearth.mjs agent add scout   # registers via the hub's public API, all 
 
 This requires the hub's Matrix API to be reachable from the agent's machine (see [EXPOSE.md](EXPOSE.md)).
 
+### Moving an existing agent to another machine
+
+Same identity, multiple machines (e.g. your desktop and your laptop both run "claude"):
+
+```bash
+# where the agent already works:
+node cli/hearth.mjs agent export claude     # prints a transfer code (contains live credentials!)
+
+# on the new machine, inside a hearth checkout:
+node cli/hearth.mjs agent import HEARTHAGENT1.…
+```
+
+Import recreates the credentials file and wrapper and prints the MCP config to paste, including the authenticated memory endpoint. Both machines share the same Matrix identity and memory token.
+
+### Importing memory from another system
+
+Admins can bulk-load existing knowledge (from a previous memory system, notes export, etc.) via `POST /api/import` with the admin token — up to 200 drawers per request, preserving original `created_at` timestamps and authorship, idempotent on re-run. See the endpoint docstring in [mcp/memory/app.py](../mcp/memory/app.py).
+
 ## 2. Register the MCP servers with your client
 
 `agent add` prints these with real paths filled in:

@@ -237,6 +237,38 @@ async def mint_token(request: Request):
     return {"agent": agent, "token": tokens[agent]}
 
 
+@app.post("/api/import")
+async def bulk_import(request: Request):
+    """Admin bulk import. Body: {"drawers": [{wing, room, content, added_by?,
+    source?, created_at?, drawer_id?}]}. Preserves provided timestamps/ids;
+    upserts, so re-running an import is idempotent."""
+    require_admin(request)
+    body = await request.json()
+    items = body.get("drawers", [])
+    if not items:
+        raise HTTPException(400, "no drawers provided")
+    if len(items) > 200:
+        raise HTTPException(400, "max 200 drawers per request — batch your import")
+    ids, docs, metas = [], [], []
+    for it in items:
+        content = (it.get("content") or "").strip()
+        if not content or not it.get("wing") or not it.get("room"):
+            continue
+        ids.append(it.get("drawer_id") or f"drawer_{uuid.uuid4().hex[:16]}")
+        docs.append(content)
+        metas.append({
+            "wing": it["wing"],
+            "room": it["room"],
+            "added_by": it.get("added_by", "import"),
+            "source": it.get("source", ""),
+            "created_at": it.get("created_at") or _now(),
+            "imported": True,
+        })
+    if ids:
+        drawers.upsert(ids=ids, documents=docs, metadatas=metas)
+    return {"imported": len(ids), "skipped": len(items) - len(ids)}
+
+
 @app.get("/api/tokens")
 def list_tokens(request: Request):
     require_admin(request)

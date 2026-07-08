@@ -434,6 +434,46 @@ Settings → General → Change password.)
 ───────────────────────────────────────────────────────────────────`);
 }
 
+// Move an existing agent identity to another machine: export prints a code
+// containing the agent's credentials; import (inside a hearth checkout on the
+// other machine) recreates the env file + wrapper and prints MCP config.
+async function cmdAgentExport(name) {
+  const envPath = path.join(SECRETS, "agents", `${name}.env`);
+  const vars = readEnvFile(envPath);
+  if (!vars.MATRIX_ACCESS_TOKEN) die(`no credentials at ${envPath}`);
+  const code = "HEARTHAGENT1." + Buffer.from(JSON.stringify({ v: 1, name, vars })).toString("base64url");
+  console.log(`Agent transfer code for '${name}' — CONTAINS LIVE CREDENTIALS, transfer securely:\n`);
+  console.log(code);
+  console.log(`\nOn the other machine, inside a hearth checkout:\n  node cli/hearth.mjs agent import <code>`);
+}
+
+async function cmdAgentImport(code) {
+  if (!code?.startsWith("HEARTHAGENT1.")) die("usage: hearth agent import HEARTHAGENT1.…");
+  let p;
+  try {
+    p = JSON.parse(Buffer.from(code.slice(13), "base64url").toString());
+  } catch {
+    die("could not decode agent code (truncated?)");
+  }
+  const envPath = path.join(SECRETS, "agents", `${p.name}.env`);
+  writeEnvFile(envPath, p.vars);
+  const wrapperPath = writeAgentWrapper(p.name);
+  ensureMatrixDeps();
+  // No hub config on this machine is fine — the wrapper is self-contained.
+  if (fs.existsSync(CONFIG_PATH)) {
+    const cfg = loadConfig();
+    cfg.agents ??= [];
+    if (!cfg.agents.some((a) => a.name === p.name)) {
+      cfg.agents.push({ name: p.name, userId: p.vars.MATRIX_USER_ID });
+      saveConfig(cfg);
+    }
+  }
+  ok(`Imported ${p.vars.MATRIX_USER_ID}`);
+  console.log(mcpSnippets({ ports: {} }, p.name, wrapperPath,
+    (p.vars.HEARTH_MEMORY_URL || "http://localhost:8010").replace(/\/$/, ""),
+    p.vars.HEARTH_MEMORY_TOKEN || null));
+}
+
 async function cmdLink(code) {
   if (!code) {
     // Export: print a link code for onboarding another machine.
@@ -578,6 +618,8 @@ try {
   else if (cmd === "down") await cmdDown();
   else if (cmd === "setup") await cmdSetup();
   else if (cmd === "agent" && sub === "add") await cmdAgentAdd(rest[0], rest.slice(1));
+  else if (cmd === "agent" && sub === "export") await cmdAgentExport(rest[0]);
+  else if (cmd === "agent" && sub === "import") await cmdAgentImport(rest[0]);
   else if (cmd === "user" && sub === "add") await cmdUserAdd(rest[0]);
   else if (cmd === "link") await cmdLink(sub);
   else if (cmd === "notify") await cmdNotify(sub, rest);
@@ -589,6 +631,8 @@ try {
   hearth up | down            start/stop the Docker stack
   hearth setup                create admin user + standard rooms
   hearth agent add <name>     onboard an agent (add --existing for a pre-made user)
+  hearth agent export <name>  print a transfer code to move this agent to another machine
+  hearth agent import <code>  recreate an exported agent here (env + wrapper + MCP config)
   hearth user add <name>      onboard a human teammate (Element login card)
   hearth link [code]          no code: print a hub link code for another machine
                               with code: link this machine to a remote hub
