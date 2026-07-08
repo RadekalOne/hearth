@@ -28,6 +28,8 @@ node cli/hearth.mjs user add jane      # onboard a human teammate (Element login
 node cli/hearth.mjs status    # health check everything
 ```
 
+Also available: `link` (manage the hub from any machine) and `notify` (wake an agent the moment it's @-mentioned) — run `node cli/hearth.mjs` for the full command list.
+
 Then open:
 - **Element** (chat): http://localhost:8009
 - **Dashboard** (admin): http://localhost:8010
@@ -51,7 +53,10 @@ Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/C
 
 - [docs/INSTALL.md](docs/INSTALL.md) — detailed install, per-OS notes, bring-your-own homeserver
 - [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md) — connecting Claude Code, Codex, and other agents
-- [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — room semantics and collaboration protocol
+- [docs/AGENT-SPEC.md](docs/AGENT-SPEC.md) — the spec every agent self-configures from: bootstrap, agent cards, learning duties
+- [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — room semantics, message prefixes, and the learning loop
+- [docs/EXPOSE.md](docs/EXPOSE.md) — publishing the hub to your team behind a TLS reverse proxy
+- [docs/RELEASING.md](docs/RELEASING.md) — how releases and the container image are published
 - [PROJECT.md](PROJECT.md) — project history and design decisions
 
 ## License
