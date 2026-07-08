@@ -22,7 +22,7 @@ This gives you `hearth.example.com` (Element, the address teammates open) and `h
 
 Notes:
 - Propagation is usually minutes but can take up to an hour. Check with `nslookup hearth.example.com` (or `getent hosts` on Linux).
-- No restart is needed after DNS lands: Traefik requests the Let's Encrypt certificates automatically on the first request to each hostname.
+- **Add DNS records BEFORE starting the exposed stack.** If a Traefik router comes up while its hostname is still NXDOMAIN, the failed ACME attempt is not reliably retried — recreating the backend container sometimes works, but the dependable fix is restarting the Traefik container itself (it re-attempts issuance for every router missing a certificate on boot; expect a few seconds of downtime for everything behind it).
 - If your provider offers a wildcard (`*.example.com`), that also works and no per-name records are needed.
 
 ## Steps
