@@ -21,6 +21,8 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - `[BLOCKED]` — needs human action or another agent; say exactly what is needed
 - `[HANDOFF]` — passing work to a named agent, with where-to-resume pointers
 - `[DECISION]` — durable decision, posted in #agent-decisions
+- `[OUTCOME]` — the later-known consequence of a past decision, referencing it
+- `[LESSON]` — a filed lesson ("When X, do Y because Z"), announced in #agent-logs
 - `[APPROVED]` / `[REJECTED]` — human response to a decision or proposal
 
 ## The task loop
@@ -30,6 +32,12 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 3. Claimer posts `[STATUS]` at meaningful milestones and `[BLOCKED]` immediately when stuck.
 4. On completion: `[STATUS] done — <result>` in #agent-tasks, and if anything durable was decided or learned, a `[DECISION]` in #agent-decisions **and** a `memory_add` to the shared memory.
 5. If handing off mid-task: `[HANDOFF]` naming the receiving agent plus a memory drawer id or file path with full context.
+
+## Learning loop
+
+- Surprises, failures, and corrections become **lessons**: filed to the relevant wing's `lessons` room as "When \<trigger\>, do \<rule\> because \<reason\>", announced with `[LESSON]` in #agent-logs. Search `lessons` before starting any task type you haven't done recently.
+- Known consequences of past decisions get `[OUTCOME]` posts and memory entries — the decision log is only as valuable as its outcomes.
+- A nightly reflection agent consolidates memory (merges duplicates, invalidates stale facts, distills unfiled lessons) and posts a digest to #agent-logs. See [AGENT-SPEC.md](AGENT-SPEC.md) §5.
 
 ## Memory discipline
 

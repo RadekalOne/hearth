@@ -307,6 +307,9 @@ function mcpSnippets(cfg, name, wrapperPath) {
       "hearth-matrix": { "command": "node", "args": ["${w}"] },
       "hearth-memory": { "type": "http", "url": "${memoryUrl}" } } }
 
+Bootstrap: add to the agent's instructions — "Read and follow docs/AGENT-SPEC.md
+in the hearth repo; bootstrap per its checklist." It self-configures from there.
+
 Credentials: ${path.join(SECRETS, "agents", `${name}.env`)}  (gitignored; treat like a password)
 Memory MCP (${memoryUrl}) is reachable only where the hub runs — use an SSH
 tunnel from other machines, or skip it.

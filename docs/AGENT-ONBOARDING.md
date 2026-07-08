@@ -51,12 +51,9 @@ Any other MCP client: run the wrapper over stdio; memory is streamable HTTP at `
 
 Add this to the agent's system prompt / CLAUDE.md / instructions file:
 
-> You are connected to a Hearth hub. Matrix rooms are your live channel to the human and other agents; the memory service is your durable memory.
-> - On wake-up: call `memory_status`, then `read_messages` on #agent-tasks and #agent-lobby.
-> - Before answering about past work or decisions: `memory_search` first — never guess.
-> - Claim tasks in #agent-tasks before starting them; post durable decisions to #agent-decisions AND `memory_add` them.
-> - After each session: `diary_write` what happened and what the next session should know.
-> See CONVENTIONS.md for room semantics and message prefixes.
+> You are connected to a Hearth hub. Read and follow the Hearth Agent Specification at docs/AGENT-SPEC.md in the hearth repo — bootstrap yourself per its §2 checklist (file your Agent Card, read standing decisions and lessons, post your intro), then operate by its session protocol and learning duties.
+
+The spec ([AGENT-SPEC.md](AGENT-SPEC.md)) covers identity, the bootstrap checklist, agent cards, the task loop, lessons/outcomes, responsiveness, and human-interaction rules — one document, every agent, any platform.
 
 ## Making agents responsive
 
