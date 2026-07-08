@@ -155,6 +155,8 @@ async function cmdInit() {
     HEARTH_SERVER_NAME: serverName,
     HEARTH_HOMESERVER_URL: homeserverUrl,
     HEARTH_REGISTRATION_TOKEN: registrationToken,
+    HEARTH_MEMORY_ADMIN_TOKEN: randomBytes(32).toString("base64url"),
+    HEARTH_MEMORY_URL: `http://localhost:${ports.memory}`,
     HEARTH_MATRIX_PORT: ports.matrix ?? "6167",
     HEARTH_ELEMENT_PORT: ports.element ?? "8009",
     HEARTH_MEMORY_PORT: ports.memory,
@@ -175,9 +177,13 @@ async function cmdInit() {
 
 async function cmdUp() {
   const env = readEnvFile(ENV_PATH);
-  const files = env.HEARTH_EXPOSE === "1"
-    ? ["-f", "docker-compose.yml", "-f", "docker-compose.expose.yml"]
-    : [];
+  const files = [];
+  if (env.HEARTH_EXPOSE === "1") files.push("-f", "docker-compose.yml", "-f", "docker-compose.expose.yml");
+  if (env.HEARTH_PUBLIC_MEMORY_HOST) {
+    if (!env.HEARTH_MEMORY_ADMIN_TOKEN) die("refusing to expose memory without HEARTH_MEMORY_ADMIN_TOKEN (no auth)");
+    if (!files.length) files.push("-f", "docker-compose.yml");
+    files.push("-f", "docker-compose.expose-memory.yml");
+  }
   compose(...files, "up", "-d", "--build");
   ok("Stack is starting. Run `hearth status` to check health.");
 }
@@ -287,15 +293,21 @@ function ensureMatrixDeps() {
   if (res.status !== 0) console.log("⚠ npm install failed — run it manually in mcp/matrix/");
 }
 
-function mcpSnippets(cfg, name, wrapperPath) {
-  const memoryUrl = `http://localhost:${cfg.ports?.memory ?? 8010}/mcp`;
+function mcpSnippets(cfg, name, wrapperPath, memoryUrl, memoryToken) {
+  const mcpUrl = `${memoryUrl}/mcp`;
   const w = wrapperPath.replaceAll("\\", "\\\\");
+  const memClaude = memoryToken
+    ? `claude mcp add --transport http hearth-memory ${mcpUrl} --header "Authorization: Bearer ${memoryToken}"`
+    : `claude mcp add --transport http hearth-memory ${mcpUrl}`;
+  const memJson = memoryToken
+    ? `{ "type": "http", "url": "${mcpUrl}", "headers": { "Authorization": "Bearer ${memoryToken}" } }`
+    : `{ "type": "http", "url": "${mcpUrl}" }`;
   return `
-── Connect this agent (no tokens needed — the wrapper loads them) ─
+── Connect this agent ─────────────────────────────────────────────
 
 ▸ Claude Code:
   claude mcp add hearth-matrix -- node "${wrapperPath}"
-  claude mcp add --transport http hearth-memory ${memoryUrl}
+  ${memClaude}
 
 ▸ Codex (~/.codex/config.toml):
   [mcp_servers.hearth-matrix]
@@ -305,14 +317,15 @@ function mcpSnippets(cfg, name, wrapperPath) {
 ▸ Generic MCP (.mcp.json style):
   { "mcpServers": {
       "hearth-matrix": { "command": "node", "args": ["${w}"] },
-      "hearth-memory": { "type": "http", "url": "${memoryUrl}" } } }
+      "hearth-memory": ${memJson} } }
 
 Bootstrap: add to the agent's instructions — "Read and follow docs/AGENT-SPEC.md
 in the hearth repo; bootstrap per its checklist." It self-configures from there.
 
 Credentials: ${path.join(SECRETS, "agents", `${name}.env`)}  (gitignored; treat like a password)
-Memory MCP (${memoryUrl}) is reachable only where the hub runs — use an SSH
-tunnel from other machines, or skip it.
+${memoryToken
+    ? `Memory access is token-authenticated (credential saved alongside the Matrix one).`
+    : `No memory token issued — the agent gets Matrix only until the memory service is reachable.`}
 ───────────────────────────────────────────────────────────────────`;
 }
 
@@ -338,11 +351,36 @@ async function cmdAgentAdd(name, flags) {
     `/profile/${encodeURIComponent(creds.user_id)}/displayname`,
     { token: creds.access_token, body: { displayname: name } });
 
+  // Mint a memory token so this agent can use the shared memory service.
+  const memoryUrl = (env.HEARTH_MEMORY_URL || `http://localhost:${cfg.ports?.memory ?? 8010}`).replace(/\/$/, "");
+  let memoryToken = null;
+  if (env.HEARTH_MEMORY_ADMIN_TOKEN) {
+    try {
+      const res = await fetch(`${memoryUrl}/api/tokens`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.HEARTH_MEMORY_ADMIN_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ agent: name }),
+      });
+      if (res.ok) {
+        memoryToken = (await res.json()).token;
+        ok(`memory token minted for ${name}`);
+      } else {
+        console.log(`⚠ memory token mint failed (HTTP ${res.status}) — is the stack up-to-date and running?`);
+      }
+    } catch {
+      console.log(`⚠ memory service unreachable at ${memoryUrl} — agent gets Matrix only (re-run later or use an SSH tunnel)`);
+    }
+  }
+
   const agentEnvPath = path.join(SECRETS, "agents", `${name}.env`);
   writeEnvFile(agentEnvPath, {
     MATRIX_HOMESERVER_URL: cfg.homeserverUrl,
     MATRIX_USER_ID: creds.user_id,
     MATRIX_ACCESS_TOKEN: creds.access_token,
+    ...(memoryToken ? { HEARTH_MEMORY_URL: memoryUrl, HEARTH_MEMORY_TOKEN: memoryToken } : {}),
   });
   const wrapperPath = writeAgentWrapper(name);
   ensureMatrixDeps();
@@ -350,7 +388,7 @@ async function cmdAgentAdd(name, flags) {
     cfg.agents.push({ name, userId: creds.user_id });
     saveConfig(cfg);
   }
-  console.log(mcpSnippets(cfg, name, wrapperPath));
+  console.log(mcpSnippets(cfg, name, wrapperPath, memoryUrl, memoryToken));
 }
 
 async function cmdUserAdd(name) {
@@ -410,6 +448,8 @@ async function cmdLink(code) {
       v: 1, serverName: cfg.serverName, homeserverUrl: cfg.homeserverUrl,
       ports: cfg.ports, rooms: cfg.rooms,
       registrationToken: env.HEARTH_REGISTRATION_TOKEN, admin: adminEnv,
+      memoryUrl: env.HEARTH_MEMORY_URL || "",
+      memoryAdminToken: env.HEARTH_MEMORY_ADMIN_TOKEN || "",
     };
     console.log(`Hub link code for ${cfg.serverName} — CONTAINS ADMIN CREDENTIALS,
 share only over a secure channel and only with machines you trust:\n`);
@@ -435,6 +475,8 @@ Then: hearth agent add <name>, hearth user add <name>, hearth status.`);
       HEARTH_SERVER_NAME: p.serverName,
       HEARTH_HOMESERVER_URL: p.homeserverUrl,
       HEARTH_REGISTRATION_TOKEN: p.registrationToken,
+      ...(p.memoryUrl ? { HEARTH_MEMORY_URL: p.memoryUrl } : {}),
+      ...(p.memoryAdminToken ? { HEARTH_MEMORY_ADMIN_TOKEN: p.memoryAdminToken } : {}),
     });
     writeEnvFile(path.join(SECRETS, "admin.env"), p.admin);
     ok(`Linked to ${p.serverName} (${p.homeserverUrl})`);

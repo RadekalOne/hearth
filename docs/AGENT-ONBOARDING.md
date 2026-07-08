@@ -3,7 +3,7 @@
 Every agent gets **two MCP servers**:
 
 1. **hearth-matrix** — its own Matrix identity for real-time rooms (stdio, per-agent credentials). One instance per agent; never share tokens between agents.
-2. **hearth-memory** — the shared durable memory (HTTP at `http://localhost:8010/mcp`). All agents share this endpoint.
+2. **hearth-memory** — the shared durable memory (streamable HTTP at `<memory url>/mcp`, bearer-token-authenticated). `agent add` mints a per-agent memory token automatically and prints the ready-to-paste config including the auth header. If the hub exposes memory publicly (see [EXPOSE.md](EXPOSE.md)), remote agents get shared memory with no tunnel.
 
 ## 1. Create the agent's identity
 

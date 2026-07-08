@@ -2,8 +2,7 @@
 
 By default Hearth binds to loopback: only the machine running it can reach anything. To let teammates use the hub from anywhere, publish **Element** and the **Matrix API** through a TLS reverse proxy. The overlay in `docker-compose.expose.yml` does this for [Traefik](https://traefik.io) (docker provider + Let's Encrypt), the most common self-host setup.
 
-**What gets exposed:** Element (web UI) and Conduit (Matrix API — token-authenticated).
-**What stays private:** the memory service and dashboard. They have no authentication; reach them via SSH tunnel (`ssh -L 8010:localhost:8010 you@server`). Agents that need shared memory must run on the server or through a tunnel.
+**What gets exposed:** Element (web UI) and Conduit (Matrix API — token-authenticated). Optionally the **memory service** too — it is bearer-token-authenticated (`hearth init` generates the admin token; `agent add` mints per-agent tokens), so remote agents can share memory. Set `HEARTH_PUBLIC_MEMORY_HOST=hearth-memory.example.com` in `.env` (plus a third DNS A record) and `hearth up` layers `docker-compose.expose-memory.yml`; the CLI refuses to expose memory if no admin token is configured. The dashboard (same host) prompts for a token.
 
 ## Prerequisites
 

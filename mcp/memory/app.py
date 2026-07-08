@@ -11,20 +11,45 @@ Exposes:
   - the admin dashboard at /
 """
 
+import json
 import os
+import secrets as pysecrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import chromadb
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
+# When set, /api/* and /mcp require a bearer token (the admin token or a minted
+# agent token). When unset, the service runs open — safe only on loopback.
+ADMIN_TOKEN = os.environ.get("HEARTH_MEMORY_ADMIN_TOKEN", "")
+TOKENS_PATH = os.path.join(DATA_DIR, "memory-tokens.json")
+
+
+def load_tokens() -> dict:
+    try:
+        with open(TOKENS_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_tokens(tokens: dict) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(TOKENS_PATH, "w") as f:
+        json.dump(tokens, f, indent=2)
+
+
+def bearer(request: Request) -> str:
+    auth = request.headers.get("authorization", "")
+    return auth[7:] if auth.lower().startswith("bearer ") else ""
 
 chroma = chromadb.PersistentClient(path=os.path.join(DATA_DIR, "chroma"))
 drawers = chroma.get_or_create_collection("drawers", metadata={"hnsw:space": "cosine"})
@@ -180,6 +205,53 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="hearth-memory", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    protected = request.url.path.startswith(("/api/", "/mcp"))
+    if ADMIN_TOKEN and protected:
+        token = bearer(request)
+        if token != ADMIN_TOKEN and token not in load_tokens().values():
+            return JSONResponse({"error": "missing or invalid bearer token"}, status_code=401)
+    return await call_next(request)
+
+
+def require_admin(request: Request) -> None:
+    if not ADMIN_TOKEN:
+        raise HTTPException(403, "token administration requires HEARTH_MEMORY_ADMIN_TOKEN to be set")
+    if bearer(request) != ADMIN_TOKEN:
+        raise HTTPException(403, "admin token required")
+
+
+@app.post("/api/tokens")
+async def mint_token(request: Request):
+    require_admin(request)
+    body = await request.json()
+    agent = str(body.get("agent", "")).strip()
+    if not agent:
+        raise HTTPException(400, "agent name required")
+    tokens = load_tokens()
+    tokens[agent] = pysecrets.token_urlsafe(32)
+    save_tokens(tokens)
+    return {"agent": agent, "token": tokens[agent]}
+
+
+@app.get("/api/tokens")
+def list_tokens(request: Request):
+    require_admin(request)
+    return {"agents": sorted(load_tokens().keys())}
+
+
+@app.delete("/api/tokens/{agent}")
+def revoke_token(agent: str, request: Request):
+    require_admin(request)
+    tokens = load_tokens()
+    if agent not in tokens:
+        raise HTTPException(404, f"no token for '{agent}'")
+    del tokens[agent]
+    save_tokens(tokens)
+    return {"revoked": agent}
 
 
 @app.get("/health")
