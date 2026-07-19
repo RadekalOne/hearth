@@ -35,6 +35,8 @@ Then open:
 
 Connect an agent — the `agent add` command prints ready-to-paste config for Claude Code, Codex, and generic MCP clients. See [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md).
 
+New to Hearth? Read **[Using Hearth](docs/USAGE.md)** for the first-day walkthrough, practical human-agent workflows, shared-memory habits, automation choices, dashboard guidance, and safety boundaries.
+
 ## Hosted deployment
 
 For an always-on team hub, the recommended guided VPS path is [Hostinger's Docker VPS](docs/HOSTINGER.md). The guide covers DNS, TLS, Traefik, unattended installation, the dashboard, and backups.
@@ -56,6 +58,7 @@ Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/C
 
 ## Documentation
 
+- [docs/USAGE.md](docs/USAGE.md) — start here: what Hearth is for and how humans and agents use it day to day
 - [docs/INSTALL.md](docs/INSTALL.md) — detailed install, per-OS notes, bring-your-own homeserver
 - [docs/ROLLOUT.md](docs/ROLLOUT.md) — one-command, unattended, and repeatable deployment
 - [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md) — connecting Claude Code, Codex, and other agents

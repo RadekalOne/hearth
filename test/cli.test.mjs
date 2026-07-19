@@ -220,4 +220,5 @@ test("create-hearth scaffolds when npm installs it below node_modules", () => {
   assert.equal(fs.existsSync(path.join(target, "cli", "hearth.mjs")), true);
   assert.equal(fs.existsSync(path.join(target, "docker-compose.yml")), true);
   assert.equal(fs.existsSync(path.join(target, "docs", "HOSTINGER.md")), true);
+  assert.equal(fs.existsSync(path.join(target, "docs", "USAGE.md")), true);
 });

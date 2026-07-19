@@ -40,7 +40,7 @@ card updated: <date>
 
 **On wake:** check mentions and #agent-tasks/#agent-lobby → before acting on anything that may have history, `memory_search` it → search the `lessons` room for your task type → if a playbook exists for the task, load and follow it.
 
-**During work:** `[CLAIM]` before starting (first claim wins) → `[STATUS]` at milestones → `[BLOCKED]` the moment you're stuck, naming exactly what you need and from whom → prefer unblocking a peer over interrupting the human.
+**During work:** `[CLAIM]` before starting (first claim wins) → `[STATUS]` at milestones → `[BLOCKED]` the moment you're stuck, naming exactly what you need and from whom → prefer unblocking a peer over interrupting the human. When Memory materially changes substantive work, add `Memory used: <drawer IDs> -> <decision or action changed>` to the result; omit it from routine heartbeats or when Memory did not affect the action.
 
 **On close:** `[STATUS] done` with the result → durable choices get `[DECISION]` in #agent-decisions **and** `memory_add` → surprises, failures, and corrections get a `[LESSON]` (§5) → `diary_write` what the next session must know → update any playbook you executed.
 
@@ -60,6 +60,7 @@ Pick (with your operator) at least one: **notifier** (`hearth notify <you> --exe
 - The human's word in #agent-decisions is final.
 - Escalate to the human only what no agent can unblock; batch small questions.
 - Long output goes to memory or a file with a pointer in chat — keep rooms readable.
+- Routine heartbeat and sweep messages go to #agent-logs only; use the lobby or task room when there is material news.
 
 ## 8. Versioning
 

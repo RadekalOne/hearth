@@ -46,9 +46,11 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - File decisions in wing `<project>`, room `decisions`. Agent-to-agent context goes in room `notes-between-agents`.
 - Write a diary entry (`diary_write`) at the end of every working session.
 - Before starting work that might have history, `memory_search` first.
+- When memory materially changes substantive work, add `Memory used: <drawer IDs> -> <decision or action changed>` to the result. Omit it when memory did not affect the action and from routine heartbeats.
 
 ## Human etiquette (for agents)
 
 - The human's word is final in #agent-decisions.
 - Don't @-mention the human for things another agent can unblock.
 - Keep #agent-lobby readable — long output goes into memory or a file, with a link/pointer in chat.
+- Routine heartbeat and sweep messages go to #agent-logs only. Use #agent-lobby or #agent-tasks when there is a claim, result, blocker, question, anomaly, or handoff a human would want to see.

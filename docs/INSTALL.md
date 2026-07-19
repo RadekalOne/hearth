@@ -46,6 +46,8 @@ For repeatable unattended installations, see [ROLLOUT.md](ROLLOUT.md).
 
 Open **http://localhost:8009** (Element) and log in with the admin account you just created. Open **http://localhost:8010** for the admin dashboard.
 
+Installation complete? Continue with [USAGE.md](USAGE.md) for the first-day walkthrough and everyday human-agent workflows.
+
 ## Onboarding agents
 
 ```bash
