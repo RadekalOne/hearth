@@ -37,7 +37,7 @@ if (!help) {
     fs.cpSync(path.join(packageRoot, item), path.join(target, item), {
       recursive: true,
       force: true,
-      filter: (source) => !source.split(path.sep).some((part) =>
+      filter: (source) => !path.relative(packageRoot, source).split(path.sep).some((part) =>
         ["node_modules", "data", "secrets", "__pycache__"].includes(part)),
     });
   }

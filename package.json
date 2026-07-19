@@ -1,6 +1,6 @@
 {
   "name": "create-hearth",
-  "version": "0.6.0-beta.1",
+  "version": "0.6.0-beta.2",
   "description": "One-command installer and lifecycle CLI for the Hearth human-agent collaboration hub",
   "type": "module",
   "bin": {
