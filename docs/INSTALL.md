@@ -10,12 +10,21 @@ On Windows, Docker Desktop needs the WSL2 backend (its installer sets this up).
 ## Install
 
 ```bash
-git clone <hearth-repo-url>
-cd hearth
-node cli/hearth.mjs init
+npx create-hearth@latest
 ```
 
-The wizard asks:
+This checks the machine, creates `./hearth`, starts the stack, and guides you through the initial administrator and room setup. To choose another location, use `--directory <path>`.
+
+For a source checkout instead:
+
+```bash
+git clone https://github.com/RadekalOne/hearth.git
+cd hearth
+node cli/hearth.mjs doctor
+node cli/hearth.mjs install
+```
+
+The guided installation asks:
 
 1. **Homeserver mode** — `local` (default) bundles a Conduit Matrix server inside Docker; `byo` points Hearth at a homeserver you already run.
 2. **Server name** — the domain part of user IDs (`@alice:hearth.localhost`). For local use the default is fine.
@@ -23,13 +32,15 @@ The wizard asks:
 
 It writes `.env` (secrets, gitignored) and `hearth.config.json` (shareable config).
 
-Then:
+The individual lifecycle commands remain available:
 
 ```bash
 node cli/hearth.mjs up       # builds + starts containers (first run downloads images)
 node cli/hearth.mjs setup    # creates your human admin account + the 4 rooms
 node cli/hearth.mjs status   # verify: homeserver ok, memory ok
 ```
+
+For repeatable unattended installations, see [ROLLOUT.md](ROLLOUT.md).
 
 Open **http://localhost:8009** (Element) and log in with the admin account you just created. Open **http://localhost:8010** for the admin dashboard.
 

@@ -11,7 +11,7 @@ Every agent gets **two MCP servers**:
 node cli/hearth.mjs agent add <name>        # e.g. claude, codex, mavis
 ```
 
-One command does everything: registers the Matrix account, joins the rooms, saves credentials to `secrets/agents/<name>.env`, generates a runnable wrapper at `secrets/agents/<name>.mjs`, installs the MCP server's dependencies if needed, and prints ready-to-paste client config. **The printed config contains no tokens** — clients just run the wrapper.
+One command does everything: registers the Matrix account, joins the rooms, saves credentials to `secrets/agents/<name>.env`, generates a runnable wrapper at `secrets/agents/<name>.mjs`, installs the MCP server's dependencies if needed, and prints ready-to-paste client config. **The printed config contains no tokens** — Matrix clients run the wrapper, while Memory clients reference `HEARTH_MEMORY_TOKEN` from the gitignored credentials file.
 
 ### Adding agents from a different machine (`hearth link`)
 
@@ -51,9 +51,9 @@ Admins can bulk-load existing knowledge (from a previous memory system, notes ex
 `agent add` prints these with real paths filled in:
 
 ```bash
-# Claude Code
+# Claude Code (HEARTH_MEMORY_TOKEN must be present in Claude's environment)
 claude mcp add hearth-matrix -- node /path/to/hearth/secrets/agents/<name>.mjs
-claude mcp add --transport http hearth-memory http://localhost:8010/mcp
+claude mcp add-json hearth-memory '{ "type": "http", "url": "http://localhost:8010/mcp", "headers": { "Authorization": "Bearer ${HEARTH_MEMORY_TOKEN}" } }'
 ```
 
 ```toml
@@ -61,9 +61,15 @@ claude mcp add --transport http hearth-memory http://localhost:8010/mcp
 [mcp_servers.hearth-matrix]
 command = "node"
 args = ["/path/to/hearth/secrets/agents/<name>.mjs"]
+
+[mcp_servers.hearth-memory]
+url = "http://localhost:8010/mcp"
+bearer_token_env_var = "HEARTH_MEMORY_TOKEN"
 ```
 
-Any other MCP client: run the wrapper over stdio; memory is streamable HTTP at `http://localhost:8010/mcp` (only reachable where the hub runs — SSH tunnel from elsewhere).
+Before starting Claude Code or Codex, load `HEARTH_MEMORY_TOKEN` from `secrets/agents/<name>.env` into that process's environment. Do not copy the token into a tracked config file. Claude Code expands `${HEARTH_MEMORY_TOKEN}` in MCP headers; Codex reads the variable named by `bearer_token_env_var`.
+
+Any other MCP client: run the wrapper over stdio; memory is streamable HTTP at `http://localhost:8010/mcp` (only reachable where the hub runs — SSH tunnel from elsewhere). If the client supports environment expansion in HTTP headers, use `Authorization: Bearer ${HEARTH_MEMORY_TOKEN}`.
 
 ## 3. Teach the agent the protocol
 
@@ -86,6 +92,8 @@ Agents are only "in the room" while a session is running — a message sits in t
    ```
 
    It long-polls the homeserver with the agent's own credentials and runs your command the instant anyone writes `@<agent>` in a room the agent has joined. The triggering context is passed in env vars (`HEARTH_ROOM_ID`, `HEARTH_EVENT_ID`, `HEARTH_SENDER`, `HEARTH_BODY`). On Linux/macOS use `$HEARTH_ROOM_ID` syntax; run it under a process manager (systemd, pm2, Task Scheduler) to keep it alive.
+
+   On Windows, put a multi-word agent prompt in a `.ps1` handler and pass that script to `--exec`; nested one-line quoting differs between PowerShell and `cmd.exe`. For a completely invisible Task Scheduler job, launch the PowerShell handler through `wscript.exe` with a small `.vbs` wrapper. Keep unattended agent permissions scoped to the Hearth tools the handler actually uses.
 
 ## Tool reference
 

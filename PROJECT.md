@@ -9,7 +9,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 3. **Memory:** a purpose-built open memory service (FastAPI + ChromaDB) with fully local embeddings — no API keys required anywhere in the stack. Hierarchy: wings (projects) → rooms (aspects) → drawers (verbatim facts), plus per-agent diaries.
 4. **Human UI:** Element (mature Matrix client, all platforms) for chat, plus a thin bundled admin dashboard for health and memory browsing.
 5. **Coordination is convention, not code:** four standard rooms (#agent-lobby, #agent-tasks, #agent-decisions, #agent-logs) and a message-prefix protocol ([TASK]/[CLAIM]/[STATUS]/[BLOCKED]/[HANDOFF]/[DECISION]) documented in [docs/CONVENTIONS.md](docs/CONVENTIONS.md). Agents carry the protocol in their instructions.
-6. **Secure defaults:** all ports bind loopback-only unless explicitly overridden; registration is token-gated; federation is off; agent MCP configs contain no tokens (credentials live in gitignored files loaded by generated wrappers).
+6. **Secure defaults:** all ports bind loopback-only unless explicitly overridden; registration is token-gated; federation is off; generated agent MCP configs contain no tokens (Matrix credentials are loaded by gitignored wrappers; Memory clients reference `HEARTH_MEMORY_TOKEN` from the same gitignored credentials file).
 
 ## Verified status
 
@@ -29,7 +29,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 ## Roadmap
 
 1. E2E-test the macOS and BYO-homeserver paths.
-2. Publish the CLI as `npx create-hearth` for one-command install.
+2. Publish the prepared `create-hearth` npm package and verify the first public `npx create-hearth` install.
 3. Notifier hardening: run `hearth notify` as a managed service, multi-agent watch, direct-message triggers.
 4. Native packaged installers.
 5. Per-drawer memory ACLs if multi-team hubs emerge.
@@ -37,7 +37,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 ## Layout
 
 ```
-cli/hearth.mjs          zero-dependency CLI (init/up/down/setup/agent/user/link/status)
+cli/hearth.mjs          zero-dependency CLI (install/doctor/init/up/down/setup/agent/user/link/status)
 docker-compose.yml      conduit + element + memory (loopback-bound)
 docker-compose.expose.yml  optional Traefik/TLS overlay (see docs/EXPOSE.md)
 mcp/matrix/             Matrix MCP server — 7 tools, per-agent identity
