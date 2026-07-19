@@ -1,5 +1,7 @@
 # Installing Hearth
 
+Want an always-on hosted hub? See the complete [Hostinger Docker VPS guide](HOSTINGER.md) for DNS, TLS, dashboard, and backup setup.
+
 ## Prerequisites
 
 - **Docker Desktop** (Windows/macOS) or Docker Engine + Compose v2 (Linux) — https://www.docker.com/products/docker-desktop/

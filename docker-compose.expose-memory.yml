@@ -3,10 +3,17 @@
 # layers this file only when HEARTH_PUBLIC_MEMORY_HOST is configured.
 services:
   memory:
+    networks: [default, hearth-proxy]
     labels:
       traefik.enable: "true"
+      traefik.docker.network: ${HEARTH_PROXY_NETWORK:-hearth-proxy}
       traefik.http.routers.hearth-memory.entrypoints: websecure
       traefik.http.routers.hearth-memory.rule: Host(`${HEARTH_PUBLIC_MEMORY_HOST:?set in .env}`)
       traefik.http.routers.hearth-memory.tls.certresolver: ${HEARTH_CERTRESOLVER:-letsencrypt}
       traefik.http.routers.hearth-memory.service: hearth-memory-svc
       traefik.http.services.hearth-memory-svc.loadbalancer.server.port: "8010"
+
+networks:
+  hearth-proxy:
+    external: true
+    name: ${HEARTH_PROXY_NETWORK:-hearth-proxy}

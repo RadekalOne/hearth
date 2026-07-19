@@ -115,6 +115,64 @@ test("noninteractive install validates deployment config before starting Docker"
   assert.match(result.stderr, /invalid deployment port memory=70000/);
 });
 
+test("noninteractive install rejects malformed public deployment hosts before Docker", () => {
+  const root = fixture();
+  const config = path.join(root, "deployment.json");
+  fs.writeFileSync(config, JSON.stringify({
+    mode: "local",
+    public: {
+      elementHost: "https://hearth.example.test",
+      matrixHost: "hearth-matrix.example.test",
+    },
+  }));
+  const result = spawnSync(process.execPath,
+    [path.join(root, "cli", "hearth.mjs"), "install", "--yes", "--skip-doctor", "--config", config], {
+      encoding: "utf8", env: fixtureEnv(root),
+    });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /public\.elementHost must be a hostname/);
+  assert.doesNotMatch(result.stderr, /Docker not found/);
+});
+
+test("public deployment config writes proxy hosts and public service URLs", () => {
+  const root = fixture();
+  fs.mkdirSync(path.join(root, "config"), { recursive: true });
+  fs.copyFileSync(path.join(REPO, "config", "element-config.json"),
+    path.join(root, "config", "element-config.json"));
+  const config = path.join(root, "deployment.json");
+  fs.writeFileSync(config, JSON.stringify({
+    mode: "local",
+    serverName: "hearth.example.test",
+    public: {
+      elementHost: "hearth.example.test",
+      matrixHost: "hearth-matrix.example.test",
+      memoryHost: "hearth-memory.example.test",
+      certResolver: "letsencrypt",
+      proxyNetwork: "hearth-proxy",
+    },
+  }));
+  spawnSync(process.execPath,
+    [path.join(root, "cli", "hearth.mjs"), "install", "--yes", "--skip-doctor", "--config", config], {
+      encoding: "utf8", env: { ...fixtureEnv(root), HEARTH_ADMIN_PASSWORD: "test-only-password" },
+    });
+
+  const env = fs.readFileSync(path.join(root, ".env"), "utf8");
+  assert.match(env, /HEARTH_EXPOSE=1/);
+  assert.match(env, /HEARTH_PUBLIC_MATRIX_HOST=hearth-matrix\.example\.test/);
+  assert.match(env, /HEARTH_MEMORY_URL=https:\/\/hearth-memory\.example\.test/);
+  assert.match(env, /HEARTH_PROXY_NETWORK=hearth-proxy/);
+  const element = JSON.parse(fs.readFileSync(path.join(root, "config", "element-config.json"), "utf8"));
+  assert.equal(element.default_server_config["m.homeserver"].base_url,
+    "https://hearth-matrix.example.test");
+});
+
+test("help includes dashboard observer recovery", () => {
+  const root = fixture();
+  const output = execFileSync(process.execPath,
+    [path.join(root, "cli", "hearth.mjs")], { encoding: "utf8", env: fixtureEnv(root) });
+  assert.match(output, /hearth dashboard configure/);
+});
+
 test("create-hearth scaffolds a durable directory and preserves deployment config", () => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "create-hearth-test-"));
   const target = path.join(parent, "hub");
@@ -161,4 +219,5 @@ test("create-hearth scaffolds when npm installs it below node_modules", () => {
   assert.match(result.stderr, /could not read deployment config/);
   assert.equal(fs.existsSync(path.join(target, "cli", "hearth.mjs")), true);
   assert.equal(fs.existsSync(path.join(target, "docker-compose.yml")), true);
+  assert.equal(fs.existsSync(path.join(target, "docs", "HOSTINGER.md")), true);
 });
