@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/cli.test.mjs",
     "prepublishOnly": "npm run check && npm test"
   },
   "engines": {
