@@ -33,3 +33,10 @@ jobs:
       - uses: actions/checkout@v7
       - run: cp .env.example .env
       - run: docker compose config --quiet
+      - name: Validate public Traefik overlays
+        env:
+          HEARTH_PUBLIC_ELEMENT_HOST: hearth.example.test
+          HEARTH_PUBLIC_MATRIX_HOST: hearth-matrix.example.test
+          HEARTH_PUBLIC_MEMORY_HOST: hearth-memory.example.test
+          HEARTH_MEMORY_ADMIN_TOKEN: ci-admin-token
+        run: docker compose -f docker-compose.yml -f docker-compose.expose.yml -f docker-compose.expose-memory.yml config --quiet

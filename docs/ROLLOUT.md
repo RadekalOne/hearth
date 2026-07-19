@@ -2,6 +2,8 @@
 
 This guide covers the shortest supported installation path and repeatable configuration for teams.
 
+For a complete always-on VPS walkthrough, including DNS, Traefik, TLS, and backups, see [HOSTINGER.md](HOSTINGER.md).
+
 ## Guided rollout
 
 Install Docker Desktop (or Docker Engine with Compose v2) and Node.js 20 or newer, then run:
@@ -55,6 +57,20 @@ npx create-hearth@latest --directory hearth --yes --config deployment.json
 On PowerShell, set the secret only for the current process with `$env:HEARTH_ADMIN_PASSWORD = "..."`. Use your secret manager in CI or fleet tooling; do not commit the password or generated `.env` and `secrets/` files.
 
 For `byo` mode, set `homeserverUrl` to an HTTPS Matrix homeserver and set `serverName` to the domain used in Matrix user IDs. Closed-registration homeservers still require accounts to be provisioned by their administrator.
+
+For a public bundled deployment behind Traefik, add a non-secret `public` object. The proxy network must already exist before the installer starts Docker:
+
+```json
+"public": {
+  "elementHost": "hearth.example.com",
+  "matrixHost": "hearth-matrix.example.com",
+  "memoryHost": "hearth-memory.example.com",
+  "certResolver": "letsencrypt",
+  "proxyNetwork": "hearth-proxy"
+}
+```
+
+`elementHost` and `matrixHost` are required when `public` is present; `memoryHost` is optional. The installer validates hostnames, configures Element and the public Matrix URL, selects the Traefik overlays, and writes the public Memory URL automatically.
 
 ## Repeatability and recovery
 

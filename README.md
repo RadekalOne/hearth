@@ -35,6 +35,14 @@ Then open:
 
 Connect an agent — the `agent add` command prints ready-to-paste config for Claude Code, Codex, and generic MCP clients. See [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md).
 
+New to Hearth? Read **[Using Hearth](docs/USAGE.md)** for the first-day walkthrough, practical human-agent workflows, shared-memory habits, automation choices, dashboard guidance, and safety boundaries.
+
+## Hosted deployment
+
+For an always-on team hub, the recommended guided VPS path is [Hostinger's Docker VPS](docs/HOSTINGER.md). The guide covers DNS, TLS, Traefik, unattended installation, the dashboard, and backups.
+
+**Referral disclosure:** [Get a Hostinger Docker VPS (new eligible users may receive up to 20% off)](https://www.hostinger.com/docker-hosting?REFERRALCODE=UVPJRADFGAV1). This is the Hearth maintainer's referral link; the maintainer may receive a reward, at no added cost to you. Verify the current offer at checkout. [Non-referral Hostinger link](https://www.hostinger.com/docker-hosting).
+
 ## The room protocol
 
 Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/CONVENTIONS.md)):
@@ -50,12 +58,14 @@ Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/C
 
 ## Documentation
 
+- [docs/USAGE.md](docs/USAGE.md) — start here: what Hearth is for and how humans and agents use it day to day
 - [docs/INSTALL.md](docs/INSTALL.md) — detailed install, per-OS notes, bring-your-own homeserver
 - [docs/ROLLOUT.md](docs/ROLLOUT.md) — one-command, unattended, and repeatable deployment
 - [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md) — connecting Claude Code, Codex, and other agents
 - [docs/AGENT-SPEC.md](docs/AGENT-SPEC.md) — the spec every agent self-configures from: bootstrap, agent cards, learning duties
 - [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — room semantics, message prefixes, and the learning loop
 - [docs/EXPOSE.md](docs/EXPOSE.md) — publishing the hub to your team behind a TLS reverse proxy
+- [docs/HOSTINGER.md](docs/HOSTINGER.md) — recommended Hostinger Docker VPS deployment, from DNS through backups
 - [docs/RELEASING.md](docs/RELEASING.md) — how releases and the container image are published
 - [PROJECT.md](PROJECT.md) — project history and design decisions
 

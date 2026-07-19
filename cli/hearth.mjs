@@ -82,6 +82,10 @@ function isHttpUrl(value) {
     return false;
   }
 }
+function isHostname(value) {
+  return typeof value === "string" && value.length <= 253 &&
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(value);
+}
 function isSafeEnvMap(value) {
   return value && typeof value === "object" && !Array.isArray(value) &&
     Object.entries(value).every(([key, item]) =>
@@ -125,6 +129,27 @@ function readDeploymentConfig(file) {
         Number(value) < 1 || Number(value) > 65535) {
       die(`invalid deployment port ${name}=${value}`);
     }
+  }
+  if (cfg.public !== undefined) {
+    if (!cfg.public || typeof cfg.public !== "object" || Array.isArray(cfg.public)) {
+      die("deployment config public must be a JSON object");
+    }
+    for (const name of ["elementHost", "matrixHost", "memoryHost"]) {
+      if (cfg.public[name] !== undefined && !isHostname(cfg.public[name])) {
+        die(`deployment config public.${name} must be a hostname without a URL scheme or path`);
+      }
+    }
+    if (!cfg.public.elementHost || !cfg.public.matrixHost) {
+      die("deployment config public requires elementHost and matrixHost");
+    }
+    for (const name of ["certResolver", "proxyNetwork"]) {
+      if (cfg.public[name] !== undefined &&
+          (typeof cfg.public[name] !== "string" || !/^[a-z0-9][a-z0-9._-]*$/i.test(cfg.public[name]))) {
+        die(`deployment config public.${name} contains unsupported characters`);
+      }
+    }
+    if (cfg.mode === "byo") die("deployment config public is only supported with the bundled local homeserver");
+    cfg.homeserverUrl ??= `https://${cfg.public.matrixHost}`;
   }
   return cfg;
 }
@@ -182,6 +207,18 @@ function compose(...args) {
   const res = spawnSync("docker", ["compose", ...args], { cwd: ROOT, stdio: "inherit" });
   if (res.error) die("Docker not found. Install Docker Desktop: https://www.docker.com/products/docker-desktop/");
   if (res.status !== 0) die(`docker compose ${args[0]} failed`);
+}
+
+function composeFileArgs(env) {
+  const files = [];
+  if (env.HEARTH_EXPOSE === "1") {
+    files.push("-f", "docker-compose.yml", "-f", "docker-compose.expose.yml");
+  }
+  if (env.HEARTH_PUBLIC_MEMORY_HOST) {
+    if (!files.length) files.push("-f", "docker-compose.yml");
+    files.push("-f", "docker-compose.expose-memory.yml");
+  }
+  return files;
 }
 
 async function matrix(base, method, pathname, { token, body, okCodes = [], okStatuses = [] } = {}) {
@@ -259,6 +296,7 @@ async function cmdInit(options = {}) {
   }
   ports.memory = String(options.ports?.memory ??
     await ask("Memory service / dashboard port", "8010"));
+  const publicConfig = options.public;
 
   const registrationToken = randomBytes(24).toString("base64url");
   writeEnvFile(ENV_PATH, {
@@ -267,10 +305,20 @@ async function cmdInit(options = {}) {
     HEARTH_HOMESERVER_URL: homeserverUrl,
     HEARTH_REGISTRATION_TOKEN: registrationToken,
     HEARTH_MEMORY_ADMIN_TOKEN: randomBytes(32).toString("base64url"),
-    HEARTH_MEMORY_URL: `http://localhost:${ports.memory}`,
+    HEARTH_MEMORY_URL: publicConfig?.memoryHost
+      ? `https://${publicConfig.memoryHost}`
+      : `http://localhost:${ports.memory}`,
     HEARTH_MATRIX_PORT: ports.matrix ?? "6167",
     HEARTH_ELEMENT_PORT: ports.element ?? "8009",
     HEARTH_MEMORY_PORT: ports.memory,
+    ...(publicConfig ? {
+      HEARTH_EXPOSE: "1",
+      HEARTH_PUBLIC_ELEMENT_HOST: publicConfig.elementHost,
+      HEARTH_PUBLIC_MATRIX_HOST: publicConfig.matrixHost,
+      HEARTH_PUBLIC_MEMORY_HOST: publicConfig.memoryHost ?? "",
+      HEARTH_CERTRESOLVER: publicConfig.certResolver ?? "letsencrypt",
+      HEARTH_PROXY_NETWORK: publicConfig.proxyNetwork ?? "hearth-proxy",
+    } : {}),
     COMPOSE_PROFILES: mode === "local" ? "local-homeserver" : "",
   });
   saveConfig({ mode, serverName, homeserverUrl, ports, agents: [], rooms: {} });
@@ -288,14 +336,10 @@ async function cmdInit(options = {}) {
 
 async function cmdUp() {
   const env = readEnvFile(ENV_PATH);
-  const files = [];
-  if (env.HEARTH_EXPOSE === "1") files.push("-f", "docker-compose.yml", "-f", "docker-compose.expose.yml");
   if (env.HEARTH_PUBLIC_MEMORY_HOST) {
     if (!env.HEARTH_MEMORY_ADMIN_TOKEN) die("refusing to expose memory without HEARTH_MEMORY_ADMIN_TOKEN (no auth)");
-    if (!files.length) files.push("-f", "docker-compose.yml");
-    files.push("-f", "docker-compose.expose-memory.yml");
   }
-  compose(...files, "up", "-d", "--build");
+  compose(...composeFileArgs(env), "up", "-d", "--build");
   ok("Stack is starting. Run `hearth status` to check health.");
 }
 async function cmdDown() {
@@ -319,7 +363,7 @@ Usage:
 --directory <path> install files into this directory (default: ./hearth)
 --yes              noninteractive; requires HEARTH_ADMIN_PASSWORD if setup is incomplete
 --config <file>    JSON defaults (mode, serverName, homeserverUrl, ports, adminUsername,
-                   adminPasswordEnv)
+                   adminPasswordEnv, public)
 --skip-doctor      bypass prerequisite checks (not recommended)`);
     return;
   }
@@ -360,6 +404,9 @@ Usage:
   const roomsComplete = ROOMS.every((room) => cfg.rooms?.[room.alias]);
   if (adminEnv.MATRIX_ACCESS_TOKEN && roomsComplete) {
     ok("Admin identity and standard rooms already configured");
+    if (!readEnvFile(ENV_PATH).HEARTH_MATRIX_TOKEN) {
+      await configureDashboardObserver(cfg, adminEnv.MATRIX_ACCESS_TOKEN);
+    }
   } else {
     const passwordEnv = deployment.adminPasswordEnv || "HEARTH_ADMIN_PASSWORD";
     const password = yes ? process.env[passwordEnv] : undefined;
@@ -436,6 +483,7 @@ async function cmdSetup(options = {}) {
     }
   }
   saveConfig(cfg);
+  await configureDashboardObserver(cfg, creds.access_token);
   console.log("\nDone. Open Element and log in as your admin user. Next: hearth agent add <name>\n");
 }
 
@@ -451,6 +499,44 @@ async function joinStandardRooms(cfg, adminToken, creds) {
     });
     ok(`${creds.user_id} joined #${alias}`);
   }
+}
+
+async function configureDashboardObserver(cfg, adminToken) {
+  const env = readEnvFile(ENV_PATH);
+  const observerPath = path.join(SECRETS, "dashboard.env");
+  let observer = readEnvFile(observerPath);
+
+  if (!observer.MATRIX_ACCESS_TOKEN && cfg.mode === "local") {
+    try {
+      const password = randomBytes(32).toString("base64url");
+      const creds = await registerUser(cfg.homeserverUrl, "hearth-dashboard", password,
+        env.HEARTH_REGISTRATION_TOKEN);
+      await joinStandardRooms(cfg, adminToken, creds);
+      observer = {
+        MATRIX_HOMESERVER_URL: cfg.homeserverUrl,
+        MATRIX_USER_ID: creds.user_id,
+        MATRIX_ACCESS_TOKEN: creds.access_token,
+      };
+      writeEnvFile(observerPath, observer);
+      ok(`Created dedicated dashboard observer ${creds.user_id}`);
+    } catch (err) {
+      console.log(`⚠ Could not create a dedicated dashboard observer (${err.message}); using the admin Matrix token.`);
+    }
+  }
+
+  const observerToken = observer.MATRIX_ACCESS_TOKEN || adminToken;
+  if (!observerToken) die("dashboard observer requires an admin Matrix token");
+  const updatedEnv = { ...env, HEARTH_MATRIX_TOKEN: observerToken };
+  writeEnvFile(ENV_PATH, updatedEnv);
+  compose(...composeFileArgs(updatedEnv), "up", "-d", "--force-recreate", "memory");
+  ok("Dashboard Matrix activity observer configured");
+}
+
+async function cmdDashboardConfigure() {
+  const cfg = loadConfig();
+  const adminEnv = readEnvFile(path.join(SECRETS, "admin.env"));
+  if (!adminEnv.MATRIX_ACCESS_TOKEN) die("No admin credentials — run `hearth setup` first.");
+  await configureDashboardObserver(cfg, adminEnv.MATRIX_ACCESS_TOKEN);
 }
 
 // Write a self-contained wrapper next to the agent's env file: it loads the
@@ -836,6 +922,7 @@ try {
   else if (cmd === "agent" && sub === "export") await cmdAgentExport(rest[0]);
   else if (cmd === "agent" && sub === "import") await cmdAgentImport(rest[0]);
   else if (cmd === "user" && sub === "add") await cmdUserAdd(rest[0]);
+  else if (cmd === "dashboard" && sub === "configure") await cmdDashboardConfigure();
   else if (cmd === "link") await cmdLink(sub);
   else if (cmd === "notify") await cmdNotify(sub, rest);
   else if (cmd === "status") await cmdStatus();
@@ -852,6 +939,7 @@ try {
   hearth agent export <name>  print a transfer code to move this agent to another machine
   hearth agent import <code>  recreate an exported agent here (env + wrapper + MCP config)
   hearth user add <name>      onboard a human teammate (Element login card)
+  hearth dashboard configure configure/recover the dashboard Matrix observer
   hearth link [code]          no code: print a hub link code for another machine
                               with code: link this machine to a remote hub
   hearth notify <agent> [--exec "<command>"]

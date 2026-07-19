@@ -3,8 +3,10 @@
 # See docs/EXPOSE.md. The memory service is NOT exposed by design (no auth).
 services:
   conduit:
+    networks: [default, hearth-proxy]
     labels:
       traefik.enable: "true"
+      traefik.docker.network: ${HEARTH_PROXY_NETWORK:-hearth-proxy}
       traefik.http.routers.hearth-matrix.entrypoints: websecure
       traefik.http.routers.hearth-matrix.rule: Host(`${HEARTH_PUBLIC_MATRIX_HOST:?set in .env}`)
       traefik.http.routers.hearth-matrix.tls.certresolver: ${HEARTH_CERTRESOLVER:-letsencrypt}
@@ -12,10 +14,17 @@ services:
       traefik.http.services.hearth-matrix-svc.loadbalancer.server.port: "6167"
 
   element:
+    networks: [default, hearth-proxy]
     labels:
       traefik.enable: "true"
+      traefik.docker.network: ${HEARTH_PROXY_NETWORK:-hearth-proxy}
       traefik.http.routers.hearth-element.entrypoints: websecure
       traefik.http.routers.hearth-element.rule: Host(`${HEARTH_PUBLIC_ELEMENT_HOST:?set in .env}`)
       traefik.http.routers.hearth-element.tls.certresolver: ${HEARTH_CERTRESOLVER:-letsencrypt}
       traefik.http.routers.hearth-element.service: hearth-element-svc
       traefik.http.services.hearth-element-svc.loadbalancer.server.port: "80"
+
+networks:
+  hearth-proxy:
+    external: true
+    name: ${HEARTH_PROXY_NETWORK:-hearth-proxy}
