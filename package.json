@@ -1,0 +1,55 @@
+{
+  "name": "create-hearth",
+  "version": "0.6.0-beta.1",
+  "description": "One-command installer and lifecycle CLI for the Hearth human-agent collaboration hub",
+  "type": "module",
+  "bin": {
+    "create-hearth": "cli/create-hearth.mjs",
+    "hearth": "cli/hearth.mjs"
+  },
+  "files": [
+    ".env.example",
+    "cli/",
+    "config/",
+    "docs/",
+    "mcp/matrix/index.mjs",
+    "mcp/matrix/package.json",
+    "mcp/matrix/package-lock.json",
+    "mcp/memory/app.py",
+    "mcp/memory/Dockerfile",
+    "mcp/memory/requirements.txt",
+    "mcp/memory/static/",
+    "docker-compose*.yml",
+    "LICENSE",
+    "PROJECT.md",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RadekalOne/hearth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RadekalOne/hearth/issues"
+  },
+  "homepage": "https://github.com/RadekalOne/hearth#readme",
+  "keywords": [
+    "ai-agents",
+    "matrix",
+    "mcp",
+    "multi-agent",
+    "self-hosted"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

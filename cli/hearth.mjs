@@ -12,10 +12,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(process.env.HEARTH_ROOT ||
+  (fs.existsSync(path.join(process.cwd(), "docker-compose.yml")) ? process.cwd() : PACKAGE_ROOT));
 const CONFIG_PATH = path.join(ROOT, "hearth.config.json");
 const ENV_PATH = path.join(ROOT, ".env");
 const SECRETS = path.join(ROOT, "secrets");
+const AGENT_NAME_RE = /^[a-z0-9][a-z0-9._=-]*$/;
 
 const ROOMS = [
   { alias: "agent-lobby", name: "Agent Lobby", topic: "General human/agent collaboration room." },
@@ -71,6 +74,109 @@ function die(msg) {
 }
 function ok(msg) {
   console.log(`✓ ${msg}`);
+}
+function isHttpUrl(value) {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+function isSafeEnvMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    Object.entries(value).every(([key, item]) =>
+      /^[A-Z_]+$/.test(key) && typeof item === "string" && !/[\r\n]/.test(item));
+}
+function commandResult(command, args) {
+  const result = spawnSync(command, args, { cwd: ROOT, encoding: "utf8" });
+  return {
+    ok: !result.error && result.status === 0,
+    detail: (result.stdout || result.stderr || result.error?.message || "").trim().split(/\r?\n/)[0],
+  };
+}
+function flagValue(args, name) {
+  const exact = args.indexOf(name);
+  if (exact >= 0) return args[exact + 1];
+  const prefix = `${name}=`;
+  return args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+}
+function readDeploymentConfig(file) {
+  if (!file) return {};
+  const resolved = path.resolve(process.cwd(), file);
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(resolved, "utf8"));
+  } catch (err) {
+    die(`could not read deployment config ${resolved}: ${err.message}`);
+  }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) die("deployment config must be a JSON object");
+  if (cfg.mode && !["local", "byo"].includes(cfg.mode)) die("deployment config mode must be local or byo");
+  if (cfg.mode === "byo" && !isHttpUrl(cfg.homeserverUrl)) {
+    die("byo deployment config requires an http(s) homeserverUrl");
+  }
+  if (cfg.adminUsername && !/^[a-z0-9._=-]+$/i.test(cfg.adminUsername)) {
+    die("deployment config adminUsername contains unsupported characters");
+  }
+  if (cfg.adminPasswordEnv && !/^[A-Z_][A-Z0-9_]*$/.test(cfg.adminPasswordEnv)) {
+    die("deployment config adminPasswordEnv must be an environment variable name");
+  }
+  for (const [name, value] of Object.entries(cfg.ports ?? {})) {
+    if (!/^(matrix|element|memory)$/.test(name) || !/^\d+$/.test(String(value)) ||
+        Number(value) < 1 || Number(value) > 65535) {
+      die(`invalid deployment port ${name}=${value}`);
+    }
+  }
+  return cfg;
+}
+function runDoctor({ json = false } = {}) {
+  const checks = [];
+  const add = (name, passed, detail, fix = "") => checks.push({ name, passed, detail, fix });
+  const major = Number(process.versions.node.split(".")[0]);
+  add("Node.js 20+", major >= 20, `Node ${process.versions.node}`, "Install Node.js 20 or newer.");
+
+  const docker = commandResult("docker", ["--version"]);
+  add("Docker CLI", docker.ok, docker.detail || "not found", "Install Docker Desktop or Docker Engine.");
+  const composeCheck = docker.ok
+    ? commandResult("docker", ["compose", "version"])
+    : { ok: false, detail: "Docker unavailable" };
+  add("Docker Compose", composeCheck.ok, composeCheck.detail, "Install the Docker Compose plugin.");
+  const daemon = composeCheck.ok
+    ? commandResult("docker", ["info", "--format", "{{.ServerVersion}}"])
+    : { ok: false, detail: "Docker unavailable" };
+  add("Docker daemon", daemon.ok, daemon.ok ? `server ${daemon.detail}` : daemon.detail,
+    "Start Docker Desktop or the Docker service.");
+
+  try {
+    fs.accessSync(ROOT, fs.constants.R_OK | fs.constants.W_OK);
+    add("Hearth directory", true, ROOT);
+  } catch (err) {
+    add("Hearth directory", false, err.message, "Choose a writable install directory.");
+  }
+  const composePath = path.join(ROOT, "docker-compose.yml");
+  add("Compose bundle", fs.existsSync(composePath), composePath, "Reinstall the Hearth package.");
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+      add("Existing configuration", true, CONFIG_PATH);
+    } catch (err) {
+      add("Existing configuration", false, err.message, "Repair or restore hearth.config.json.");
+    }
+  }
+
+  const passed = checks.every((check) => check.passed);
+  if (json) {
+    console.log(JSON.stringify({ passed, checks }, null, 2));
+  } else {
+    console.log("\nHearth doctor\n");
+    for (const check of checks) {
+      console.log(`${check.passed ? "✓" : "✗"} ${check.name}: ${check.detail}`);
+      if (!check.passed && check.fix) console.log(`  fix: ${check.fix}`);
+    }
+    console.log(passed
+      ? "\nReady to install Hearth.\n"
+      : "\nResolve the failed checks, then run `hearth doctor` again.\n");
+  }
+  return { passed, checks };
 }
 function compose(...args) {
   const res = spawnSync("docker", ["compose", ...args], { cwd: ROOT, stdio: "inherit" });
@@ -131,23 +237,28 @@ async function login(base, username, password) {
 
 // ---------------------------------------------------------------- commands
 
-async function cmdInit() {
+async function cmdInit(options = {}) {
   console.log("\n🔥 Hearth setup wizard\n");
-  const mode = (await ask("Homeserver mode — 'local' (bundled, recommended) or 'byo'", "local")).toLowerCase();
+  const mode = String(options.mode ??
+    await ask("Homeserver mode — 'local' (bundled, recommended) or 'byo'", "local")).toLowerCase();
   if (!["local", "byo"].includes(mode)) die("mode must be 'local' or 'byo'");
 
   let serverName, homeserverUrl, ports = {};
   if (mode === "local") {
-    serverName = await ask("Server name (domain part of user IDs)", "hearth.localhost");
-    ports.matrix = await ask("Matrix port", "6167");
-    ports.element = await ask("Element port", "8009");
-    homeserverUrl = `http://localhost:${ports.matrix}`;
+    serverName = String(options.serverName ??
+      await ask("Server name (domain part of user IDs)", "hearth.localhost"));
+    ports.matrix = String(options.ports?.matrix ?? await ask("Matrix port", "6167"));
+    ports.element = String(options.ports?.element ?? await ask("Element port", "8009"));
+    homeserverUrl = String(options.homeserverUrl ?? `http://localhost:${ports.matrix}`);
   } else {
-    homeserverUrl = await ask("Existing homeserver URL (e.g. https://matrix.example.org)");
+    homeserverUrl = String(options.homeserverUrl ??
+      await ask("Existing homeserver URL (e.g. https://matrix.example.org)"));
     if (!homeserverUrl) die("homeserver URL is required in byo mode");
-    serverName = await ask("Server name (domain in your user IDs)", new URL(homeserverUrl).hostname);
+    serverName = String(options.serverName ??
+      await ask("Server name (domain in your user IDs)", new URL(homeserverUrl).hostname));
   }
-  ports.memory = await ask("Memory service / dashboard port", "8010");
+  ports.memory = String(options.ports?.memory ??
+    await ask("Memory service / dashboard port", "8010"));
 
   const registrationToken = randomBytes(24).toString("base64url");
   writeEnvFile(ENV_PATH, {
@@ -192,6 +303,82 @@ async function cmdDown() {
   ok("Stack stopped.");
 }
 
+async function cmdDoctor(flags) {
+  const result = runDoctor({ json: flags.includes("--json") });
+  if (!result.passed) process.exitCode = 1;
+}
+
+async function cmdInstall(flags) {
+  if (flags.includes("--help") || flags.includes("-h")) {
+    console.log(`Install Hearth in one guided flow.
+
+Usage:
+  create-hearth [--directory hearth] [--yes] [--config deployment.json] [--skip-doctor]
+  hearth install [--yes] [--config deployment.json] [--skip-doctor]
+
+--directory <path> install files into this directory (default: ./hearth)
+--yes              noninteractive; requires HEARTH_ADMIN_PASSWORD if setup is incomplete
+--config <file>    JSON defaults (mode, serverName, homeserverUrl, ports, adminUsername,
+                   adminPasswordEnv)
+--skip-doctor      bypass prerequisite checks (not recommended)`);
+    return;
+  }
+
+  const yes = flags.includes("--yes");
+  const configFile = flagValue(flags, "--config");
+  const hasConfigFlag = flags.some((flag) => flag === "--config" || flag.startsWith("--config="));
+  if (hasConfigFlag && (!configFile || configFile.startsWith("--"))) {
+    die("--config requires a JSON file path");
+  }
+  const deployment = readDeploymentConfig(configFile);
+  if (!flags.includes("--skip-doctor")) {
+    const diagnosis = runDoctor();
+    if (!diagnosis.passed) die("prerequisite checks failed");
+  }
+
+  if (!fs.existsSync(CONFIG_PATH)) {
+    if (yes) {
+      deployment.mode ??= "local";
+      deployment.serverName ??= deployment.mode === "byo"
+        ? new URL(deployment.homeserverUrl).hostname
+        : "hearth.localhost";
+      deployment.ports = {
+        matrix: "6167",
+        element: "8009",
+        memory: "8010",
+        ...deployment.ports,
+      };
+    }
+    await cmdInit(deployment);
+  } else {
+    ok(`Using existing configuration at ${CONFIG_PATH}`);
+  }
+
+  await cmdUp();
+  const cfg = loadConfig();
+  const adminEnv = readEnvFile(path.join(SECRETS, "admin.env"));
+  const roomsComplete = ROOMS.every((room) => cfg.rooms?.[room.alias]);
+  if (adminEnv.MATRIX_ACCESS_TOKEN && roomsComplete) {
+    ok("Admin identity and standard rooms already configured");
+  } else {
+    const passwordEnv = deployment.adminPasswordEnv || "HEARTH_ADMIN_PASSWORD";
+    const password = yes ? process.env[passwordEnv] : undefined;
+    if (yes && !password) {
+      die(`noninteractive setup requires the administrator password in ${passwordEnv}`);
+    }
+    await cmdSetup({ adminUsername: deployment.adminUsername, adminPassword: password });
+  }
+
+  await cmdStatus();
+  console.log(`\nHearth installation complete.
+
+Next:
+  hearth agent add <name>
+  hearth user add <name>
+
+Element and dashboard addresses are shown by \`hearth status\`.\n`);
+}
+
 async function waitForHomeserver(base, tries = 30) {
   for (let i = 0; i < tries; i++) {
     try {
@@ -203,14 +390,14 @@ async function waitForHomeserver(base, tries = 30) {
   die(`homeserver at ${base} not reachable — is the stack up?`);
 }
 
-async function cmdSetup() {
+async function cmdSetup(options = {}) {
   const cfg = loadConfig();
   const env = readEnvFile(ENV_PATH);
   await waitForHomeserver(cfg.homeserverUrl);
 
   console.log("\nCreate your (human) admin account:");
-  const username = await ask("Admin username", "admin");
-  const password = await ask("Admin password (stored only in secrets/)");
+  const username = String(options.adminUsername ?? await ask("Admin username", "admin"));
+  const password = String(options.adminPassword ?? await ask("Admin password (stored only in secrets/)"));
   if (!password) die("password required");
 
   let creds;
@@ -297,11 +484,19 @@ function mcpSnippets(cfg, name, wrapperPath, memoryUrl, memoryToken) {
   const mcpUrl = `${memoryUrl}/mcp`;
   const w = wrapperPath.replaceAll("\\", "\\\\");
   const memClaude = memoryToken
-    ? `claude mcp add --transport http hearth-memory ${mcpUrl} --header "Authorization: Bearer ${memoryToken}"`
+    ? `claude mcp add-json hearth-memory '${`{ "type": "http", "url": "${mcpUrl}", "headers": { "Authorization": "Bearer \${HEARTH_MEMORY_TOKEN}" } }`}'`
     : `claude mcp add --transport http hearth-memory ${mcpUrl}`;
   const memJson = memoryToken
-    ? `{ "type": "http", "url": "${mcpUrl}", "headers": { "Authorization": "Bearer ${memoryToken}" } }`
+    ? `{ "type": "http", "url": "${mcpUrl}", "headers": { "Authorization": "Bearer \${HEARTH_MEMORY_TOKEN}" } }`
     : `{ "type": "http", "url": "${mcpUrl}" }`;
+  const memCodex = memoryToken
+    ? `
+[mcp_servers.hearth-memory]
+url = "${mcpUrl}"
+bearer_token_env_var = "HEARTH_MEMORY_TOKEN"`
+    : `
+[mcp_servers.hearth-memory]
+url = "${mcpUrl}"`;
   return `
 ── Connect this agent ─────────────────────────────────────────────
 
@@ -313,6 +508,7 @@ function mcpSnippets(cfg, name, wrapperPath, memoryUrl, memoryToken) {
   [mcp_servers.hearth-matrix]
   command = "node"
   args = ["${w}"]
+  ${memCodex.trimStart()}
 
 ▸ Generic MCP (.mcp.json style):
   { "mcpServers": {
@@ -324,13 +520,15 @@ in the hearth repo; bootstrap per its checklist." It self-configures from there.
 
 Credentials: ${path.join(SECRETS, "agents", `${name}.env`)}  (gitignored; treat like a password)
 ${memoryToken
-    ? `Memory access is token-authenticated (credential saved alongside the Matrix one).`
+    ? `Memory access is token-authenticated. Set HEARTH_MEMORY_TOKEN in the client process
+from that credentials file before starting Claude Code or Codex. The snippets reference
+the environment variable and do not print or store the live token.`
     : `No memory token issued — the agent gets Matrix only until the memory service is reachable.`}
 ───────────────────────────────────────────────────────────────────`;
 }
 
 async function cmdAgentAdd(name, flags) {
-  if (!name || !/^[a-z0-9._=-]+$/.test(name)) die("usage: hearth agent add <name>  (lowercase, no spaces)");
+  if (!name || !AGENT_NAME_RE.test(name)) die("usage: hearth agent add <name>  (lowercase, no spaces)");
   const cfg = loadConfig();
   const env = readEnvFile(ENV_PATH);
   const adminEnv = readEnvFile(path.join(SECRETS, "admin.env"));
@@ -392,7 +590,7 @@ async function cmdAgentAdd(name, flags) {
 }
 
 async function cmdUserAdd(name) {
-  if (!name || !/^[a-z0-9._=-]+$/.test(name)) die("usage: hearth user add <name>  (lowercase, no spaces)");
+  if (!name || !AGENT_NAME_RE.test(name)) die("usage: hearth user add <name>  (lowercase, no spaces)");
   const cfg = loadConfig();
   const env = readEnvFile(ENV_PATH);
   const adminEnv = readEnvFile(path.join(SECRETS, "admin.env"));
@@ -455,6 +653,11 @@ async function cmdAgentImport(code) {
   } catch {
     die("could not decode agent code (truncated?)");
   }
+  if (p?.v !== 1 || typeof p.name !== "string" || !AGENT_NAME_RE.test(p.name) ||
+      !isSafeEnvMap(p.vars) || !isHttpUrl(p.vars.MATRIX_HOMESERVER_URL) ||
+      !p.vars.MATRIX_USER_ID?.startsWith("@") || !p.vars.MATRIX_ACCESS_TOKEN) {
+    die("invalid agent transfer code");
+  }
   const envPath = path.join(SECRETS, "agents", `${p.name}.env`);
   writeEnvFile(envPath, p.vars);
   const wrapperPath = writeAgentWrapper(p.name);
@@ -505,6 +708,14 @@ Then: hearth agent add <name>, hearth user add <name>, hearth status.`);
       p = JSON.parse(Buffer.from(code.slice(8), "base64url").toString());
     } catch {
       die("could not decode link code (truncated?)");
+    }
+    if (p?.v !== 1 || typeof p.serverName !== "string" || !p.serverName ||
+        !isHttpUrl(p.homeserverUrl) || !isSafeEnvMap(p.admin) ||
+        !p.admin.MATRIX_ACCESS_TOKEN || typeof p.registrationToken !== "string" ||
+        /[\r\n]/.test(p.registrationToken) ||
+        (p.memoryUrl && !isHttpUrl(p.memoryUrl)) ||
+        (p.memoryAdminToken && (typeof p.memoryAdminToken !== "string" || /[\r\n]/.test(p.memoryAdminToken)))) {
+      die("invalid hub link code");
     }
     saveConfig({
       mode: "remote", serverName: p.serverName, homeserverUrl: p.homeserverUrl,
@@ -591,7 +802,9 @@ async function cmdNotify(name, rest) {
 
 async function cmdStatus() {
   const cfg = loadConfig();
-  const memoryUrl = `http://localhost:${cfg.ports.memory}`;
+  const env = readEnvFile(ENV_PATH);
+  const memoryUrl = (env.HEARTH_MEMORY_URL ||
+    `http://localhost:${cfg.ports?.memory ?? 8010}`).replace(/\/$/, "");
   try {
     const res = await fetch(`${cfg.homeserverUrl.replace(/\/$/, "")}/_matrix/client/versions`);
     console.log(res.ok ? `✓ homeserver ok (${cfg.homeserverUrl})` : `✗ homeserver HTTP ${res.status}`);
@@ -613,7 +826,9 @@ async function cmdStatus() {
 
 const [, , cmd, sub, ...rest] = process.argv;
 try {
-  if (cmd === "init") await cmdInit();
+  if (cmd === "install") await cmdInstall([sub, ...rest].filter(Boolean));
+  else if (cmd === "doctor") await cmdDoctor([sub, ...rest].filter(Boolean));
+  else if (cmd === "init") await cmdInit();
   else if (cmd === "up") await cmdUp();
   else if (cmd === "down") await cmdDown();
   else if (cmd === "setup") await cmdSetup();
@@ -627,6 +842,9 @@ try {
   else {
     console.log(`Hearth — human–agent collaboration hub
 
+  hearth install [--yes]      check prerequisites, configure, start, and set up
+    [--config <file>]         use a deployment JSON file for unattended rollout
+  hearth doctor [--json]     verify Node, Docker, Compose, and local files
   hearth init                 configure the hub (wizard)
   hearth up | down            start/stop the Docker stack
   hearth setup                create admin user + standard rooms

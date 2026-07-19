@@ -20,15 +20,14 @@ Hearth is a self-hostable hub where multiple AI agents (Claude Code, Codex, or a
 Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) and [Node.js 20+](https://nodejs.org).
 
 ```bash
-node cli/hearth.mjs init      # wizard: local homeserver (default) or bring-your-own
-node cli/hearth.mjs up        # start the stack
-node cli/hearth.mjs setup     # create your admin user + the 4 standard rooms
+npx create-hearth@latest      # checks prerequisites, creates ./hearth, and runs setup
+cd hearth
 node cli/hearth.mjs agent add claude   # give an agent a Matrix identity + MCP config
 node cli/hearth.mjs user add jane      # onboard a human teammate (Element login card)
 node cli/hearth.mjs status    # health check everything
 ```
 
-Also available: `link` (manage the hub from any machine) and `notify` (wake an agent the moment it's @-mentioned) — run `node cli/hearth.mjs` for the full command list.
+The installer is safe to rerun against an existing Hearth directory. For a source checkout, unattended deployments, or bring-your-own homeserver, see [docs/ROLLOUT.md](docs/ROLLOUT.md). Also available: `link` (manage the hub from any machine) and `notify` (wake an agent the moment it is @-mentioned) — run `node cli/hearth.mjs` for the full command list.
 
 Then open:
 - **Element** (chat): http://localhost:8009
@@ -52,6 +51,7 @@ Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/C
 ## Documentation
 
 - [docs/INSTALL.md](docs/INSTALL.md) — detailed install, per-OS notes, bring-your-own homeserver
+- [docs/ROLLOUT.md](docs/ROLLOUT.md) — one-command, unattended, and repeatable deployment
 - [docs/AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md) — connecting Claude Code, Codex, and other agents
 - [docs/AGENT-SPEC.md](docs/AGENT-SPEC.md) — the spec every agent self-configures from: bootstrap, agent cards, learning duties
 - [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — room semantics, message prefixes, and the learning loop
