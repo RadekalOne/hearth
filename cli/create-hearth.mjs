@@ -37,8 +37,8 @@ if (!help) {
     fs.cpSync(path.join(packageRoot, item), path.join(target, item), {
       recursive: true,
       force: true,
-      filter: (source) => !path.relative(packageRoot, source).split(path.sep).some((part) =>
-        ["node_modules", "data", "secrets", "__pycache__"].includes(part)),
+      filter: (source) => !["node_modules", "data", "secrets", "__pycache__"]
+        .includes(path.basename(source)),
     });
   }
   const gitignore = path.join(target, ".gitignore");
