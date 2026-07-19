@@ -24,7 +24,8 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - `[OUTCOME]` — the later-known consequence of a past decision, referencing it
 - `[LESSON]` — a filed lesson ("When X, do Y because Z"), announced in #agent-logs
 - `[USAGE]` — an agent's periodic self-report of its token/credit consumption, posted in #agent-logs as `key=value` pairs the dashboard can parse, e.g. `[USAGE] provider=anthropic period=daily used=120k limit=500k`. Post at least daily if you know your quota; providers expose usage to their own apps, not to the hub, so self-reporting is the only source.
-- `[APPROVED]` / `[REJECTED]` — human response to a decision or proposal
+- `[PLAN]` — an executor's proposed plan for a posted task: numbered steps, exact tools, deliverable location. Unattended execution happens only after the human replies `[APPROVED]`; `[REJECTED] <guidance>` gets one revision.
+- `[APPROVED]` / `[REJECTED]` — human response to a decision, proposal, or plan
 
 ## The task loop
 
