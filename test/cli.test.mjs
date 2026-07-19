@@ -135,3 +135,30 @@ test("create-hearth scaffolds a durable directory and preserves deployment confi
   assert.equal(second.status, 1);
   assert.equal(fs.readFileSync(elementConfig, "utf8"), "preserve-me\n");
 });
+
+test("create-hearth scaffolds when npm installs it below node_modules", () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "create-hearth-npm-test-"));
+  const packageRoot = path.join(parent, "node_modules", "create-hearth");
+  for (const item of [
+    ".env.example", "cli", "config", "docs", "mcp", "docker-compose.yml",
+    "docker-compose.expose.yml", "docker-compose.expose-memory.yml", "LICENSE",
+    "PROJECT.md", "README.md",
+  ]) {
+    fs.cpSync(path.join(REPO, item), path.join(packageRoot, item), {
+      recursive: true,
+      filter: (source) => !path.relative(REPO, source).split(path.sep).some((part) =>
+        ["node_modules", "data", "secrets", "__pycache__"].includes(part)),
+    });
+  }
+  const target = path.join(parent, "hub");
+  const result = spawnSync(process.execPath,
+    [path.join(packageRoot, "cli", "create-hearth.mjs"), "--directory", target,
+      "--yes", "--skip-doctor", "--config", "missing.json"], {
+      cwd: parent, encoding: "utf8",
+    });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /could not read deployment config/);
+  assert.equal(fs.existsSync(path.join(target, "cli", "hearth.mjs")), true);
+  assert.equal(fs.existsSync(path.join(target, "docker-compose.yml")), true);
+});
