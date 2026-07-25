@@ -1,5 +1,7 @@
 # Exposing Hearth to your team (reverse proxy + TLS)
 
+For an end-to-end Hostinger VPS walkthrough, including a minimal Traefik stack, see [HOSTINGER.md](HOSTINGER.md).
+
 By default Hearth binds to loopback: only the machine running it can reach anything. To let teammates use the hub from anywhere, publish **Element** and the **Matrix API** through a TLS reverse proxy. The overlay in `docker-compose.expose.yml` does this for [Traefik](https://traefik.io) (docker provider + Let's Encrypt), the most common self-host setup.
 
 **What gets exposed:** Element (web UI) and Conduit (Matrix API — token-authenticated). Optionally the **memory service** too — it is bearer-token-authenticated (`hearth init` generates the admin token; `agent add` mints per-agent tokens), so remote agents can share memory. Set `HEARTH_PUBLIC_MEMORY_HOST=hearth-memory.example.com` in `.env` (plus a third DNS A record) and `hearth up` layers `docker-compose.expose-memory.yml`; the CLI refuses to expose memory if no admin token is configured. The dashboard (same host) prompts for a token.
@@ -7,6 +9,7 @@ By default Hearth binds to loopback: only the machine running it can reach anyth
 ## Prerequisites
 
 - A server running Docker with Traefik already routing (entrypoint `websecure` on 443, a Let's Encrypt certresolver, `providers.docker` enabled).
+- An external Docker network shared by Traefik and Hearth. The default is `hearth-proxy`; create it with `docker network create hearth-proxy` or set `HEARTH_PROXY_NETWORK` to your existing proxy network.
 - Two DNS A records pointing at the server (next section).
 
 ## DNS setup
@@ -36,6 +39,7 @@ Notes:
    HEARTH_PUBLIC_ELEMENT_HOST=hearth.example.com
    HEARTH_PUBLIC_MATRIX_HOST=hearth-matrix.example.com
    HEARTH_CERTRESOLVER=letsencrypt        # your Traefik certresolver name
+   HEARTH_PROXY_NETWORK=hearth-proxy      # external network used by Traefik
    HEARTH_HOMESERVER_URL=https://hearth-matrix.example.com
    ```
 
@@ -50,6 +54,8 @@ Notes:
 4. **Start:** `node cli/hearth.mjs up` — with `HEARTH_EXPOSE=1` it layers the overlay automatically. Traefik requests certificates on first hit; give it a minute after DNS propagates.
 
 5. **Verify:** `https://hearth-matrix.example.com/_matrix/client/versions` returns JSON; `https://hearth.example.com` shows Element. Then `hearth setup` and onboard people with `hearth user add`.
+
+`hearth setup` also provisions the Matrix observer used by the dashboard. Existing installations can run `hearth dashboard configure` to add or repair it.
 
 ## Security notes
 

@@ -1,5 +1,7 @@
 # Installing Hearth
 
+Want an always-on hosted hub? See the complete [Hostinger Docker VPS guide](HOSTINGER.md) for DNS, TLS, dashboard, and backup setup.
+
 ## Prerequisites
 
 - **Docker Desktop** (Windows/macOS) or Docker Engine + Compose v2 (Linux) — https://www.docker.com/products/docker-desktop/
@@ -43,6 +45,8 @@ node cli/hearth.mjs status   # verify: homeserver ok, memory ok
 For repeatable unattended installations, see [ROLLOUT.md](ROLLOUT.md).
 
 Open **http://localhost:8009** (Element) and log in with the admin account you just created. Open **http://localhost:8010** for the admin dashboard.
+
+Installation complete? Continue with [USAGE.md](USAGE.md) for the first-day walkthrough and everyday human-agent workflows.
 
 ## Onboarding agents
 
