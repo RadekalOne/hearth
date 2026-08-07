@@ -9,6 +9,7 @@ import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -258,6 +259,43 @@ async function registerUser(base, username, password, registrationToken) {
   }
   if (!data.access_token) throw new Error(`registration failed: ${JSON.stringify(data)}`);
   return data; // { user_id, access_token }
+}
+
+// Does the memory service still accept this bearer token? Used to avoid rotating a
+// working credential, and by `status` to detect drift.
+async function memoryTokenValid(memoryUrl, token) {
+  if (!token) return false;
+  try {
+    const res = await fetch(`${memoryUrl}/api/status`, { headers: { Authorization: `Bearer ${token}` } });
+    return res.ok;
+  } catch {
+    return false; // unreachable — caller must not treat this as "invalid"
+  }
+}
+
+// The memory MCP's bearer token lives in the client's own config, which this CLI never
+// writes. Read it back so `status` can spot the mismatch that used to fail silently.
+// Best-effort and read-only: an unreadable or absent config is simply "unknown".
+function clientMemoryToken() {
+  try {
+    const file = path.join(os.homedir(), ".claude.json");
+    if (!fs.existsSync(file)) return null;
+    const found = [];
+    (function walk(node) {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== "object") return;
+      for (const [key, value] of Object.entries(node)) {
+        if (key === "hearth-memory" && value && typeof value === "object") {
+          const auth = value.headers?.Authorization ?? "";
+          if (auth && !auth.includes("${")) found.push(auth.replace(/^Bearer\s+/i, "").trim());
+        }
+        walk(value);
+      }
+    })(JSON.parse(fs.readFileSync(file, "utf8")));
+    return found[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function login(base, username, password) {
@@ -635,10 +673,27 @@ async function cmdAgentAdd(name, flags) {
     `/profile/${encodeURIComponent(creds.user_id)}/displayname`,
     { token: creds.access_token, body: { displayname: name } });
 
-  // Mint a memory token so this agent can use the shared memory service.
+  // Memory credentials are not self-maintaining the way Matrix ones are. The Matrix
+  // wrapper re-reads this env file at every startup, so a new access token propagates by
+  // itself. The memory MCP does not: it is an HTTP server registered in the *client's*
+  // config (~/.claude.json, Codex's config.toml, .mcp.json), with the bearer token held
+  // there. Nothing in this CLI can update those files. So minting invalidates a token the
+  // client is still sending, the client has no way to learn about it, and the failure is
+  // silent — a restart does not help, because the stale value is what gets re-read.
+  //
+  // Therefore: do not rotate a working token. Re-running `agent add` on an existing agent
+  // (as a homeserver rebuild requires for every agent) now leaves memory access intact.
   const memoryUrl = (env.HEARTH_MEMORY_URL || `http://localhost:${cfg.ports?.memory ?? 8010}`).replace(/\/$/, "");
+  const agentEnvPath = path.join(SECRETS, "agents", `${name}.env`);
+  const existingAgentEnv = readEnvFile(agentEnvPath);
+  const priorMemoryToken = existingAgentEnv.HEARTH_MEMORY_TOKEN || null;
+
   let memoryToken = null;
-  if (env.HEARTH_MEMORY_ADMIN_TOKEN) {
+  if (!flags.includes("--rotate-memory-token") && priorMemoryToken &&
+      await memoryTokenValid(memoryUrl, priorMemoryToken)) {
+    memoryToken = priorMemoryToken;
+    ok(`reused ${name}'s existing memory token — still valid, so no client re-registration needed`);
+  } else if (env.HEARTH_MEMORY_ADMIN_TOKEN) {
     try {
       const res = await fetch(`${memoryUrl}/api/tokens`, {
         method: "POST",
@@ -659,15 +714,13 @@ async function cmdAgentAdd(name, flags) {
     }
   }
 
-  const agentEnvPath = path.join(SECRETS, "agents", `${name}.env`);
   // Merge over whatever is already on disk. Writing a fresh object would drop
   // HEARTH_MEMORY_* on any run where the mint above failed — silently costing an
   // existing agent its memory access, with a warning and exit code 0. Memory tokens
   // live in the memory service's own store, not the homeserver, so a previously
   // issued one stays valid across a homeserver rebuild and is worth keeping.
-  const existingAgentEnv = readEnvFile(agentEnvPath);
-  if (!memoryToken && existingAgentEnv.HEARTH_MEMORY_TOKEN) {
-    console.log(`⚠ kept ${name}'s existing memory token (still valid) — re-run once the memory service is reachable to rotate it`);
+  if (!memoryToken && priorMemoryToken) {
+    console.log(`⚠ kept ${name}'s existing memory token — could not reach the service to verify or rotate it`);
   }
   writeEnvFile(agentEnvPath, {
     ...existingAgentEnv,
@@ -676,7 +729,18 @@ async function cmdAgentAdd(name, flags) {
     MATRIX_ACCESS_TOKEN: creds.access_token,
     ...(memoryToken ? { HEARTH_MEMORY_URL: memoryUrl, HEARTH_MEMORY_TOKEN: memoryToken } : {}),
   });
-  const effectiveMemoryToken = memoryToken || existingAgentEnv.HEARTH_MEMORY_TOKEN || null;
+  const effectiveMemoryToken = memoryToken || priorMemoryToken || null;
+
+  // Rotation happened and something out there is still holding the old value. Say so
+  // loudly: this is the failure mode that cost a full debugging session on 2026-08-07.
+  if (memoryToken && priorMemoryToken && memoryToken !== priorMemoryToken) {
+    console.log(`
+⚠ ${name}'s memory token was ROTATED — the previous one is now invalid.
+  The memory MCP stores its bearer token in the CLIENT's config, not in
+  ${path.relative(ROOT, agentEnvPath)}, so this does not propagate on its own and
+  restarting the client will NOT fix it. Re-register with the snippet printed below.
+  Check for drift at any time with: hearth status`);
+  }
   const wrapperPath = writeAgentWrapper(name);
   ensureMatrixDeps();
   if (!cfg.agents.some((a) => a.name === name)) {
@@ -917,6 +981,34 @@ async function cmdStatus() {
   console.log(`  agents: ${cfg.agents.map((a) => a.name).join(", ") || "none yet"}`);
   console.log(`  users:  ${(cfg.users ?? []).map((u) => u.name).join(", ") || "admin only"}`);
   console.log(`  rooms:  ${Object.keys(cfg.rooms).map((r) => "#" + r).join(", ") || "not set up"}`);
+
+  // Memory-credential drift. The token an agent's env file holds and the one its MCP
+  // client actually sends are separate stores, and only the first is maintained here —
+  // so they can diverge with no error anywhere. Surface it.
+  const stored = {};
+  for (const { name } of cfg.agents) {
+    const token = readEnvFile(path.join(SECRETS, "agents", `${name}.env`)).HEARTH_MEMORY_TOKEN;
+    stored[name] = token;
+    if (!token) {
+      console.log(`  ⚠ ${name}: no memory token — re-run \`hearth agent add ${name}\` with the stack up`);
+    } else if (!(await memoryTokenValid(memoryUrl, token))) {
+      console.log(`  ⚠ ${name}: stored memory token REJECTED by the service — rotate with \`hearth agent add ${name} --rotate-memory-token\``);
+    }
+  }
+
+  // This machine registers hearth-memory once, as whichever agent it runs as — so
+  // compare the registered token against the set, not against each agent in turn.
+  const registered = clientMemoryToken();
+  if (registered) {
+    const matches = Object.entries(stored).find(([, token]) => token && token === registered);
+    if (matches) {
+      console.log(`  ✓ this client's memory registration matches ${matches[0]}`);
+    } else {
+      console.log(`  ⚠ this client's registered memory token matches no agent's stored token.`);
+      console.log(`     The MCP sends the registered value, and nothing here updates it, so memory calls`);
+      console.log(`     will fail until hearth-memory is re-registered. Restarting the client will not help.`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- dispatch
@@ -946,7 +1038,9 @@ try {
   hearth init                 configure the hub (wizard)
   hearth up | down            start/stop the Docker stack
   hearth setup                create admin user + standard rooms
-  hearth agent add <name>     onboard an agent (add --existing for a pre-made user)
+  hearth agent add <name>     onboard an agent (add --existing for a pre-made user;
+                              --rotate-memory-token to replace a working memory token,
+                              which then needs the MCP re-registered in the client)
   hearth agent export <name>  print a transfer code to move this agent to another machine
   hearth agent import <code>  recreate an exported agent here (env + wrapper + MCP config)
   hearth user add <name>      onboard a human teammate (Element login card)

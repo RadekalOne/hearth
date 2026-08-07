@@ -84,6 +84,13 @@ test("agent add keeps existing memory credentials when the mint fails", async ()
   const homeserver = http.createServer((req, res) => {
     req.resume();
     res.setHeader("Content-Type", "application/json");
+    // Reject the existing token, so the CLI decides it must mint...
+    if (req.url === "/api/status") {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "invalid token" }));
+      return;
+    }
+    // ...and then the mint itself fails. That combination is what used to wipe the file.
     if (req.url === "/api/tokens") {
       res.statusCode = 503;
       res.end(JSON.stringify({ error: "memory service down" }));
@@ -127,6 +134,68 @@ test("agent add keeps existing memory credentials when the mint fails", async ()
       "the Matrix token should still be rotated");
   } finally {
     await new Promise((resolve) => homeserver.close(resolve));
+  }
+});
+
+// Regression: re-adding an agent used to mint a new memory token unconditionally. The
+// memory MCP holds its bearer token in the *client's* config, which this CLI never
+// writes, so rotating silently broke memory access with no way for the client to learn
+// about it. A still-valid token must be left alone.
+test("agent add reuses a still-valid memory token instead of rotating it", async () => {
+  const root = fixture();
+  const keptToken = "already-valid-memory-token";
+  let mintCalls = 0;
+
+  const server = http.createServer((req, res) => {
+    req.resume();
+    res.setHeader("Content-Type", "application/json");
+    if (req.url === "/api/status") {
+      const ok = (req.headers.authorization || "") === `Bearer ${keptToken}`;
+      res.statusCode = ok ? 200 : 401;
+      res.end("{}");
+      return;
+    }
+    if (req.url === "/api/tokens") { mintCalls++; res.end(JSON.stringify({ token: "freshly-minted" })); return; }
+    if (req.url === "/_matrix/client/v3/register") {
+      res.end(JSON.stringify({ user_id: "@codex:example.test", access_token: "new-matrix-token" }));
+      return;
+    }
+    res.end("{}");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    fs.writeFileSync(path.join(root, "hearth.config.json"), JSON.stringify({
+      mode: "local", homeserverUrl: url, ports: { memory: "8010" },
+      agents: [{ name: "codex", userId: "@codex:example.test" }], users: [], rooms: {},
+    }));
+    fs.writeFileSync(path.join(root, ".env"),
+      `HEARTH_REGISTRATION_TOKEN=tok\nHEARTH_MEMORY_ADMIN_TOKEN=admin\nHEARTH_MEMORY_URL=${url}\n`);
+    fs.mkdirSync(path.join(root, "secrets", "agents"), { recursive: true });
+    fs.writeFileSync(path.join(root, "secrets", "admin.env"), "MATRIX_ACCESS_TOKEN=admin-matrix-token\n");
+    fs.writeFileSync(path.join(root, "secrets", "agents", "codex.env"),
+      `MATRIX_HOMESERVER_URL=${url}\nMATRIX_USER_ID=@codex:example.test\n` +
+      `MATRIX_ACCESS_TOKEN=stale\nHEARTH_MEMORY_URL=${url}\nHEARTH_MEMORY_TOKEN=${keptToken}\n`);
+
+    await promisify(execFile)(process.execPath,
+      [path.join(root, "cli", "hearth.mjs"), "agent", "add", "codex"],
+      { encoding: "utf8", env: fixtureEnv(root) });
+
+    const env = fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8");
+    assert.equal(mintCalls, 0, "a valid memory token must not be rotated");
+    assert.match(env, new RegExp(`HEARTH_MEMORY_TOKEN=${keptToken}`));
+    assert.match(env, /MATRIX_ACCESS_TOKEN=new-matrix-token/, "the Matrix token should still rotate");
+
+    // ...but --rotate-memory-token is an explicit opt-in.
+    await promisify(execFile)(process.execPath,
+      [path.join(root, "cli", "hearth.mjs"), "agent", "add", "codex", "--rotate-memory-token"],
+      { encoding: "utf8", env: fixtureEnv(root) });
+    assert.equal(mintCalls, 1, "explicit rotation must still mint");
+    assert.match(fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8"),
+      /HEARTH_MEMORY_TOKEN=freshly-minted/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 
