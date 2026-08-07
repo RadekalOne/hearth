@@ -275,26 +275,30 @@ async function memoryTokenValid(memoryUrl, token) {
 
 // The memory MCP's bearer token lives in the client's own config, which this CLI never
 // writes. Read it back so `status` can spot the mismatch that used to fail silently.
-// Best-effort and read-only: an unreadable or absent config is simply "unknown".
-function clientMemoryToken() {
+// Best-effort and read-only. Returns a state, not just a token, so `status` can tell
+// "registered with the wrong token" apart from "not registered at all" — the second
+// looks identical to healthy if you only compare values.
+function clientMemoryRegistration() {
   try {
     const file = path.join(os.homedir(), ".claude.json");
-    if (!fs.existsSync(file)) return null;
-    const found = [];
+    if (!fs.existsSync(file)) return { state: "unknown" };
+    let result = { state: "absent" };
     (function walk(node) {
       if (Array.isArray(node)) return node.forEach(walk);
       if (!node || typeof node !== "object") return;
       for (const [key, value] of Object.entries(node)) {
-        if (key === "hearth-memory" && value && typeof value === "object") {
+        if (key === "hearth-memory" && value && typeof value === "object" && result.state === "absent") {
           const auth = value.headers?.Authorization ?? "";
-          if (auth && !auth.includes("${")) found.push(auth.replace(/^Bearer\s+/i, "").trim());
+          if (!auth) result = { state: "no-auth" };
+          else if (auth.includes("${")) result = { state: "env-var" };
+          else result = { state: "literal", token: auth.replace(/^Bearer\s+/i, "").trim() };
         }
         walk(value);
       }
     })(JSON.parse(fs.readFileSync(file, "utf8")));
-    return found[0] ?? null;
+    return result;
   } catch {
-    return null;
+    return { state: "unknown" };
   }
 }
 
@@ -998,17 +1002,32 @@ async function cmdStatus() {
 
   // This machine registers hearth-memory once, as whichever agent it runs as — so
   // compare the registered token against the set, not against each agent in turn.
-  const registered = clientMemoryToken();
-  if (registered) {
-    const matches = Object.entries(stored).find(([, token]) => token && token === registered);
-    if (matches) {
-      console.log(`  ✓ this client's memory registration matches ${matches[0]}`);
+  const reg = clientMemoryRegistration();
+  const reregister = `     Re-register with: claude mcp add --transport http hearth-memory <url> --header "Authorization: Bearer <token>" --scope user`;
+  if (reg.state === "literal") {
+    const match = Object.entries(stored).find(([, token]) => token && token === reg.token);
+    if (match) {
+      console.log(`  ✓ this client's memory registration matches ${match[0]}`);
     } else {
       console.log(`  ⚠ this client's registered memory token matches no agent's stored token.`);
       console.log(`     The MCP sends the registered value, and nothing here updates it, so memory calls`);
-      console.log(`     will fail until hearth-memory is re-registered. Restarting the client will not help.`);
+      console.log(`     will fail until it is re-registered. Restarting the client will not help.`);
+      console.log(reregister);
     }
+  } else if (reg.state === "absent") {
+    console.log(`  ⚠ hearth-memory is not registered in this client — agents here have Matrix but no memory.`);
+    console.log(reregister);
+  } else if (reg.state === "no-auth") {
+    console.log(`  ⚠ hearth-memory is registered without an Authorization header; the service will reject it.`);
+    console.log(reregister);
+  } else if (reg.state === "env-var") {
+    const live = process.env.HEARTH_MEMORY_TOKEN;
+    const match = live && Object.entries(stored).find(([, token]) => token && token === live);
+    if (match) console.log(`  ✓ this client resolves its memory token from the environment, matching ${match[0]}`);
+    else if (live) console.log(`  ⚠ HEARTH_MEMORY_TOKEN is set but matches no agent's stored token.`);
+    else console.log(`  ⚠ this client's registration expects HEARTH_MEMORY_TOKEN, but it is not set in the environment.`);
   }
+  // state "unknown" stays quiet: no readable client config is not evidence of a problem.
 }
 
 // ---------------------------------------------------------------- dispatch
