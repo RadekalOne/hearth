@@ -145,6 +145,6 @@ The final command repairs or upgrades the dashboard's Matrix observer if an olde
 
 ## Backups and updates
 
-Back up `/opt/hearth/.env`, `/opt/hearth/hearth.config.json`, `/opt/hearth/secrets/`, and the `conduit-data` and `memory-data` Docker volumes. Rerun `npx create-hearth@latest --directory /opt/hearth` for an in-place package refresh; it preserves deployment state and generated secrets.
+Back up `/opt/hearth/.env`, `/opt/hearth/hearth.config.json`, `/opt/hearth/secrets/`, and the `continuwuity-data` and `memory-data` Docker volumes. Rerun `npx create-hearth@latest --directory /opt/hearth` for an in-place package refresh; it preserves deployment state and generated secrets.
 
 For proxy details, alternate hosts, and security notes, see [EXPOSE.md](EXPOSE.md). For unattended configuration behavior, see [ROLLOUT.md](ROLLOUT.md).

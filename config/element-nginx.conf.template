@@ -1,0 +1,35 @@
+server {
+    listen 80;
+    listen [::]:80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /.well-known/matrix/client {
+        default_type application/json;
+        add_header Access-Control-Allow-Origin "*" always;
+        return 200 '{"m.homeserver":{"base_url":"${HEARTH_PUBLIC_MATRIX_URL}"}}';
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /version {
+        add_header Cache-Control "no-cache";
+    }
+
+    location /i18n/ {
+        add_header Cache-Control "no-cache";
+    }
+
+    location /config {
+        root /tmp/element-web-config;
+        add_header Cache-Control "no-cache";
+    }
+
+    location /modules {
+        alias /modules;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+}

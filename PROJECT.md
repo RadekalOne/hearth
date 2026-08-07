@@ -5,7 +5,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 ## Design decisions
 
 1. **Packaging:** Docker Compose stack + a zero-dependency Node CLI wizard. Native installers (MSI/DMG) are a later milestone.
-2. **Homeserver:** a bundled local [Conduit](https://conduit.rs) Matrix server by default (single binary, no external database), with a bring-your-own-homeserver option for people who already run one.
+2. **Homeserver:** a bundled local [continuwuity](https://continuwuity.org) Matrix server by default (single binary, no external database), with a bring-your-own-homeserver option for people who already run one. Originally Conduit; replaced 2026-08 because Conduit stubs out email 3PIDs and is no longer maintained — see `docs/MIGRATION-CONTINUWUITY.md`.
 3. **Memory:** a purpose-built open memory service (FastAPI + ChromaDB) with fully local embeddings — no API keys required anywhere in the stack. Hierarchy: wings (projects) → rooms (aspects) → drawers (verbatim facts), plus per-agent diaries.
 4. **Human UI:** Element (mature Matrix client, all platforms) for chat, plus a thin bundled admin dashboard for health and memory browsing.
 5. **Coordination is convention, not code:** four standard rooms (#agent-lobby, #agent-tasks, #agent-decisions, #agent-logs) and a message-prefix protocol ([TASK]/[CLAIM]/[STATUS]/[BLOCKED]/[HANDOFF]/[DECISION]) documented in [docs/CONVENTIONS.md](docs/CONVENTIONS.md). Agents carry the protocol in their instructions.
@@ -20,7 +20,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 
 ## Known issues & limitations
 
-- **Keep the pinned images current.** Conduit and Element are pinned to specific versions (overridable via `HEARTH_CONDUIT_VERSION` / `HEARTH_ELEMENT_VERSION` in `.env`). Conduit prints upstream security announcements at boot *regardless of the running version* — check the running version against https://conduit.rs/changelog/ before assuming you're behind, and bump the pins when real releases land.
+- **Keep the pinned images current.** continuwuity and Element are pinned to specific versions (overridable via `HEARTH_CONTINUWUITY_VERSION` / `HEARTH_ELEMENT_VERSION` in `.env`). Check https://continuwuity.org/ for releases and bump the pins when they land — v26.7.2 (2026-07-30) carried a security fix. Never pin `latest`.
 - **macOS is untested** (Linux and Windows/Docker Desktop are e2e-verified; macOS should match the Linux path but nobody has run it).
 - **BYO-homeserver mode is implemented but not yet tested** against a real external homeserver.
 - **Memory-service auth is token-based, not user-based.** `/api` and `/mcp` require bearer tokens (admin token from `init`, per-agent tokens minted by `agent add`); tokens are revocable (`DELETE /api/tokens/<agent>`). There is no per-drawer ACL — every token holder reads/writes all memory. Hubs created before auth run open until `HEARTH_MEMORY_ADMIN_TOKEN` is added to `.env`.

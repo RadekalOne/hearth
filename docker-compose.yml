@@ -3,9 +3,14 @@ name: hearth
 services:
   # Local Matrix homeserver (default mode). Skipped in bring-your-own mode:
   # the CLI sets COMPOSE_PROFILES=local-homeserver only when mode=local.
+  # Service key stays `conduit` so the Traefik labels in docker-compose.expose.yml
+  # and the memory service's HEARTH_HOMESERVER_URL keep resolving. The image is
+  # continuwuity — see docs/MIGRATION-CONTINUWUITY.md for why and for the
+  # (one-way) database implications.
   conduit:
-    # Pinned for reproducibility; check https://conduit.rs/changelog/ before bumping.
-    image: matrixconduit/matrix-conduit:${HEARTH_CONDUIT_VERSION:-v0.10.12}
+    # Pinned for reproducibility; check https://continuwuity.org/ before bumping.
+    image: forgejo.ellis.link/continuwuation/continuwuity:${HEARTH_CONTINUWUITY_VERSION:-v26.7.2}
+    command: /sbin/conduwuit
     profiles: ["local-homeserver"]
     restart: unless-stopped
     ports:
@@ -13,28 +18,41 @@ services:
       # by setting HEARTH_BIND_ADDRESS=0.0.0.0 (put it behind TLS/auth first).
       - "${HEARTH_BIND_ADDRESS:-127.0.0.1}:${HEARTH_MATRIX_PORT:-6167}:6167"
     environment:
-      CONDUIT_CONFIG: ""   # empty = configure entirely from env vars
-      CONDUIT_SERVER_NAME: ${HEARTH_SERVER_NAME:-hearth.localhost}
-      CONDUIT_ADDRESS: 0.0.0.0
-      CONDUIT_PORT: "6167"
-      CONDUIT_DATABASE_BACKEND: rocksdb
-      CONDUIT_DATABASE_PATH: /var/lib/matrix-conduit
-      CONDUIT_ALLOW_REGISTRATION: "true"
-      CONDUIT_REGISTRATION_TOKEN: ${HEARTH_REGISTRATION_TOKEN:?run 'hearth init' first}
-      CONDUIT_ALLOW_FEDERATION: "false"
-      CONDUIT_MAX_REQUEST_SIZE: "20000000"
-      CONDUIT_TRUSTED_SERVERS: '["matrix.org"]'
+      CONTINUWUITY_SERVER_NAME: ${HEARTH_SERVER_NAME:-hearth.localhost}
+      CONTINUWUITY_ADDRESS: 0.0.0.0
+      CONTINUWUITY_PORT: "6167"
+      CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
+      CONTINUWUITY_ALLOW_REGISTRATION: "true"
+      CONTINUWUITY_REGISTRATION_TOKEN: ${HEARTH_REGISTRATION_TOKEN:?run 'hearth init' first}
+      CONTINUWUITY_ALLOW_FEDERATION: "false"
+      CONTINUWUITY_MAX_REQUEST_SIZE: "20000000"
+      CONTINUWUITY_TRUSTED_SERVERS: '["matrix.org"]'
+      # Nested TOML sections map to a double underscore: SMTP__CONNECTION_URI is
+      # [global.smtp] connection_uri. Setting these enables email 3PIDs and
+      # self-service password reset. The URI holds a password — keep it in .env.
+      # Null (no value) rather than ${VAR:-}: an empty string would be parsed as a
+      # malformed SMTP URI. This form omits the variable entirely when unset.
+      CONTINUWUITY_SMTP__CONNECTION_URI:
+      CONTINUWUITY_SMTP__SENDER:
     volumes:
-      - conduit-data:/var/lib/matrix-conduit
+      - continuwuity-data:/var/lib/continuwuity
 
   element:
-    image: vectorim/element-web:${HEARTH_ELEMENT_VERSION:-v1.12.22}
+    image: vectorim/element-web:${HEARTH_ELEMENT_VERSION:-v1.12.23}
     profiles: ["local-homeserver"]
     restart: unless-stopped
     ports:
       - "${HEARTH_BIND_ADDRESS:-127.0.0.1}:${HEARTH_ELEMENT_PORT:-8009}:80"
+    environment:
+      # Interpolated into the nginx template below to serve /.well-known/matrix/client.
+      HEARTH_PUBLIC_MATRIX_URL: ${HEARTH_PUBLIC_MATRIX_URL:-http://localhost:6167}
     volumes:
       - ./config/element-config.json:/app/config.json:ro
+      # Serves /.well-known/matrix/client as JSON+CORS so native clients (Element X on
+      # Android in particular) can discover the homeserver from the Element hostname.
+      # Keep both `listen 80` and `listen [::]:80` in the template — the image's health
+      # check hits localhost and may resolve it to IPv6.
+      - ./config/element-nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
 
   memory:
     # Built locally by `hearth up`; a prebuilt image is also published at this
@@ -55,5 +73,9 @@ services:
       - memory-data:/data
 
 volumes:
+  # Retained, no longer mounted: the Conduit RocksDB store. continuwuity cannot
+  # read it, so this is the rollback path. Do not prune until the new server has
+  # run clean for a week.
   conduit-data:
+  continuwuity-data:
   memory-data:

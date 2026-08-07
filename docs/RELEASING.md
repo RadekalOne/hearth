@@ -8,7 +8,7 @@ How releases and the container package are published. Applies to humans and agen
 2. **A container image** at `ghcr.io/radekalone/hearth-memory` — the memory service, built by CI ([.github/workflows/publish.yml](../.github/workflows/publish.yml)) on every `v*` tag, tagged both `<version>` (e.g. `0.1.0`) and `latest`. Public repo → public image; users can `docker compose pull memory` instead of building locally.
 3. **The `create-hearth` npm package** — the one-command installer. Prereleases publish under the `next` dist-tag; stable versions publish under `latest`.
 
-The Conduit/Element images are upstream and pinned in `docker-compose.yml` — they are not part of our publish pipeline.
+The continuwuity/Element images are upstream and pinned in `docker-compose.yml` — they are not part of our publish pipeline.
 
 ## Cutting a release
 

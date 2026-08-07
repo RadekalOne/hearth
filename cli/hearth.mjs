@@ -660,19 +660,30 @@ async function cmdAgentAdd(name, flags) {
   }
 
   const agentEnvPath = path.join(SECRETS, "agents", `${name}.env`);
+  // Merge over whatever is already on disk. Writing a fresh object would drop
+  // HEARTH_MEMORY_* on any run where the mint above failed — silently costing an
+  // existing agent its memory access, with a warning and exit code 0. Memory tokens
+  // live in the memory service's own store, not the homeserver, so a previously
+  // issued one stays valid across a homeserver rebuild and is worth keeping.
+  const existingAgentEnv = readEnvFile(agentEnvPath);
+  if (!memoryToken && existingAgentEnv.HEARTH_MEMORY_TOKEN) {
+    console.log(`⚠ kept ${name}'s existing memory token (still valid) — re-run once the memory service is reachable to rotate it`);
+  }
   writeEnvFile(agentEnvPath, {
+    ...existingAgentEnv,
     MATRIX_HOMESERVER_URL: cfg.homeserverUrl,
     MATRIX_USER_ID: creds.user_id,
     MATRIX_ACCESS_TOKEN: creds.access_token,
     ...(memoryToken ? { HEARTH_MEMORY_URL: memoryUrl, HEARTH_MEMORY_TOKEN: memoryToken } : {}),
   });
+  const effectiveMemoryToken = memoryToken || existingAgentEnv.HEARTH_MEMORY_TOKEN || null;
   const wrapperPath = writeAgentWrapper(name);
   ensureMatrixDeps();
   if (!cfg.agents.some((a) => a.name === name)) {
     cfg.agents.push({ name, userId: creds.user_id });
     saveConfig(cfg);
   }
-  console.log(mcpSnippets(cfg, name, wrapperPath, memoryUrl, memoryToken));
+  console.log(mcpSnippets(cfg, name, wrapperPath, memoryUrl, effectiveMemoryToken));
 }
 
 async function cmdUserAdd(name) {
