@@ -34,6 +34,11 @@ services:
       # malformed SMTP URI. This form omits the variable entirely when unset.
       CONTINUWUITY_SMTP__CONNECTION_URI:
       CONTINUWUITY_SMTP__SENDER:
+      # The public URL of the client API. Required when the Matrix API is served on a
+      # different host from SERVER_NAME (here: hearth.radekal.me vs
+      # hearth-matrix.radekal.me) — without it the server builds email verification
+      # links against SERVER_NAME, which serves Element and 404s every /_matrix path.
+      CONTINUWUITY_WELL_KNOWN__CLIENT:
     volumes:
       - continuwuity-data:/var/lib/continuwuity
 

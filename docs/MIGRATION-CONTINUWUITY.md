@@ -31,6 +31,23 @@ domains" check passed) and then dropped it, with the bounce going to the same
 nonexistent address. Result: a clean `Email sent` log line and no delivery. The real
 mailbox is **`rad@radekal.one`**; `CONTINUWUITY_SMTP__SENDER` is set to it.
 
+**3b. Verification links are built from `SERVER_NAME`, which here does not serve the
+API.** continuwuity emails a link to
+`https://<SERVER_NAME>/_continuwuity/3pid/email/validate?session=…&token=…` — note the
+path is under `/_continuwuity/`, not `/_matrix/`. `SERVER_NAME` is `hearth.radekal.me`,
+which serves Element via nginx, so every link 404'd. Setting
+`well_known.client` does **not** change it; the binary concatenates `https://` with the
+server name directly. Fix: `config/element-nginx.conf.template` now proxies
+`/_continuwuity/` through to `conduit:6167`, so links land on the homeserver.
+`/_matrix/` is deliberately *not* proxied — client discovery already works via
+`.well-known` delegation, and proxying it would blur which host is the API.
+
+`CONTINUWUITY_WELL_KNOWN__CLIENT` was still worth setting (the homeserver now serves
+its own `/.well-known/matrix/client`), and it must be declared in the compose
+`environment:` block — adding it only to `.env` does nothing, because Compose passes
+through just the keys the service declares. That silently produced a no-op deploy where
+`docker compose up -d` reported "Running" rather than recreating.
+
 **4. hearth-matrix rejects non-ASCII bodies** with `M_BAD_JSON` — em-dashes, smart
 quotes, arrows, ellipses. Sanitize to ASCII before posting. (Originally learned by
 `mavis` during the campfire work; the lesson survived in the archive and applied again.)
