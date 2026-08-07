@@ -37,6 +37,9 @@ const SKIP_DIRS = new Set([
 const SKIP_FILES = [
   /(^|[\\/])\.room-id-map\.json$/,
   /(^|[\\/])chat_log\b/i,
+  // Migration handoffs print the old→new mapping as a reference table on purpose.
+  // Body-matching would rewrite the "old" column to equal the "new" one, destroying it.
+  /(^|[\\/])HANDOFF-[\w-]*\.md$/i,
 ];
 const EXTS = new Set([".py", ".ps1", ".js", ".mjs", ".md", ".json", ".cmd", ".txt", ".vbs", ".toml"]);
 // Dated one-off sweeps/posts: historical runs, not part of the live loop.
@@ -112,7 +115,12 @@ for (const [alias, oldId] of Object.entries(oldRooms)) {
     console.warn(`⚠ #${alias} still has its pre-migration ID — did \`hearth setup\` run?`);
     continue;
   }
-  replacements.push({ alias, oldId, newId });
+  // Match on the ID body, not the !-prefixed literal: room IDs also appear
+  // URL-encoded (%21...) or bare in launcher scripts and URLs. The 43-char body is
+  // unique enough to substitute on its own, and doing so preserves whatever sigil
+  // encoding the surrounding file uses. A %21-encoded reference in a tracked .cmd
+  // file survived the first migration pass precisely because of this.
+  replacements.push({ alias, oldId, newId, oldBody: oldId.replace(/^!/, ""), newBody: newId.replace(/^!/, "") });
 }
 if (!replacements.length) die("nothing to re-pin");
 
@@ -128,7 +136,7 @@ for (const file of walk(scanRoot)) {
     continue;
   }
   const counts = replacements
-    .map((r) => ({ ...r, n: text.split(r.oldId).length - 1 }))
+    .map((r) => ({ ...r, n: text.split(r.oldBody).length - 1 }))
     .filter((r) => r.n > 0);
   if (counts.length) hits.push({ file, text, counts, oneOff: ONE_OFF.test(file) });
 }
@@ -159,7 +167,7 @@ for (const h of targets) {
   fs.copyFileSync(h.file, backup);
 
   let out = h.text;
-  for (const r of h.counts) out = out.split(r.oldId).join(r.newId);
+  for (const r of h.counts) out = out.split(r.oldBody).join(r.newBody);
   fs.writeFileSync(h.file, out);
   changed++;
 }
