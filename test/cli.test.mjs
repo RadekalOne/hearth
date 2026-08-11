@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -66,6 +68,135 @@ test("agent import prints token-free Memory config for Claude and Codex", () => 
   assert.match(output, /Bearer \$\{HEARTH_MEMORY_TOKEN\}/);
   assert.doesNotMatch(output, new RegExp(token));
   assert.match(fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8"), new RegExp(token));
+});
+
+// Regression: `agent add` used to write the env file from a fresh object, so any run
+// where the memory-token mint failed silently dropped HEARTH_MEMORY_* from an existing
+// agent — Matrix kept working, memory died, exit code 0. Those tokens live in the memory
+// service's own store and survive a homeserver rebuild, so the old value stays valid.
+test("agent add keeps existing memory credentials when the mint fails", async () => {
+  const root = fixture();
+  const keptToken = "pre-existing-memory-token";
+
+  // One listener plays both roles: the homeserver registers fine, the memory service
+  // rejects the mint. A dead port would work too but does not refuse promptly on
+  // Windows, which hangs the run instead of failing it.
+  const homeserver = http.createServer((req, res) => {
+    req.resume();
+    res.setHeader("Content-Type", "application/json");
+    // Reject the existing token, so the CLI decides it must mint...
+    if (req.url === "/api/status") {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "invalid token" }));
+      return;
+    }
+    // ...and then the mint itself fails. That combination is what used to wipe the file.
+    if (req.url === "/api/tokens") {
+      res.statusCode = 503;
+      res.end(JSON.stringify({ error: "memory service down" }));
+      return;
+    }
+    if (req.url === "/_matrix/client/v3/register") {
+      res.end(JSON.stringify({ user_id: "@codex:example.test", access_token: "freshly-minted-matrix-token" }));
+      return;
+    }
+    res.end("{}");
+  });
+  await new Promise((resolve) => homeserver.listen(0, "127.0.0.1", resolve));
+  const homeserverUrl = `http://127.0.0.1:${homeserver.address().port}`;
+
+  try {
+    fs.writeFileSync(path.join(root, "hearth.config.json"), JSON.stringify({
+      mode: "local", homeserverUrl, ports: { memory: "8010" },
+      agents: [{ name: "codex", userId: "@codex:example.test" }], users: [], rooms: {},
+    }));
+    // Admin token present, memory pointed at a dead port so the mint hits the catch.
+    fs.writeFileSync(path.join(root, ".env"),
+      `HEARTH_REGISTRATION_TOKEN=tok\nHEARTH_MEMORY_ADMIN_TOKEN=admin\nHEARTH_MEMORY_URL=${homeserverUrl}\n`);
+    fs.mkdirSync(path.join(root, "secrets", "agents"), { recursive: true });
+    fs.writeFileSync(path.join(root, "secrets", "admin.env"), "MATRIX_ACCESS_TOKEN=admin-matrix-token\n");
+    fs.writeFileSync(path.join(root, "secrets", "agents", "codex.env"),
+      `MATRIX_HOMESERVER_URL=${homeserverUrl}\nMATRIX_USER_ID=@codex:example.test\n` +
+      `MATRIX_ACCESS_TOKEN=stale-matrix-token\nHEARTH_MEMORY_URL=https://memory.example.test\n` +
+      `HEARTH_MEMORY_TOKEN=${keptToken}\n`);
+
+    // Async, not execFileSync: the stub server lives in this process, and a synchronous
+    // child would block the event loop so the server could never answer it.
+    await promisify(execFile)(process.execPath,
+      [path.join(root, "cli", "hearth.mjs"), "agent", "add", "codex"],
+      { encoding: "utf8", env: fixtureEnv(root) });
+
+    const env = fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8");
+    assert.match(env, new RegExp(`HEARTH_MEMORY_TOKEN=${keptToken}`),
+      "memory token must survive a failed mint");
+    assert.match(env, /HEARTH_MEMORY_URL=https:\/\/memory\.example\.test/);
+    assert.match(env, /MATRIX_ACCESS_TOKEN=freshly-minted-matrix-token/,
+      "the Matrix token should still be rotated");
+  } finally {
+    await new Promise((resolve) => homeserver.close(resolve));
+  }
+});
+
+// Regression: re-adding an agent used to mint a new memory token unconditionally. The
+// memory MCP holds its bearer token in the *client's* config, which this CLI never
+// writes, so rotating silently broke memory access with no way for the client to learn
+// about it. A still-valid token must be left alone.
+test("agent add reuses a still-valid memory token instead of rotating it", async () => {
+  const root = fixture();
+  const keptToken = "already-valid-memory-token";
+  let mintCalls = 0;
+
+  const server = http.createServer((req, res) => {
+    req.resume();
+    res.setHeader("Content-Type", "application/json");
+    if (req.url === "/api/status") {
+      const ok = (req.headers.authorization || "") === `Bearer ${keptToken}`;
+      res.statusCode = ok ? 200 : 401;
+      res.end("{}");
+      return;
+    }
+    if (req.url === "/api/tokens") { mintCalls++; res.end(JSON.stringify({ token: "freshly-minted" })); return; }
+    if (req.url === "/_matrix/client/v3/register") {
+      res.end(JSON.stringify({ user_id: "@codex:example.test", access_token: "new-matrix-token" }));
+      return;
+    }
+    res.end("{}");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    fs.writeFileSync(path.join(root, "hearth.config.json"), JSON.stringify({
+      mode: "local", homeserverUrl: url, ports: { memory: "8010" },
+      agents: [{ name: "codex", userId: "@codex:example.test" }], users: [], rooms: {},
+    }));
+    fs.writeFileSync(path.join(root, ".env"),
+      `HEARTH_REGISTRATION_TOKEN=tok\nHEARTH_MEMORY_ADMIN_TOKEN=admin\nHEARTH_MEMORY_URL=${url}\n`);
+    fs.mkdirSync(path.join(root, "secrets", "agents"), { recursive: true });
+    fs.writeFileSync(path.join(root, "secrets", "admin.env"), "MATRIX_ACCESS_TOKEN=admin-matrix-token\n");
+    fs.writeFileSync(path.join(root, "secrets", "agents", "codex.env"),
+      `MATRIX_HOMESERVER_URL=${url}\nMATRIX_USER_ID=@codex:example.test\n` +
+      `MATRIX_ACCESS_TOKEN=stale\nHEARTH_MEMORY_URL=${url}\nHEARTH_MEMORY_TOKEN=${keptToken}\n`);
+
+    await promisify(execFile)(process.execPath,
+      [path.join(root, "cli", "hearth.mjs"), "agent", "add", "codex"],
+      { encoding: "utf8", env: fixtureEnv(root) });
+
+    const env = fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8");
+    assert.equal(mintCalls, 0, "a valid memory token must not be rotated");
+    assert.match(env, new RegExp(`HEARTH_MEMORY_TOKEN=${keptToken}`));
+    assert.match(env, /MATRIX_ACCESS_TOKEN=new-matrix-token/, "the Matrix token should still rotate");
+
+    // ...but --rotate-memory-token is an explicit opt-in.
+    await promisify(execFile)(process.execPath,
+      [path.join(root, "cli", "hearth.mjs"), "agent", "add", "codex", "--rotate-memory-token"],
+      { encoding: "utf8", env: fixtureEnv(root) });
+    assert.equal(mintCalls, 1, "explicit rotation must still mint");
+    assert.match(fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8"),
+      /HEARTH_MEMORY_TOKEN=freshly-minted/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("status checks the configured remote Memory URL", () => {

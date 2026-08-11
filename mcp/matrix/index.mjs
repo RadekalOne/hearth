@@ -125,9 +125,36 @@ tool(
         sender: e.sender,
         body: e.content?.body ?? "",
         msgtype: e.content?.msgtype,
+        ...(e.content?.url ? { media_url: e.content.url } : {}),
         timestamp: new Date(e.origin_server_ts).toISOString(),
       }));
     return { count: messages.length, messages };
+  }
+);
+
+tool(
+  "download_media",
+  "Download an mxc:// media attachment (image, file) to a local temp file and return its path. Read the returned path with your Read tool to view images.",
+  { mxc_url: z.string().describe("mxc://server/mediaId from an m.image/m.file event") },
+  async ({ mxc_url }) => {
+    const m = mxc_url.match(/^mxc:\/\/([^/]+)\/(.+)$/);
+    if (!m) throw new Error("not an mxc:// URL");
+    const [, server, mediaId] = m;
+    const os = await import("node:os");
+    const fsp = await import("node:fs/promises");
+    const pathMod = await import("node:path");
+    let res = await fetch(`${BASE}/_matrix/client/v1/media/download/${server}/${encodeURIComponent(mediaId)}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) {
+      res = await fetch(`${BASE}/_matrix/media/v3/download/${server}/${encodeURIComponent(mediaId)}`);
+    }
+    if (!res.ok) throw new Error(`media download failed: HTTP ${res.status}`);
+    const type = res.headers.get("content-type") ?? "application/octet-stream";
+    const ext = type.includes("png") ? ".png" : type.includes("gif") ? ".gif" : type.includes("jpeg") || type.includes("jpg") ? ".jpg" : "";
+    const file = pathMod.join(os.tmpdir(), `hearth-media-${mediaId.replace(/[^A-Za-z0-9]/g, "").slice(0, 24)}${ext}`);
+    await fsp.writeFile(file, Buffer.from(await res.arrayBuffer()));
+    return { path: file, content_type: type, bytes: (await fsp.stat(file)).size };
   }
 );
 

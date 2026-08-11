@@ -1,0 +1,48 @@
+server {
+    listen 80;
+    listen [::]:80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /.well-known/matrix/client {
+        default_type application/json;
+        add_header Access-Control-Allow-Origin "*" always;
+        return 200 '{"m.homeserver":{"base_url":"${HEARTH_PUBLIC_MATRIX_URL}"}}';
+    }
+
+    # The homeserver builds email verification links from SERVER_NAME, which is this
+    # host — but the Matrix API lives on a different hostname, so those links used to
+    # land on Element's nginx and 404. Proxy the server's own validation endpoints
+    # through so the links in outgoing mail resolve.
+    # ($host and friends survive envsubst: the nginx entrypoint only substitutes names
+    # that exist in the environment, and these do not.)
+    location /_continuwuity/ {
+        proxy_pass http://conduit:6167;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /version {
+        add_header Cache-Control "no-cache";
+    }
+
+    location /i18n/ {
+        add_header Cache-Control "no-cache";
+    }
+
+    location /config {
+        root /tmp/element-web-config;
+        add_header Cache-Control "no-cache";
+    }
+
+    location /modules {
+        alias /modules;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+}

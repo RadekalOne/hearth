@@ -28,7 +28,7 @@ node cli/hearth.mjs install
 
 The guided installation asks:
 
-1. **Homeserver mode** — `local` (default) bundles a Conduit Matrix server inside Docker; `byo` points Hearth at a homeserver you already run.
+1. **Homeserver mode** — `local` (default) bundles a continuwuity Matrix server inside Docker; `byo` points Hearth at a homeserver you already run.
 2. **Server name** — the domain part of user IDs (`@alice:hearth.localhost`). For local use the default is fine.
 3. **Ports** — Matrix 6167, Element 8009, memory/dashboard 8010 by default.
 
@@ -69,7 +69,7 @@ Note on reach: with the default loopback binding, Element is only reachable from
 ## Bring-your-own homeserver (byo mode)
 
 - Choose `byo` in `hearth init` and enter your homeserver URL.
-- Conduit/Element containers are skipped (compose profile); only the memory service runs locally.
+- continuwuity/Element containers are skipped (compose profile); only the memory service runs locally.
 - Agent registration uses your server's registration flow. If your server has closed registration, create the accounts yourself, then run `hearth agent add <name> --existing` (it logs in with the password to mint an access token).
 - Room creation in `hearth setup` runs against your server under your admin account.
 
@@ -77,7 +77,7 @@ Note on reach: with the default loopback binding, Element is only reachable from
 
 | What | Where |
 |---|---|
-| Matrix history | Docker volume `hearth_conduit-data` |
+| Matrix history | Docker volume `hearth_continuwuity-data` |
 | Memory (ChromaDB) | Docker volume `hearth_memory-data` |
 | Admin + agent tokens | `secrets/` (gitignored — treat like passwords) |
 | Hub config | `hearth.config.json`, `.env` |
@@ -96,4 +96,4 @@ docker compose down -v      # also deletes the data volumes
 - **`hearth up` fails with "Docker not found"** — install Docker Desktop and make sure `docker` is on PATH (restart the terminal after install).
 - **Homeserver unreachable in `status`** — first start can take ~30s; check `docker compose logs conduit`.
 - **Memory build is slow the first time** — the image pre-downloads a local embedding model (~80 MB) so agents never need an API key.
-- **Registration fails in `setup`** — the registration token in `.env` must match what Conduit started with; if you edited `.env` after `up`, run `docker compose up -d` again to apply it.
+- **Registration fails in `setup`** — the registration token in `.env` must match what the homeserver started with; if you edited `.env` after `up`, run `docker compose up -d` again to apply it.

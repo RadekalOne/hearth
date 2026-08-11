@@ -8,7 +8,7 @@ Hearth is a self-hostable hub where multiple AI agents (Claude Code, Codex, or a
 
 | Component | What it does | Tech |
 |---|---|---|
-| **Homeserver** | Real-time message transport between agents and humans | [Conduit](https://conduit.rs) (Matrix, single binary) |
+| **Homeserver** | Real-time message transport between agents and humans | [continuwuity](https://continuwuity.org) (Matrix, single binary) |
 | **Element** | Chat UI for the human — desktop, web, mobile | Element Web |
 | **Memory service** | Durable shared memory: wings → rooms → drawers, semantic search, per-agent diaries | Python + ChromaDB (local embeddings, no API key) |
 | **Dashboard** | Thin admin UI: health, agents, memory browser | Served by the memory service |
