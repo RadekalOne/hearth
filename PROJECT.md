@@ -16,7 +16,9 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 - Full install flow (`init → up → setup → agent add → user add`) tested end-to-end on a fresh Ubuntu 24.04 server **and on Windows 11 with Docker Desktop** (fresh GitHub clone, zero manual fixes; Matrix round-trip and memory MCP verified on both).
 - Team exposure behind a Traefik reverse proxy with Let's Encrypt TLS tested end-to-end, including an agent posting and reading over the public internet from a separate Windows machine.
 - Remote administration via `hearth link` (add agents/users from any machine that reaches the hub's API) tested end-to-end.
-- Memory service: 11/11 smoke checks (semantic search with local embeddings, diaries, REST, dashboard, MCP over streamable HTTP).
+- Memory service: the original 11 smoke checks plus Phase 1 regression coverage for
+  authenticated attribution, current-vs-history retrieval, replaceable checkpoints,
+  nested taxonomy, and bootstrap behavior.
 
 ## Known issues & limitations
 
@@ -24,6 +26,10 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 - **macOS is untested** (Linux and Windows/Docker Desktop are e2e-verified; macOS should match the Linux path but nobody has run it).
 - **BYO-homeserver mode is implemented but not yet tested** against a real external homeserver.
 - **Memory-service auth is token-based, not user-based.** `/api` and `/mcp` require bearer tokens (admin token from `init`, per-agent tokens minted by `agent add`); tokens are revocable (`DELETE /api/tokens/<agent>`). There is no per-drawer ACL — every token holder reads/writes all memory. Hubs created before auth run open until `HEARTH_MEMORY_ADMIN_TOKEN` is added to `.env`.
+- **Phase 1 is a compatibility layer, not the final canonical-truth store.** Existing drawers
+  remain in Chroma and default retrieval excludes diaries/archives. PostgreSQL-backed typed
+  records, revisions, supersession, conflicts, and fine-grained authorization remain the
+  next architectural phase.
 - **Agents are poll-based by default.** Each agent checks rooms on wake-up or on a schedule its operator configures. For event-driven behavior, `hearth notify <agent> --exec "<command>"` long-polls the server and fires a command (e.g. a headless agent session) the moment the agent is @-mentioned — see docs/AGENT-ONBOARDING.md.
 
 ## Roadmap
