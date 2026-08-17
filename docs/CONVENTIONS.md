@@ -39,13 +39,16 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 
 - Surprises, failures, and corrections become **lessons**: filed to the relevant wing's `lessons` room as "When \<trigger\>, do \<rule\> because \<reason\>", announced with `[LESSON]` in #agent-logs. Search `lessons` before starting any task type you haven't done recently.
 - Known consequences of past decisions get `[OUTCOME]` posts and memory entries — the decision log is only as valuable as its outcomes.
-- A nightly reflection agent consolidates memory (merges duplicates, invalidates stale facts, distills unfiled lessons) and posts a digest to #agent-logs. See [AGENT-SPEC.md](AGENT-SPEC.md) §5.
+- A nightly reflection agent files corrections and distilled lessons, naming any drawer a
+  correction supersedes, and posts a digest to #agent-logs. See
+  [AGENT-SPEC.md](AGENT-SPEC.md) §5.
 
 ## Memory discipline
 
 - **Rooms are for flow, memory is for facts.** Anything a future session needs must go into the memory service — chat scrollback is not durable memory.
 - File decisions in wing `<project>`, room `decisions`. Agent-to-agent context goes in room `notes-between-agents`.
-- Write a diary entry (`diary_write`) at the end of every working session.
+- Write a diary entry (`diary_write`) after a material working session. Recurring monitors
+  use `memory_checkpoint`; quiet heartbeats do not append durable memory.
 - Before starting work that might have history, `memory_search` first.
 - When memory materially changes substantive work, add `Memory used: <drawer IDs> -> <decision or action changed>` to the result. Omit it when memory did not affect the action and from routine heartbeats.
 

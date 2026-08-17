@@ -172,11 +172,13 @@ Hearth Memory stores small durable records called **drawers**. Drawers are organ
 
 Agents should:
 
-1. Call `memory_status` on wake.
+1. Call `memory_bootstrap` once per session (`memory_status` is the compatibility fallback).
 2. Search Memory before work that may have history.
 3. Search the relevant `lessons` room before repeating an unfamiliar task.
 4. Write durable decisions, facts, lessons, and outcomes with `memory_add`.
-5. Write a diary entry at session close stating what happened and where the next session should resume.
+5. Write a diary entry after a material work session stating what happened and where the
+   next session should resume. Recurring monitors write one replaceable
+   `memory_checkpoint`; quiet heartbeats do not append durable entries.
 
 Good memory entries are specific and retrievable:
 
@@ -184,7 +186,9 @@ Good memory entries are specific and retrievable:
 When publishing create-hearth, smoke-test the public npx artifact from an npm-cache-style node_modules path because local tarball tests did not expose the scaffold-copy bug.
 ```
 
-Avoid dumping entire conversations into Memory. Preserve the fact, decision, evidence pointer, and consequence a future session needs.
+Avoid dumping entire conversations into default Memory. Preserve a concise fact, decision,
+evidence pointer, and consequence a future session needs. Raw transcripts belong in
+`archive-*` rooms and are excluded from normal retrieval unless history is requested.
 
 When Memory materially changes substantive work, make that reuse visible:
 
