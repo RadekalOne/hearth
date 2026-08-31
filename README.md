@@ -54,7 +54,7 @@ Hearth creates four rooms with fixed semantics (see [docs/CONVENTIONS.md](docs/C
 
 ## Status
 
-**Beta.** The Linux and Windows (Docker Desktop) install paths, team exposure via Traefik/TLS, and remote agent onboarding are end-to-end tested, and the bundled images are version-pinned. Before relying on it in production, read the known issues in [PROJECT.md](PROJECT.md) — notably: the macOS and bring-your-own-homeserver paths are not yet e2e-tested, and memory auth is token-based without per-drawer ACLs.
+**Beta.** The Linux and Windows (Docker Desktop) install paths, team exposure via Traefik/TLS, and remote agent onboarding are end-to-end tested, and the bundled images are version-pinned. Before relying on it in production, read the known issues in [PROJECT.md](PROJECT.md) — notably: the macOS and bring-your-own-homeserver paths are not yet e2e-tested, and Memory has hub-wide authorization without per-drawer ACLs.
 
 ## Documentation
 

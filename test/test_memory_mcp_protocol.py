@@ -1,11 +1,13 @@
 """End-to-end MCP 2.0 and legacy-protocol checks for Hearth Memory."""
 
 import asyncio
+import gc
 import importlib.util
 import json
 import os
 import socket
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -33,7 +35,20 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
     def tearDownClass(cls):
         cls.memory.chroma._system.stop()
         cls.memory.chroma.clear_system_cache()
-        cls.data_dir.cleanup()
+        # Chroma's SQLite handle can be released a moment after the ASGI server on
+        # Windows. Drop collection references and retry cleanup instead of making an
+        # otherwise-passing protocol test flaky with WinError 32.
+        cls.memory.drawers = cls.memory.checkpoints = cls.memory.relays = None
+        cls.memory.chroma = None
+        gc.collect()
+        for attempt in range(10):
+            try:
+                cls.data_dir.cleanup()
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.1)
 
     async def asyncSetUp(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -78,8 +93,24 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                 try:
                     async with client:
                         self.assertIn("memory_bootstrap", client.instructions)
+                        self.assertIn("queue relay_request", client.instructions)
                         tools = await client.list_tools()
-                        self.assertIn("memory_bootstrap", {tool.name for tool in tools.tools})
+                        tool_names = {tool.name for tool in tools.tools}
+                        tools_by_name = {tool.name: tool for tool in tools.tools}
+                        self.assertIn("memory_bootstrap", tool_names)
+                        self.assertTrue(
+                            {"relay_request", "relay_inbox", "relay_claim", "relay_resolve"}
+                            <= tool_names
+                        )
+                        self.assertTrue(
+                            tools_by_name["memory_bootstrap"].annotations.read_only_hint
+                        )
+                        self.assertFalse(
+                            tools_by_name["relay_request"].annotations.read_only_hint
+                        )
+                        self.assertFalse(
+                            tools_by_name["relay_request"].annotations.destructive_hint
+                        )
                         resources = await client.list_resources()
                         self.assertIn(
                             "hearth://bootstrap",
@@ -95,6 +126,7 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         self.assertFalse(result.is_error)
                         payload = result.structured_content or json.loads(result.content[0].text)
                         self.assertEqual(payload["authenticated_as"], "codex")
+                        self.assertEqual(payload["service"]["agent_spec_version"], "1.2")
                         self.assertEqual(payload["default_search"]["mode"], "current")
                         if mode == "auto":
                             await client.call_tool(
@@ -122,6 +154,7 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                                     "room": "decisions",
                                     "content": "Authenticated authorship wins",
                                     "added_by": "claude @ fake-surface",
+                                    "source": "MCP protocol authentication test",
                                 },
                             )
                             add_payload = add_result.structured_content or json.loads(add_result.content[0].text)
@@ -137,6 +170,26 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                                 {"agent": "claude", "surface": "test", "content": "spoof"},
                             )
                             self.assertTrue(forbidden.is_error)
+
+                            relay_result = await client.call_tool(
+                                "relay_request",
+                                {
+                                    "target_agent": "codex",
+                                    "request": "Continue this in an interactive session",
+                                    "source_surface": "chat",
+                                    "priority": "high",
+                                },
+                            )
+                            relay_payload = relay_result.structured_content or json.loads(
+                                relay_result.content[0].text
+                            )
+                            inbox_result = await client.call_tool(
+                                "relay_inbox", {"agent": "codex"}
+                            )
+                            inbox_payload = inbox_result.structured_content or json.loads(
+                                inbox_result.content[0].text
+                            )
+                            self.assertEqual(inbox_payload["entries"][0]["relay_id"], relay_payload["relay_id"])
                 finally:
                     await http_client.aclose()
 

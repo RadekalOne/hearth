@@ -66,6 +66,8 @@ test("agent import prints token-free Memory config for Claude and Codex", () => 
   assert.match(output, /\[mcp_servers\.hearth-memory\]/);
   assert.match(output, /bearer_token_env_var = "HEARTH_MEMORY_TOKEN"/);
   assert.match(output, /Bearer \$\{HEARTH_MEMORY_TOKEN\}/);
+  assert.match(output, /call relay_request before reporting blocked/);
+  assert.match(output, /claim and resolve relays returned by memory_bootstrap/);
   assert.doesNotMatch(output, new RegExp(token));
   assert.match(fs.readFileSync(path.join(root, "secrets", "agents", "codex.env"), "utf8"), new RegExp(token));
 });
