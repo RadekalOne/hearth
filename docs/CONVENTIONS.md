@@ -20,6 +20,8 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - `[STATUS]` — progress update or heartbeat
 - `[BLOCKED]` — needs human action or another agent; say exactly what is needed
 - `[HANDOFF]` — passing work to a named agent, with where-to-resume pointers
+- `[RELAY]` — this agent queued work for its own next interactive surface; include the
+  `relay_id` and say “queued,” not “started”
 - `[DECISION]` — durable decision, posted in #agent-decisions
 - `[OUTCOME]` — the later-known consequence of a past decision, referencing it
 - `[LESSON]` — a filed lesson ("When X, do Y because Z"), announced in #agent-logs
@@ -31,7 +33,9 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 
 1. Human (or agent) posts `[TASK]` in #agent-tasks.
 2. An agent replies `[CLAIM]` before starting — first claim wins; others stand down.
-3. Claimer posts `[STATUS]` at meaningful milestones and `[BLOCKED]` immediately when stuck.
+3. Claimer posts `[STATUS]` at meaningful milestones. If only the current chat/unattended
+   surface is limited, it calls `relay_request` and posts `[RELAY]`; human approval,
+   missing requester information, and external blockers use `[BLOCKED]`.
 4. On completion: `[STATUS] done — <result>` in #agent-tasks, and if anything durable was decided or learned, a `[DECISION]` in #agent-decisions **and** a `memory_add` to the shared memory.
 5. If handing off mid-task: `[HANDOFF]` naming the receiving agent plus a memory drawer id or file path with full context.
 
@@ -39,13 +43,19 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 
 - Surprises, failures, and corrections become **lessons**: filed to the relevant wing's `lessons` room as "When \<trigger\>, do \<rule\> because \<reason\>", announced with `[LESSON]` in #agent-logs. Search `lessons` before starting any task type you haven't done recently.
 - Known consequences of past decisions get `[OUTCOME]` posts and memory entries — the decision log is only as valuable as its outcomes.
-- A nightly reflection agent consolidates memory (merges duplicates, invalidates stale facts, distills unfiled lessons) and posts a digest to #agent-logs. See [AGENT-SPEC.md](AGENT-SPEC.md) §5.
+- A nightly reflection agent files corrections and distilled lessons, naming any drawer a
+  correction supersedes, and posts a digest to #agent-logs. See
+  [AGENT-SPEC.md](AGENT-SPEC.md) §5.
 
 ## Memory discipline
 
 - **Rooms are for flow, memory is for facts.** Anything a future session needs must go into the memory service — chat scrollback is not durable memory.
 - File decisions in wing `<project>`, room `decisions`. Agent-to-agent context goes in room `notes-between-agents`.
-- Write a diary entry (`diary_write`) at the end of every working session.
+- Write a diary entry (`diary_write`) after a material working session. Recurring monitors
+  use `memory_checkpoint`; quiet heartbeats do not append durable memory.
+- Chat/unattended surfaces use `relay_request` when their own interactive surface can
+  continue within existing authority. Interactive sessions claim and resolve relays returned
+  by `memory_bootstrap`; relays are durable delivery, not wake signals.
 - Before starting work that might have history, `memory_search` first.
 - When memory materially changes substantive work, add `Memory used: <drawer IDs> -> <decision or action changed>` to the result. Omit it when memory did not affect the action and from routine heartbeats.
 

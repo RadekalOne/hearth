@@ -13,9 +13,12 @@
   h2.sec { font-size:.85rem; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:1.6rem 0 .7rem; }
   .sub { color:var(--dim); }
   .topbar { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
-  .topbar .grow { flex:1; min-width:220px; }
+  .topbar .grow { flex:1; min-width:1rem; }
+  .topbar #stamp { max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .topbar .actions { display:flex; gap:.65rem; align-items:center; }
   button { background:var(--accent); color:#16130f; border:0; border-radius:8px; padding:.55rem 1rem; font:inherit; font-weight:600; cursor:pointer; }
   button:hover { filter:brightness(1.1); }
+  button.secondary { background:transparent; color:var(--text); border:1px solid var(--line); }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; }
   .agents { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem; }
@@ -43,17 +46,51 @@
   .legend { display:flex; flex-wrap:wrap; gap:.9rem; font-size:.78rem; color:var(--dim); margin-top:.4rem; }
   .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:.3rem; }
   .charts { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .hidden { display:none !important; }
+  .login-shell { min-height:calc(100vh - 4rem); display:grid; place-items:center; }
+  .login-card { width:min(420px,100%); background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1.6rem; box-shadow:0 18px 60px #0006; }
+  .login-card h1 { margin-bottom:.35rem; }
+  .login-card p { color:var(--dim); margin-bottom:1.2rem; }
+  .login-card label { display:block; color:var(--dim); font-size:.8rem; font-weight:600; margin:.8rem 0 .3rem; }
+  .login-card button { width:100%; margin-top:1rem; }
+  .login-card details { margin-top:1.2rem; color:var(--dim); }
+  .login-card summary { cursor:pointer; font-size:.85rem; }
+  .error { min-height:1.5rem; color:var(--bad) !important; margin:.7rem 0 0 !important; }
+  .identity { color:var(--dim); font-size:.82rem; white-space:nowrap; }
   @media (max-width:800px){ .charts { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
+<section class="login-shell" id="login-shell">
+  <form class="login-card" id="login-form">
+    <h1>🔥 <span>Hearth</span> Memory</h1>
+    <p>Sign in with your Hearth account to open the dashboard.</p>
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button id="login-button" type="submit">Sign in</button>
+    <p class="error" id="login-error" role="alert"></p>
+    <details id="token-login">
+      <summary>Sign in with an admin or agent access token</summary>
+      <label for="access-token">Access token</label>
+      <input id="access-token" type="password" autocomplete="off">
+      <button class="secondary" id="token-button" type="button">Use access token</button>
+    </details>
+  </form>
+</section>
+
+<main class="hidden" id="dashboard">
 <div class="topbar">
   <h1>🔥 <span>Hearth</span> Dashboard</h1>
   <span class="sub" id="stamp"></span>
   <span class="grow"></span>
-  <button id="refresh">↻ Refresh</button>
+  <span class="actions">
+    <span class="identity" id="identity"></span>
+    <button class="secondary" id="logout">Sign out</button>
+    <button id="refresh">↻ Refresh</button>
+  </span>
 </div>
-<input id="tok" type="password" placeholder="Access token (admin or agent) — required if auth is enabled" style="margin-bottom:1.1rem">
 
 <div class="grid">
   <div class="card"><h2>Homeserver</h2><div class="big" id="hs">…</div></div>
@@ -74,20 +111,66 @@
 <h2 class="sec">Memory search</h2>
 <input id="q" placeholder="Search memory… (Enter to search, empty shows recent)">
 <div id="results" style="margin-top:.7rem"></div>
+</main>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const COLORS = ["--c1","--c2","--c3","--c4","--c5","--c6"].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
 
-$("tok").value = localStorage.getItem("hearth-token") || "";
-$("tok").addEventListener("change", () => { localStorage.setItem("hearth-token", $("tok").value); refreshAll(); });
 async function afetch(url) {
-  const headers = $("tok").value ? { Authorization: `Bearer ${$("tok").value}` } : {};
-  const res = await fetch(url, { headers });
-  if (res.status === 401) throw new Error("401 — enter a valid access token above");
+  const res = await fetch(url);
+  if (res.status === 401) {
+    showLogin("Your session expired. Please sign in again.");
+    throw new Error("authentication required");
+  }
   return res;
 }
+
+function showLogin(message = "") {
+  $("dashboard").classList.add("hidden");
+  $("login-shell").classList.remove("hidden");
+  $("login-error").textContent = message;
+  $("password").value = "";
+}
+
+function showDashboard(principal, authEnabled = true) {
+  $("login-shell").classList.add("hidden");
+  $("dashboard").classList.remove("hidden");
+  $("identity").textContent = principal ? `Signed in as ${principal}` : "Authentication disabled";
+  $("logout").classList.toggle("hidden", !authEnabled);
+  refreshAll();
+}
+
+async function signIn(body) {
+  $("login-error").textContent = "";
+  $("login-button").disabled = true;
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Sign-in failed");
+    $("access-token").value = "";
+    showDashboard(data.principal, data.auth_enabled !== false);
+  } catch (err) {
+    $("login-error").textContent = err.message;
+  } finally {
+    $("login-button").disabled = false;
+  }
+}
+
+$("login-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  signIn({ username: $("username").value.trim(), password: $("password").value });
+});
+$("token-button").addEventListener("click", () => signIn({ token: $("access-token").value.trim() }));
+$("logout").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  showLogin();
+});
 
 const ago = (ts) => {
   if (!ts) return "never";
@@ -153,7 +236,9 @@ async function refreshAll() {
     $("mem").textContent = h.memory; $("mem").className = "big " + (h.memory === "ok" ? "ok" : "bad");
     $("count").textContent = h.drawers;
 
-    const data = await (await afetch("/api/agents")).json();
+    const agentsResponse = await afetch("/api/agents");
+    const data = await agentsResponse.json();
+    if (!agentsResponse.ok) throw new Error(data.detail || "Agent activity is unavailable");
     const agents = data.agents.filter(a => a.messages > 0);
     $("active").textContent = agents.filter(a => Date.now() - a.last_seen < 86400e3).length;
     $("agents").innerHTML = agents.map(agentCard).join("");
@@ -167,8 +252,15 @@ async function refreshAll() {
     $("stamp").textContent = `updated ${new Date().toLocaleTimeString()} · auto-refresh 10 min`;
   } catch (err) {
     $("stamp").textContent = err.message;
+    if (err.message !== "authentication required") {
+      $("active").textContent = "—";
+      $("agents").innerHTML = `<p class="sub">${esc(err.message)}</p>`;
+      $("chart-activity").innerHTML = '<p class="sub">activity unavailable</p>';
+      $("legend-activity").innerHTML = "";
+      $("chart-wings").innerHTML = '<p class="sub">activity unavailable</p>';
+    }
   }
-  try { recent(); } catch {}
+  try { await recent(); } catch {}
 }
 
 function render(entries) {
@@ -185,7 +277,13 @@ $("q").addEventListener("keydown", async (ev) => {
   render((await (await afetch(`/api/search?q=${encodeURIComponent(q)}`)).json()).results);
 });
 $("refresh").addEventListener("click", refreshAll);
-refreshAll();
+fetch("/api/auth/status")
+  .then(res => res.json())
+  .then(auth => {
+    if (auth.authenticated || !auth.auth_enabled) showDashboard(auth.principal, auth.auth_enabled);
+    else if (!auth.matrix_login_available) $("login-error").textContent = "Matrix sign-in is unavailable; use an access token.";
+  })
+  .catch(() => showLogin("Hearth Memory is unavailable."));
 setInterval(refreshAll, 600000); // 10 minutes
 </script>
 </body>

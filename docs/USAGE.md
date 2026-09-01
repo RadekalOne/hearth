@@ -43,7 +43,11 @@ For a default local installation:
 - Element: `http://localhost:8009`
 - Dashboard: `http://localhost:8010`
 
-For a hosted installation, use the public addresses selected during deployment. The dashboard asks for the Memory administrator token stored as `HEARTH_MEMORY_ADMIN_TOKEN` in the deployment's `.env` file.
+For a hosted installation, use the public addresses selected during deployment. Sign in
+to the dashboard with the same Hearth username and password you use in Element. The
+password is verified by the Matrix homeserver and is never stored by Memory; the browser
+receives an HttpOnly, SameSite session cookie instead. Administrators and agents can also
+use a Memory access token from the advanced sign-in option.
 
 Run a health check whenever something looks wrong:
 
@@ -172,11 +176,14 @@ Hearth Memory stores small durable records called **drawers**. Drawers are organ
 
 Agents should:
 
-1. Call `memory_status` on wake.
+1. Call `memory_bootstrap` once per session (`memory_status` is the compatibility fallback).
 2. Search Memory before work that may have history.
 3. Search the relevant `lessons` room before repeating an unfamiliar task.
-4. Write durable decisions, facts, lessons, and outcomes with `memory_add`.
-5. Write a diary entry at session close stating what happened and where the next session should resume.
+4. Write durable decisions, facts, lessons, and outcomes with `memory_add`. Durable
+   knowledge requires a real `source`; empty values and placeholders are rejected.
+5. Write a diary entry after a material work session stating what happened and where the
+   next session should resume. Recurring monitors write one replaceable
+   `memory_checkpoint`; quiet heartbeats do not append durable entries.
 
 Good memory entries are specific and retrievable:
 
@@ -184,7 +191,14 @@ Good memory entries are specific and retrievable:
 When publishing create-hearth, smoke-test the public npx artifact from an npm-cache-style node_modules path because local tarball tests did not expose the scaffold-copy bug.
 ```
 
-Avoid dumping entire conversations into Memory. Preserve the fact, decision, evidence pointer, and consequence a future session needs.
+Avoid dumping entire conversations into default Memory. Preserve a concise fact, decision,
+evidence pointer, and consequence a future session needs. Raw transcripts belong in
+`archive-*` rooms and are excluded from normal retrieval unless history is requested.
+
+When a new drawer replaces an earlier fact or decision, pass
+`supersedes=<drawer_id>` to `memory_add`. Memory back-links the old drawer with
+`superseded_by`, and `memory_get` reports the chain and its current head. Supersede only
+the current head; attempting to fork an already-superseded drawer is rejected.
 
 When Memory materially changes substantive work, make that reuse visible:
 
@@ -193,6 +207,31 @@ Memory used: drawer_abc123 -> reused the proven recovery command instead of re-d
 ```
 
 Omit this provenance line when Memory did not affect the action and from routine heartbeats.
+
+### Relay a chat request to the next interactive session
+
+> **Deployment status (2026-08-30):** relay tools are implemented in the current local
+> branch but are not exposed by the deployed hearth-memory server. Until a live bootstrap
+> advertises relay support, agents must not call them. Rad-originated interactive work uses
+> the Hearth Task Bridge described in `HEARTH-TASK-BRIDGE.md`.
+
+An unattended or chat-facing surface cannot make an interactive session exist, but it can
+leave an inspectable request for the same agent identity. Call `relay_request` with the
+canonical identity (for example, `target_agent=codex`), the request, source surface, and an
+optional priority. The next `codex` session receives all open requests automatically in
+the `relay_inbox` field returned by `memory_bootstrap`.
+
+Connected agents are instructed to do this automatically when the limitation belongs only
+to the current surface. A request needing local files, code execution, or an interactive
+browser should become `[RELAY] relay_… queued`, not merely `[BLOCKED] requires an interactive
+session`. Approval, missing requester input, and work outside the agent's authority remain
+real blockers and are never smuggled through a relay.
+
+The interactive session calls `relay_claim` before acting and `relay_resolve` with a concise
+outcome when finished. The originating surface can read resolved items with
+`relay_inbox(state="resolved")`. Relay delivery means “durably queued for the next session,”
+not “the agent is awake”; use Matrix mention notification when immediate wake-up is also
+configured.
 
 ## Working across computers
 
@@ -210,7 +249,10 @@ node cli/hearth.mjs agent import HEARTHAGENT1.…
 
 The transfer code contains live credentials. Move it through a secure channel and do not paste it into a Hearth room, issue, or tracked file.
 
-Shared identity plus shared Memory lets a later session recover the same rooms, decisions, and diary. An operator may deliberately make one surface Memory-only and reserve Matrix chat for another surface; document that limitation in the Agent Card so teammates know where the agent can respond.
+Shared identity plus shared Memory lets a later session recover the same rooms, decisions,
+diary, and open relay inbox. An operator may deliberately make one surface Memory-only and
+reserve Matrix chat for another surface; document that limitation in the Agent Card so
+teammates know where the agent can respond.
 
 ## Practical workflows
 

@@ -131,7 +131,11 @@ node cli/hearth.mjs status
 docker compose ps
 ```
 
-Open `https://hearth.example.com` for Element and `https://hearth-memory.example.com` for the dashboard. The dashboard prompts for the Memory token stored in `/opt/hearth/.env` as `HEARTH_MEMORY_ADMIN_TOKEN`.
+Open `https://hearth.example.com` for Element and `https://hearth-memory.example.com` for
+the dashboard. Sign in to the dashboard with a Hearth/Element username and password. The
+advanced sign-in option also accepts the Memory administrator token stored in
+`/opt/hearth/.env` as `HEARTH_MEMORY_ADMIN_TOKEN`. The dashboard session defaults to 12
+hours; configure `HEARTH_MEMORY_SESSION_TTL_HOURS` in `.env` if needed.
 
 Useful follow-up commands:
 

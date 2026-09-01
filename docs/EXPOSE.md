@@ -4,7 +4,7 @@ For an end-to-end Hostinger VPS walkthrough, including a minimal Traefik stack, 
 
 By default Hearth binds to loopback: only the machine running it can reach anything. To let teammates use the hub from anywhere, publish **Element** and the **Matrix API** through a TLS reverse proxy. The overlay in `docker-compose.expose.yml` does this for [Traefik](https://traefik.io) (docker provider + Let's Encrypt), the most common self-host setup.
 
-**What gets exposed:** Element (web UI) and continuwuity (Matrix API — token-authenticated). Optionally the **memory service** too — it is bearer-token-authenticated (`hearth init` generates the admin token; `agent add` mints per-agent tokens), so remote agents can share memory. Set `HEARTH_PUBLIC_MEMORY_HOST=hearth-memory.example.com` in `.env` (plus a third DNS A record) and `hearth up` layers `docker-compose.expose-memory.yml`; the CLI refuses to expose memory if no admin token is configured. The dashboard (same host) prompts for a token.
+**What gets exposed:** Element (web UI) and continuwuity (Matrix API — token-authenticated). Optionally the **memory service** too — MCP remains bearer-token-authenticated (`hearth init` generates the admin token; `agent add` mints per-agent tokens), so remote agents can share memory. Set `HEARTH_PUBLIC_MEMORY_HOST=hearth-memory.example.com` in `.env` (plus a third DNS A record) and `hearth up` layers `docker-compose.expose-memory.yml`; the CLI refuses to expose memory if no admin token is configured. People sign in to the dashboard on the same host with their Hearth/Matrix username and password; the advanced option accepts an admin or agent token.
 
 ## Prerequisites
 

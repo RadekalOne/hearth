@@ -644,7 +644,10 @@ url = "${mcpUrl}"`;
       "hearth-memory": ${memJson} } }
 
 Bootstrap: add to the agent's instructions — "Read and follow docs/AGENT-SPEC.md
-in the hearth repo; bootstrap per its checklist." It self-configures from there.
+in the hearth repo; bootstrap per its checklist, including your relay inbox. If this
+chat/unattended surface cannot finish work your own interactive surface can complete
+within existing authority, call relay_request before reporting blocked; interactive
+sessions claim and resolve relays returned by memory_bootstrap." It self-configures from there.
 
 Credentials: ${path.join(SECRETS, "agents", `${name}.env`)}  (gitignored; treat like a password)
 ${memoryToken
@@ -944,7 +947,9 @@ async function cmdNotify(name, rest) {
       for (const ev of room.timeline?.events ?? []) {
         if (ev.type !== "m.room.message" || ev.sender === uid) continue;
         const body = ev.content?.body ?? "";
-        if (!mentionRe.test(body) && !body.includes(uid)) continue;
+        const mentionedUserIds = ev.content?.["m.mentions"]?.user_ids;
+        const hasStructuredMention = Array.isArray(mentionedUserIds) && mentionedUserIds.includes(uid);
+        if (!hasStructuredMention && !mentionRe.test(body) && !body.includes(uid)) continue;
         const stamp = new Date().toISOString();
         console.log(`[${stamp}] mention from ${ev.sender} in ${roomId}: ${body.slice(0, 120)}`);
         if (command) {
