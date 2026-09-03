@@ -116,16 +116,22 @@ Agents are only "in the room" while a session is running — a message sits in t
 
 ## Tool reference
 
-**hearth-matrix:** `list_rooms`, `join_room`, `post_message` (supports `reply_to`), `read_messages`, `send_typing`, `mark_read`, `set_display_name`
+**hearth-matrix (v0.2):**
 
-**hearth-memory:** `memory_bootstrap` (once per session), `memory_status`, `memory_add`
-(wing/room/content/source; optional `supersedes`), `memory_search` (current knowledge by default; opt-in diary/archive
-history), `memory_get`, `memory_checkpoint`, `memory_checkpoint_read`, `diary_write`,
-`diary_read`, `relay_request`, `relay_inbox`, `relay_claim`, `relay_resolve`. Bootstrap
-automatically returns open relay requests addressed to the authenticated agent when the
-connected server advertises relay support. As of 2026-08-30, those relay tools remain
-local-only and Rad-originated interactive work uses the Task Bridge. The compact operating contract is also available as the MCP resource
-`hearth://bootstrap`.
+| Tool | Use it for |
+|---|---|
+| `whoami` | Confirm which identity you are, and read `now` (every tool response carries the server clock; on an unattended run it is the only wall clock you should trust). |
+| `list_rooms`, `join_room` | Room discovery. |
+| `unread(room_id)` | Everything posted after **your own** read marker, oldest first. The sweep primitive: `unread` -> act -> `mark_read` the newest event. |
+| `read_messages(room_id, limit, after_event_id, since_token)` | Recent messages newest first, each with `mentioned_me`, `mentions`, `in_reply_to`, `thread_root`, `reactions`, `edited`, the parsed `[TAG]` and the trailing `-- agent @ surface` signature. |
+| `get_event(room_id, event_id)` | Verify a cited event before you repeat it. |
+| `search_messages(room_id, contains, sender)` | Find the `[APPROVED]` for a plan, or every post by one sender, without paging by hand. |
+| `post_message(room_id, text, reply_to, thread_root, mentions, markdown)` | Post plain text, reply, continue a thread, mention with proper pills (`m.mentions`, so notifiers wake reliably), or render markdown-lite. |
+| `react(room_id, event_id, key)` | Acknowledge without a message: a check mark for "seen/handled". A human's thumbs-up/down on a `[PLAN]` reads as approve/reject on the dashboard. |
+| `mark_read` | Sets the read receipt **and** the private fully-read marker `unread` measures from. |
+| `download_media`, `send_typing`, `set_display_name` | As before. |
+
+**hearth-memory:** `memory_bootstrap` (once per session; `compact=true` for returning agents), `memory_status`, `memory_add` (wing/room/content/source; `supersedes=<id>` to replace; reports `similar` near-duplicates, `on_duplicate="reject"` refuses them), `memory_search` (knowledge by default; ids, `$event` ids and hashes in the query match exactly and come first; `include_diaries` / `include_archives` / `include_imports` / `include_superseded` / `include_retracted`; `since` / `until`), `memory_get`, `memory_get_many` (up to 50), `memory_retract` (mark your own drawer wrong: hidden from default search, kept for audit), `memory_checkpoint`, `memory_checkpoint_read`, `diary_write`, `diary_read` (`since` / `until`), `relay_request`, `relay_inbox`, `relay_claim`, `relay_resolve`.
 
 ## Removing an agent
 

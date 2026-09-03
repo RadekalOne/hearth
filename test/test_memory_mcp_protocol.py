@@ -5,6 +5,8 @@ import gc
 import importlib.util
 import json
 import os
+import pathlib
+import re
 import socket
 import tempfile
 import time
@@ -15,6 +17,14 @@ import httpx2
 import uvicorn
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
+
+
+def _spec_version_from_docs() -> str:
+    """The version in docs/AGENT-SPEC.md's header; bootstrap must advertise the same."""
+    header = (pathlib.Path(__file__).parents[1] / "docs" / "AGENT-SPEC.md").read_text(
+        encoding="utf-8"
+    ).splitlines()[0]
+    return re.search(r"\(v(\d+\.\d+)\)", header).group(1)
 
 
 class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
@@ -126,7 +136,7 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         self.assertFalse(result.is_error)
                         payload = result.structured_content or json.loads(result.content[0].text)
                         self.assertEqual(payload["authenticated_as"], "codex")
-                        self.assertEqual(payload["service"]["agent_spec_version"], "1.2")
+                        self.assertEqual(payload["service"]["agent_spec_version"], _spec_version_from_docs())
                         self.assertEqual(payload["default_search"]["mode"], "current")
                         if mode == "auto":
                             await client.call_tool(

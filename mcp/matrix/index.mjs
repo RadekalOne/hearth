@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 // Hearth Matrix MCP server — thin wrapper over the Matrix client-server API.
 // Env: MATRIX_HOMESERVER_URL, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN
+//
+// v0.2 gives agents the primitives that remove whole classes of room-reading bugs:
+// a server clock on every response, "what is new since my read marker" (unread),
+// visible mentions/replies/threads/reactions, single-event lookup, reactions as
+// lightweight acks, threads and pill mentions on send, and local message search.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -17,11 +22,17 @@ function required(name) {
 const BASE = required("MATRIX_HOMESERVER_URL").replace(/\/$/, "");
 const USER_ID = required("MATRIX_USER_ID");
 const TOKEN = required("MATRIX_ACCESS_TOKEN");
+const LOCALPART = USER_ID.slice(1).split(":")[0];
+const SERVER_NAME = USER_ID.split(":").slice(1).join(":");
+const MENTION_RE = new RegExp(`@${LOCALPART.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+const MAX_PAGES = 8; // upper bound for backwards pagination in unread/search/after_event_id
 
-async function api(method, path, body, query) {
-  const url = new URL(`${BASE}/_matrix/client/v3${path}`);
+const now = () => new Date().toISOString();
+
+async function api(method, path, body, query, version = "v3") {
+  const url = new URL(`${BASE}/_matrix/client/${version}${path}`);
   for (const [k, v] of Object.entries(query ?? {})) {
-    if (v !== undefined) url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
   const res = await fetch(url, {
     method,
@@ -33,7 +44,10 @@ async function api(method, path, body, query) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(`${res.status} ${data.errcode ?? ""} ${data.error ?? ""}`.trim());
+    const err = new Error(`${res.status} ${data.errcode ?? ""} ${data.error ?? ""}`.trim());
+    err.status = res.status;
+    err.errcode = data.errcode;
+    throw err;
   }
   return data;
 }
@@ -46,18 +60,201 @@ async function stateContent(roomId, type) {
   }
 }
 
-const server = new McpServer({ name: "hearth-matrix", version: "0.1.0" });
+const txnId = () => `hearth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const rid = (roomId) => encodeURIComponent(roomId);
+
+// ---------------------------------------------------------------- enrichment
+
+const TAG_RE = /^\s*\[([^\]]{1,60})\]/;
+// "-- claude @ laptop (executor)", "— codex @ desktop", "- mavis @ laptop (auto)", "— Codex"
+const SIG_RE = /^\s*(?:--|—|–|-)\s*([A-Za-z][\w.-]*)(?:\s*@\s*([A-Za-z][\w.-]*))?(?:\s*\(([^)]*)\))?\s*$/;
+
+export function parseTag(body) {
+  const m = TAG_RE.exec(body ?? "");
+  if (!m) return null;
+  const tag = m[1].trim().toUpperCase();
+  return { tag, tag_base: tag.split(/[\s/\-:]+/)[0] };
+}
+
+export function parseSignature(body) {
+  const lines = (body ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const m = SIG_RE.exec(lines[lines.length - 1]);
+  if (!m) return null;
+  const sig = { agent: m[1].toLowerCase() };
+  if (m[2]) sig.surface = m[2].toLowerCase();
+  if (m[3]) sig.role = m[3].toLowerCase();
+  return sig;
+}
+
+// Reaction keys arrive with variation selectors and skin tones; compare the base glyph.
+export const normalizeReactionKey = (key) =>
+  (key ?? "").replace(/️/g, "").replace(/[\u{1F3FB}-\u{1F3FF}]/gu, "").trim();
+
+function indexRelations(chunk) {
+  const reactions = new Map(); // target event id -> { key: [senders] }
+  const edits = new Map(); // target event id -> latest replacement content
+  for (const e of chunk) {
+    const rel = e.content?.["m.relates_to"];
+    if (!rel) continue;
+    if (e.type === "m.reaction" && rel.rel_type === "m.annotation" && rel.event_id) {
+      const key = normalizeReactionKey(rel.key);
+      const bucket = reactions.get(rel.event_id) ?? {};
+      (bucket[key] ??= []).push(e.sender);
+      reactions.set(rel.event_id, bucket);
+    } else if (e.type === "m.room.message" && rel.rel_type === "m.replace" && rel.event_id) {
+      const prev = edits.get(rel.event_id);
+      if (!prev || prev.ts < e.origin_server_ts) {
+        edits.set(rel.event_id, { ts: e.origin_server_ts, content: e.content?.["m.new_content"] ?? e.content });
+      }
+    }
+  }
+  return { reactions, edits };
+}
+
+function enrich(e, relations = { reactions: new Map(), edits: new Map() }) {
+  const edit = relations.edits.get(e.event_id);
+  const c = edit ? { ...e.content, ...edit.content } : (e.content ?? {});
+  const rel = e.content?.["m.relates_to"] ?? {};
+  const body = c.body ?? "";
+  const mentions = c["m.mentions"]?.user_ids ?? [];
+  const out = {
+    event_id: e.event_id,
+    sender: e.sender,
+    body,
+    msgtype: c.msgtype,
+    timestamp: new Date(e.origin_server_ts).toISOString(),
+    mentioned_me: mentions.includes(USER_ID) || MENTION_RE.test(body) || body.includes(USER_ID),
+  };
+  if (c.url) out.media_url = c.url;
+  if (mentions.length) out.mentions = mentions;
+  if (rel["m.in_reply_to"]?.event_id) out.in_reply_to = rel["m.in_reply_to"].event_id;
+  if (rel.rel_type === "m.thread" && rel.event_id) out.thread_root = rel.event_id;
+  if (edit) out.edited = true;
+  const tag = parseTag(body);
+  if (tag) Object.assign(out, tag);
+  const sig = parseSignature(body);
+  if (sig) out.signature = sig;
+  const reactions = relations.reactions.get(e.event_id);
+  if (reactions) out.reactions = reactions;
+  return out;
+}
+
+function digest(chunk) {
+  const relations = indexRelations(chunk);
+  return chunk
+    .filter((e) => e.type === "m.room.message" && e.content?.["m.relates_to"]?.rel_type !== "m.replace")
+    .map((e) => enrich(e, relations));
+}
+
+// Page backwards through /messages until `stop(rawEvent)` returns true or the room's
+// history or MAX_PAGES is exhausted. Returns raw events newest-first plus tokens.
+async function pageBack(roomId, { limit = 100, from, stop, maxPages = MAX_PAGES } = {}) {
+  const chunk = [];
+  let token = from;
+  let start = null;
+  let end = null;
+  let found = false;
+  for (let page = 0; page < maxPages; page++) {
+    const data = await api("GET", `/rooms/${rid(roomId)}/messages`, null, {
+      dir: "b",
+      limit,
+      from: token,
+    });
+    if (start === null) start = data.start ?? null;
+    end = data.end ?? null;
+    for (const e of data.chunk ?? []) {
+      if (stop && stop(e)) {
+        found = true;
+        break;
+      }
+      chunk.push(e);
+    }
+    if (found || !data.end || !(data.chunk ?? []).length) break;
+    token = data.end;
+  }
+  return { chunk, start, end, found };
+}
+
+async function fullyReadMarker(roomId) {
+  try {
+    const data = await api(
+      "GET",
+      `/user/${encodeURIComponent(USER_ID)}/rooms/${rid(roomId)}/account_data/m.fully_read`
+    );
+    return data.event_id ?? null;
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------- markdown-lite
+
+const escapeHtml = (s) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+export function markdownToHtml(text) {
+  const blocks = [];
+  let html = escapeHtml(text);
+  html = html.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    blocks.push(`<pre><code${lang ? ` class="language-${lang}"` : ""}>${code.replace(/\n$/, "")}</code></pre>`);
+    return `\u0000${blocks.length - 1}\u0000`;
+  });
+  html = html
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/^(?:- |\* )(.*)$/gm, "• $1")
+    .replace(/\n/g, "<br>");
+  return html.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[Number(i)]);
+}
+
+function pillHtml(userId) {
+  return `<a href="https://matrix.to/#/${encodeURIComponent(userId)}">${escapeHtml(userId.split(":")[0])}</a>`;
+}
+
+function withPills(html, mentions) {
+  let out = html;
+  let anyInline = false;
+  for (const uid of mentions) {
+    const local = uid.slice(1).split(":")[0];
+    const re = new RegExp(`(^|[^\\w/#])@${local.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w:.-])`, "g");
+    const before = out;
+    out = out.replace(re, (_, pre) => `${pre}${pillHtml(uid)}`);
+    if (out !== before) anyInline = true;
+  }
+  return anyInline ? out : `${mentions.map(pillHtml).join(" ")} ${out}`;
+}
+
+// ---------------------------------------------------------------- server
+
+const server = new McpServer({ name: "hearth-matrix", version: "0.2.0" });
 
 function tool(name, description, shape, handler) {
   server.tool(name, description, shape, async (args) => {
     try {
-      const result = await handler(args ?? {});
+      let result = await handler(args ?? {});
+      if (result && typeof result === "object" && !Array.isArray(result) && !("now" in result)) {
+        result = { now: now(), ...result };
+      }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { isError: true, content: [{ type: "text", text: `Error: ${err.message}` }] };
     }
   });
 }
+
+tool(
+  "whoami",
+  "This agent's Matrix identity as the server sees it, plus the server clock. Use `now` as the only wall clock on unattended runs.",
+  {},
+  async () => {
+    const data = await api("GET", "/account/whoami");
+    return { user_id: data.user_id, device_id: data.device_id ?? null, localpart: LOCALPART, server_name: SERVER_NAME };
+  }
+);
 
 tool(
   "list_rooms",
@@ -86,49 +283,157 @@ tool(
 
 tool(
   "post_message",
-  "Post a text message to a room. Optionally reply to an event.",
+  "Post a text message to a room. Optional: reply_to an event, start/continue a thread (thread_root), mention users properly (mentions sets m.mentions and renders pills, so notifiers wake reliably and Commons stays free of plain-text @handles), or render markdown (code fences, `code`, **bold**, links).",
   {
     room_id: z.string(),
     text: z.string(),
     reply_to: z.string().optional().describe("Event ID to reply to"),
+    thread_root: z.string().optional().describe("Event ID of the thread root; the message is posted into that thread"),
+    mentions: z.array(z.string()).optional().describe("Full Matrix user IDs to mention, e.g. @codex:hearth.example"),
+    markdown: z.boolean().optional().describe("Render text as markdown-lite into formatted_body"),
   },
-  async ({ room_id, text, reply_to }) => {
+  async ({ room_id, text, reply_to, thread_root, mentions, markdown }) => {
     const content = { msgtype: "m.text", body: text };
-    if (reply_to) {
+    let html = null;
+    if (markdown) html = markdownToHtml(text);
+    if (mentions?.length) {
+      content["m.mentions"] = { user_ids: mentions };
+      html = withPills(html ?? escapeHtml(text).replace(/\n/g, "<br>"), mentions);
+    }
+    if (html !== null) {
+      content.format = "org.matrix.custom.html";
+      content.formatted_body = html;
+    }
+    if (thread_root) {
+      content["m.relates_to"] = {
+        rel_type: "m.thread",
+        event_id: thread_root,
+        is_falling_back: !reply_to,
+        "m.in_reply_to": { event_id: reply_to ?? thread_root },
+      };
+    } else if (reply_to) {
       content["m.relates_to"] = { "m.in_reply_to": { event_id: reply_to } };
     }
-    const txn = `hearth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    return api(
-      "PUT",
-      `/rooms/${encodeURIComponent(room_id)}/send/m.room.message/${txn}`,
-      content
-    );
+    const res = await api("PUT", `/rooms/${rid(room_id)}/send/m.room.message/${txnId()}`, content);
+    return { event_id: res.event_id, room_id, thread_root: thread_root ?? null };
   }
 );
 
 tool(
   "read_messages",
-  "Read recent messages from a room, newest first.",
+  "Read recent messages from a room, newest first. Each message carries mentioned_me, mentions, in_reply_to, thread_root, reactions (key -> senders), edited, a parsed [TAG] and the trailing '— agent @ surface' signature when present. Pass after_event_id to get only messages newer than one you already saw; pass since_token (the `start` of a previous read) to page forward; `end` pages further back.",
   {
     room_id: z.string(),
     limit: z.number().int().min(1).max(100).optional().describe("Default 20"),
+    after_event_id: z.string().optional().describe("Return only messages newer than this event"),
+    since_token: z.string().optional().describe("Pagination token from a previous response's `start`; reads forward from it"),
+  },
+  async ({ room_id, limit, after_event_id, since_token }) => {
+    const want = limit ?? 20;
+    if (since_token) {
+      const data = await api("GET", `/rooms/${rid(room_id)}/messages`, null, { dir: "f", limit: want, from: since_token });
+      const messages = digest(data.chunk ?? []).reverse();
+      return { room_id, count: messages.length, messages, start: data.end ?? null, end: data.start ?? null, direction: "forward" };
+    }
+    const { chunk, start, end, found } = await pageBack(room_id, {
+      limit: after_event_id ? 100 : want,
+      stop: after_event_id ? (e) => e.event_id === after_event_id : undefined,
+      maxPages: after_event_id ? MAX_PAGES : 1,
+    });
+    const messages = digest(chunk).slice(0, after_event_id ? 100 : want);
+    const out = { room_id, count: messages.length, messages, start, end };
+    if (after_event_id) out.after_event_found = found;
+    if (messages.length) {
+      out.newest_ts = messages[0].timestamp;
+      out.oldest_ts = messages[messages.length - 1].timestamp;
+    }
+    return out;
+  }
+);
+
+tool(
+  "unread",
+  "Messages posted after this agent's own read marker in a room, oldest first — the primitive for a sweep: call unread, act, then mark_read the newest event. Returns marker_event_id (null when never marked) and marker_found (false when the marker is older than the paged history).",
+  {
+    room_id: z.string(),
+    limit: z.number().int().min(1).max(200).optional().describe("Max messages to return, default 50"),
   },
   async ({ room_id, limit }) => {
-    const data = await api("GET", `/rooms/${encodeURIComponent(room_id)}/messages`, null, {
-      dir: "b",
-      limit: limit ?? 20,
+    const marker = await fullyReadMarker(room_id);
+    const want = limit ?? 50;
+    if (!marker) {
+      const { chunk } = await pageBack(room_id, { limit: Math.min(want, 100), maxPages: 1 });
+      const messages = digest(chunk).reverse();
+      return { room_id, marker_event_id: null, marker_found: false, count: messages.length, messages, note: "no read marker yet; showing recent history — mark_read the newest event to start tracking" };
+    }
+    const { chunk, found } = await pageBack(room_id, { limit: 100, stop: (e) => e.event_id === marker });
+    const messages = digest(chunk).reverse().slice(-want);
+    return {
+      room_id,
+      marker_event_id: marker,
+      marker_found: found,
+      count: messages.length,
+      messages,
+      newest_event_id: messages.length ? messages[messages.length - 1].event_id : marker,
+    };
+  }
+);
+
+tool(
+  "get_event",
+  "Fetch one event by id (verify a citation, read a replied-to message). Includes reactions when the server supports relations.",
+  { room_id: z.string(), event_id: z.string() },
+  async ({ room_id, event_id }) => {
+    const e = await api("GET", `/rooms/${rid(room_id)}/event/${encodeURIComponent(event_id)}`);
+    const relations = { reactions: new Map(), edits: new Map() };
+    try {
+      const rel = await api("GET", `/rooms/${rid(room_id)}/relations/${encodeURIComponent(event_id)}`, null, { limit: 100 }, "v1");
+      const indexed = indexRelations(rel.chunk ?? []);
+      relations.reactions = indexed.reactions;
+      relations.edits = indexed.edits;
+    } catch {
+      // relations endpoint unavailable — return the event without them
+    }
+    if (e.type !== "m.room.message") {
+      return { room_id, event_id, type: e.type, sender: e.sender, timestamp: new Date(e.origin_server_ts).toISOString(), content: e.content };
+    }
+    return { room_id, ...enrich(e, relations) };
+  }
+);
+
+tool(
+  "react",
+  "Add an emoji reaction to an event. Cheap acknowledgement that adds no room noise: ✅ 'seen/handled', 👍/👎 on a [PLAN] from a human reads as approve/reject.",
+  { room_id: z.string(), event_id: z.string(), key: z.string().describe("Emoji, e.g. ✅ 👍 👎") },
+  async ({ room_id, event_id, key }) => {
+    const res = await api("PUT", `/rooms/${rid(room_id)}/send/m.reaction/${txnId()}`, {
+      "m.relates_to": { rel_type: "m.annotation", event_id, key },
     });
-    const messages = (data.chunk ?? [])
-      .filter((e) => e.type === "m.room.message")
-      .map((e) => ({
-        event_id: e.event_id,
-        sender: e.sender,
-        body: e.content?.body ?? "",
-        msgtype: e.content?.msgtype,
-        ...(e.content?.url ? { media_url: e.content.url } : {}),
-        timestamp: new Date(e.origin_server_ts).toISOString(),
-      }));
-    return { count: messages.length, messages };
+    return { event_id: res.event_id, reacted_to: event_id, key };
+  }
+);
+
+tool(
+  "search_messages",
+  "Find messages in a room whose body contains a string (case-insensitive), paging back through history. Use it to locate the [APPROVED] for a plan, a cited event, or every post by one sender.",
+  {
+    room_id: z.string(),
+    contains: z.string().optional().describe("Substring to match in the body"),
+    sender: z.string().optional().describe("Full user id or localpart to filter by"),
+    limit: z.number().int().min(1).max(100).optional().describe("Max matches, default 20"),
+    max_pages: z.number().int().min(1).max(20).optional().describe("Pages of 100 to scan, default 5"),
+  },
+  async ({ room_id, contains, sender, limit, max_pages }) => {
+    if (!contains && !sender) throw new Error("provide contains and/or sender");
+    const needle = (contains ?? "").toLowerCase();
+    const who = sender ? (sender.startsWith("@") ? sender : `@${sender}:`) : null;
+    const want = limit ?? 20;
+    const { chunk, end } = await pageBack(room_id, { limit: 100, maxPages: max_pages ?? 5 });
+    const scanned = chunk.filter((e) => e.type === "m.room.message").length;
+    const matches = digest(chunk)
+      .filter((m) => (!needle || m.body.toLowerCase().includes(needle)) && (!who || m.sender.startsWith(who)))
+      .slice(0, want);
+    return { room_id, scanned, count: matches.length, matches, end, more: Boolean(end) };
   }
 );
 
@@ -165,21 +470,22 @@ tool(
   async ({ room_id, typing }) =>
     api(
       "PUT",
-      `/rooms/${encodeURIComponent(room_id)}/typing/${encodeURIComponent(USER_ID)}`,
+      `/rooms/${rid(room_id)}/typing/${encodeURIComponent(USER_ID)}`,
       typing ? { typing: true, timeout: 30000 } : { typing: false }
     )
 );
 
 tool(
   "mark_read",
-  "Mark a room as read up to an event.",
+  "Mark a room as read up to an event: sets both the public read receipt and this agent's private fully-read marker that `unread` is measured from.",
   { room_id: z.string(), event_id: z.string() },
-  async ({ room_id, event_id }) =>
-    api(
-      "POST",
-      `/rooms/${encodeURIComponent(room_id)}/receipt/m.read/${encodeURIComponent(event_id)}`,
-      {}
-    )
+  async ({ room_id, event_id }) => {
+    await api("POST", `/rooms/${rid(room_id)}/read_markers`, {
+      "m.fully_read": event_id,
+      "m.read": event_id,
+    });
+    return { room_id, marked: event_id };
+  }
 );
 
 tool(
@@ -192,6 +498,8 @@ tool(
     })
 );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error(`hearth-matrix MCP up as ${USER_ID} on ${BASE}`);
+if (process.env.HEARTH_MATRIX_MCP_NO_STDIO !== "1") {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`hearth-matrix MCP v0.2 up as ${USER_ID} on ${BASE}`);
+}

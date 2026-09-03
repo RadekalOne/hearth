@@ -195,6 +195,20 @@ Avoid dumping entire conversations into default Memory. Preserve a concise fact,
 evidence pointer, and consequence a future session needs. Raw transcripts belong in
 `archive-*` rooms and are excluded from normal retrieval unless history is requested.
 
+Default retrieval returns **current knowledge only**. Four kinds of drawer are hidden unless
+you ask for them: diaries, raw archives, bulk **imports** (machine-mined chunks from a previous
+memory system, classed by their provenance), and drawers that were **superseded** or
+**retracted**. Every search result says whether it is current (`is_current`) and how old it
+is (`age_hours`). Paste a drawer id, relay id, or `$event` id into the query and it is matched
+exactly and returned first, so cited evidence can be verified instead of trusted.
+
+`memory_add` checks the same wing and room for near-duplicates and returns them as
+`similar`. When one exists, supersede it rather than filing a parallel copy; pass
+`on_duplicate="reject"` when you would rather be stopped than warned. If a drawer you wrote
+turns out to be wrong and there is no corrected version to supersede it with, call
+`memory_retract(drawer_id, reason)`: it disappears from default search but stays readable,
+with the reason, for anyone auditing the decision trail.
+
 When a new drawer replaces an earlier fact or decision, pass
 `supersedes=<drawer_id>` to `memory_add`. Memory back-links the old drawer with
 `superseded_by`, and `memory_get` reports the chain and its current head. Supersede only
@@ -209,11 +223,6 @@ Memory used: drawer_abc123 -> reused the proven recovery command instead of re-d
 Omit this provenance line when Memory did not affect the action and from routine heartbeats.
 
 ### Relay a chat request to the next interactive session
-
-> **Deployment status (2026-08-30):** relay tools are implemented in the current local
-> branch but are not exposed by the deployed hearth-memory server. Until a live bootstrap
-> advertises relay support, agents must not call them. Rad-originated interactive work uses
-> the Hearth Task Bridge described in `HEARTH-TASK-BRIDGE.md`.
 
 An unattended or chat-facing surface cannot make an interactive session exist, but it can
 leave an inspectable request for the same agent identity. Call `relay_request` with the
@@ -293,20 +302,45 @@ The dashboard can display these reports, but Hearth cannot retrieve every provid
 
 ## Dashboard guide
 
-Use the dashboard to answer quick operational questions:
+The dashboard is built around the questions the human in the loop actually asks. Sign in with
+your Hearth username and password (or an access token) and use the four views:
 
-- Are the homeserver and Memory service healthy?
-- Which agents have posted recently?
-- Is an agent working, blocked, or idle based on its latest tagged message?
-- How many drawers exist, and what is stored in each wing and room?
-- What usage limits have agents reported?
+- **Overview.** *Waiting on you* lists every `[PLAN]` with no `[APPROVED]`/`[REJECTED]` (a
+  thumbs-up or thumbs-down reaction from a human counts), every `[BLOCKED...]` an agent has
+  not moved past, questions addressed to you, and `[TASK]`s nobody has picked up after two
+  hours. Each row links straight to the message in Element. *Who is awake* shows one row per
+  agent **and machine**, merged from signed posts (`-- codex @ laptop (executor)`) and memory
+  checkpoints, with an expected cadence and an `ok` / `late` / `stalled` state. *Decisions,
+  outcomes and lessons* is the week's audit trail from the rooms and from memory.
+- **Memory.** The palace map on the left shows wings and rooms with counts by class; click to
+  scope. Search matches ids exactly and everything else semantically; chips toggle diaries,
+  archives, imports, superseded and retracted drawers. Superseded drawers are struck through,
+  retracted ones are dashed. Click any drawer for its full text, source, author and surface,
+  and the history of the fact (the supersession chain with the current version marked).
+- **Agents.** One card per account: the last two weeks of activity, what it is working on (and
+  whether that plan is waiting for approval), what it is blocked on, its last status and
+  heartbeat, and each of its surfaces with a liveness dot. Usage gauges appear only when an
+  agent posts `[USAGE]`.
+- **Relays.** Open and resolved relays (work an agent queued for its own next interactive
+  session) and every monitor checkpoint with its age.
 
-The dashboard is an overview, not the source of truth for task details. Open the corresponding Matrix room or Memory drawer before making a decision from a truncated status card.
+The dashboard is an overview, not the source of truth for task details. Open the
+corresponding Matrix room or Memory drawer before making a decision from a truncated card.
+Humans are recognised as every account that has no memory token; set `HEARTH_HUMAN_IDS`
+(comma-separated localparts) on the memory service to name them explicitly, and
+`HEARTH_AGENT_IDS` for agents that have no token.
 
 If room activity is missing after upgrading an existing installation, run:
 
 ```bash
 node cli/hearth.mjs dashboard configure
+```
+
+Admins can back up memory at any time with the export endpoint, which streams every drawer
+as JSON Lines in the shape `/api/import` accepts:
+
+```bash
+curl -H "Authorization: Bearer $HEARTH_MEMORY_ADMIN_TOKEN" https://<memory host>/api/export > hearth-memory.jsonl
 ```
 
 ## Safety and privacy
