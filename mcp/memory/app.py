@@ -34,10 +34,10 @@ DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 APP_VERSION = os.environ.get("HEARTH_MEMORY_VERSION", "0.8.0")
 BUILD_COMMIT = os.environ.get("HEARTH_MEMORY_BUILD_COMMIT", "unknown")
-SCHEMA_VERSION = "1+checkpoints+relay+supersession+imports+retract"
+SCHEMA_VERSION = "1+checkpoints+relay+supersession+imports+retract+consolidation+compaction"
 # Must match the version in the header of docs/AGENT-SPEC.md. A test enforces it so a
 # spec bump without a code bump fails CI instead of silently forking (AGENT-SPEC §9).
-AGENT_SPEC_VERSION = os.environ.get("HEARTH_AGENT_SPEC_VERSION", "1.4")
+AGENT_SPEC_VERSION = os.environ.get("HEARTH_AGENT_SPEC_VERSION", "1.5")
 # Wings whose drawers are always classed as bulk imports (hidden from default search).
 # Provenance-based detection (added_by == "mempalace", or a "mempalace:<path>" source)
 # covers the known noise without this list; it exists for operator overrides.
@@ -51,6 +51,24 @@ DUP_DISTANCE = float(os.environ.get("HEARTH_DUP_DISTANCE", "0.18"))
 METADATA_CACHE_TTL = float(os.environ.get("HEARTH_STATUS_TTL", "30"))
 # Seconds to cache Matrix room reads behind the dashboard endpoints.
 ROOM_CACHE_TTL = float(os.environ.get("HEARTH_ROOM_CACHE_TTL", "45"))
+# Opt-in consolidation (AGENT-SPEC §1, one identity per agent brain): merge per-machine and
+# legacy agent wings into `agent_<name>`, link each agent's Agent Cards oldest-to-newest, and
+# retire the cards of deactivated accounts. Runs at startup when enabled; POST /api/consolidate
+# runs it on demand for admins. Idempotent; original wings are kept in metadata.
+CONSOLIDATE_AGENT_WINGS = os.environ.get(
+    "HEARTH_CONSOLIDATE_AGENT_WINGS", ""
+).strip().lower() in {"1", "true", "yes"}
+# Extra wing renames that cannot be derived from the roster, e.g. "wing_agent=agents,wing_hearth=hearth".
+WING_ALIASES = {
+    k.strip(): v.strip()
+    for k, _, v in (pair.partition("=") for pair in os.environ.get("HEARTH_WING_ALIASES", "").split(","))
+    if k.strip() and v.strip()
+}
+# Localparts of accounts deactivated by an identity consolidation; their Agent Cards are retired.
+RETIRED_AGENTS = {
+    a.strip().lstrip("@").split(":")[0].lower()
+    for a in os.environ.get("HEARTH_RETIRED_AGENTS", "").split(",") if a.strip()
+}
 # When set, /api/* and /mcp require a bearer token (the admin token or a minted
 # agent token). When unset, the service runs open — safe only on loopback.
 ADMIN_TOKEN = os.environ.get("HEARTH_MEMORY_ADMIN_TOKEN", "")
@@ -228,7 +246,9 @@ def _is_bulk_import(meta: dict) -> bool:
 
 
 def _classify(meta: dict) -> str:
-    """Full record class for a drawer: diary > archive > import > knowledge."""
+    """Full record class for a drawer: compacted > diary > archive > import > knowledge."""
+    if meta.get("compacted_into"):
+        return "archive"  # a diary entry rolled into a summary stays only for audit
     base = _record_class(meta.get("room"))
     if base != "knowledge":
         return base
@@ -580,6 +600,197 @@ def migrate_legacy_metadata(batch_size: int = 500) -> dict:
     return {"scanned": scanned, "updated": updated, "total": total}
 
 
+# ---------------------------------------------------------------- consolidation
+#
+# AGENT-SPEC §1 says one identity per agent brain, but memory grew per-machine wings
+# (agent_claude-desktop, wing_mavis, "agent_claude @ laptop (hourly executor)") before that
+# rule existed. Consolidation folds them into agent_<name>, keeps the original wing and
+# derives a surface from the suffix, links each agent's Agent Cards oldest-to-newest so only
+# the newest is current, and retires cards of deactivated accounts that can no longer retract
+# themselves. Everything is metadata-only and idempotent.
+
+def _agent_wing_target(wing: str, roster: set[str]) -> tuple[str, str] | None:
+    """(target_wing, surface_hint) for a per-machine/legacy variant of an agent's wing."""
+    wing = (wing or "").strip()
+    low = wing.lower()
+    for agent in sorted(roster, key=len, reverse=True):
+        home = f"agent_{agent}"
+        if low == home:
+            return None
+        for prefix in (f"{home}-", f"{home} @ ", f"{home}@", f"wing_{agent}-"):
+            if low.startswith(prefix):
+                hint = wing[len(prefix):].strip(" -_")
+                if hint.startswith("(") and hint.endswith(")"):
+                    hint = hint[1:-1].strip()
+                return home, hint
+        if low == f"wing_{agent}":
+            return home, ""
+    if wing in WING_ALIASES:
+        return WING_ALIASES[wing], ""
+    return None
+
+
+def consolidate_agent_wings(roster: set[str]) -> dict:
+    moved: dict[str, int] = {}
+    update_ids, update_metas = [], []
+    for drawer_id, meta in _all_metadata(force=True):
+        target = _agent_wing_target(meta.get("wing", ""), roster)
+        if not target:
+            continue
+        new_wing, surface_hint = target
+        new_meta = {**meta, "wing": new_wing,
+                    "original_wing": meta.get("original_wing") or meta.get("wing", "")}
+        if surface_hint and not meta.get("surface"):
+            new_meta["surface"] = surface_hint
+        update_ids.append(drawer_id)
+        update_metas.append(new_meta)
+        moved[meta.get("wing", "")] = moved.get(meta.get("wing", ""), 0) + 1
+    for i in range(0, len(update_ids), 500):
+        drawers.update(ids=update_ids[i:i + 500], metadatas=update_metas[i:i + 500])
+    if update_ids:
+        _invalidate_metadata_cache()
+    return {"moved": len(update_ids), "by_wing": moved}
+
+
+_CARD_HEADER_RE = re.compile(r"^\s*AGENT CARD:\s*([A-Za-z0-9_.@-]+)", re.IGNORECASE)
+_CARD_MATRIX_RE = re.compile(r"^\s*matrix:\s*@([^:\s]+)", re.IGNORECASE | re.MULTILINE)
+
+
+def _card_identity(content: str) -> str:
+    """Localpart an Agent Card describes: its matrix: line, else the header name."""
+    m = _CARD_MATRIX_RE.search(content or "")
+    if m:
+        return m.group(1).lower()
+    m = _CARD_HEADER_RE.match(content or "")
+    return m.group(1).lower() if m else ""
+
+
+def _registry_cards() -> list[tuple[str, str, dict]]:
+    ids = [i for i, m in _all_metadata(force=True) if m.get("room") == "registry"]
+    if not ids:
+        return []
+    got = drawers.get(ids=ids, include=["documents", "metadatas"])
+    return [
+        (i, d, m) for i, d, m in zip(got["ids"], got["documents"], got["metadatas"])
+        if _CARD_HEADER_RE.match(d or "")
+    ]
+
+
+def retire_agent_cards(retired: set[str]) -> dict:
+    """Retract the Agent Cards of deactivated accounts; nobody else can."""
+    if not retired:
+        return {"retired": 0, "cards": []}
+    done = []
+    for drawer_id, doc, meta in _registry_cards():
+        if meta.get("retracted"):
+            continue
+        identity = _card_identity(doc)
+        author = (meta.get("added_by") or "").lower()
+        if identity in retired or author in retired:
+            drawers.update(ids=[drawer_id], metadatas=[{
+                **meta, "retracted": True, "retracted_by": "consolidation",
+                "retracted_at": _now(),
+                "retraction_reason": (
+                    f"account @{identity or author} was deactivated under the one-identity-per-"
+                    "agent rule; card retired by consolidation"
+                ),
+            }])
+            done.append(drawer_id)
+    if done:
+        _invalidate_metadata_cache()
+    return {"retired": len(done), "cards": done}
+
+
+def chain_agent_cards(roster: set[str]) -> dict:
+    """Link each roster agent's cards oldest-to-newest so only the newest is current."""
+    by_agent: dict[str, list] = {}
+    for drawer_id, doc, meta in _registry_cards():
+        if meta.get("retracted"):
+            continue
+        identity = _card_identity(doc)
+        if identity in roster:
+            by_agent.setdefault(identity, []).append([meta.get("created_at") or "", drawer_id, meta])
+    linked = 0
+    for cards in by_agent.values():
+        cards.sort(key=lambda c: c[0])
+        for older, newer in zip(cards, cards[1:]):
+            _, old_id, old_meta = older
+            _, new_id, new_meta = newer
+            if old_meta.get("superseded_by") or new_meta.get("supersedes"):
+                continue  # an explicit chain already exists; leave it alone
+            old_meta["superseded_by"] = new_id
+            new_meta["supersedes"] = old_id
+            drawers.update(ids=[old_id, new_id], metadatas=[old_meta, new_meta])
+            linked += 1
+    if linked:
+        _invalidate_metadata_cache()
+    return {"agents": sorted(by_agent), "linked": linked}
+
+
+def run_consolidation(roster: set[str]) -> dict:
+    return {
+        "ran_at": _now(),
+        "wings": consolidate_agent_wings(roster),
+        "retired_cards": retire_agent_cards(RETIRED_AGENTS),
+        "card_chains": chain_agent_cards(roster),
+    }
+
+
+# ---------------------------------------------------------------- diary compaction
+
+def compact_diary(agent: str, drawer_ids: list[str], summary: str, period: str = "") -> dict:
+    """Roll several of an agent's diary entries into one summary entry.
+
+    The summary is a normal diary drawer with kind="summary"; the originals become
+    record_class "archive" and point at it via compacted_into, so diary_read and default
+    search skip them while memory_get still returns them for audit.
+    """
+    agent = (agent or "").strip()
+    ids = [(i or "").strip() for i in (drawer_ids or []) if (i or "").strip()]
+    summary = (summary or "").strip()
+    if not agent:
+        raise ValueError("agent is required")
+    if not ids:
+        raise ValueError("drawer_ids is required")
+    if len(ids) > 200:
+        raise ValueError("compact at most 200 diary entries per call")
+    if not summary:
+        raise ValueError("summary is required")
+    _require_own_agent(agent)
+    wing = f"agent_{agent}"
+    got = drawers.get(ids=ids, include=["metadatas"])
+    found = dict(zip(got["ids"], got["metadatas"]))
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise ValueError(f"unknown diary drawers: {', '.join(missing)}")
+    for drawer_id, meta in found.items():
+        if meta.get("wing") != wing or meta.get("room") != "diary":
+            raise ValueError(f"{drawer_id} is not in {wing}/diary")
+        if meta.get("compacted_into"):
+            raise ValueError(f"{drawer_id} is already compacted into {meta['compacted_into']}")
+    stamps = sorted(meta.get("created_at") or "" for meta in found.values())
+    author, surface = _author(agent)
+    created = add_drawer(
+        wing, "diary", summary, author,
+        f"diary_compact of {len(ids)} entries {stamps[0][:10]}..{stamps[-1][:10]}",
+        surface=surface,
+    )
+    summary_id = created["drawer_id"]
+    summary_meta = drawers.get(ids=[summary_id], include=["metadatas"])["metadatas"][0]
+    drawers.update(ids=[summary_id], metadatas=[{
+        **summary_meta, "kind": "summary", "compacts": len(ids),
+        "covers_from": stamps[0], "covers_to": stamps[-1], "period": (period or "").strip(),
+    }])
+    order = list(found)
+    drawers.update(
+        ids=order,
+        metadatas=[{**found[i], "record_class": "archive", "compacted_into": summary_id} for i in order],
+    )
+    _invalidate_metadata_cache()
+    return {"summary_id": summary_id, "agent": agent, "compacted": len(ids),
+            "covers_from": stamps[0], "covers_to": stamps[-1]}
+
+
 # Identifiers agents paste into queries. Cosine search cannot find these; the exact
 # lane looks them up literally and puts the hits first.
 _EXACT_TOKEN_RE = re.compile(
@@ -812,7 +1023,8 @@ PROTOCOL = (
     "3) Use relay_request to pass work from an unattended/chat surface to the same "
     "agent's next interactive session; claim and resolve relays explicitly. "
     "4) Use memory_checkpoint for recurring monitors and resumable working state. "
-    "5) Use diary_write only after a material work session, not for quiet heartbeats. "
+    "5) Use diary_write only after a material work session, not for quiet heartbeats; roll "
+    "old entries into one summary with diary_compact when the diary outgrows a week. "
     "6) File durable facts, decisions, lessons, and outcomes with memory_add; pass "
     "supersedes=<drawer_id> when replacing an earlier one. "
     "7) If a drawer you wrote proves wrong, memory_retract it with the reason so peers "
@@ -1057,6 +1269,8 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
             "memory_checkpoint": "replaceable working state for monitors and resumable tasks",
             "relay_request": "durable request for this agent's next interactive session",
             "diary_write": "material session continuity only; never quiet heartbeat telemetry",
+            "diary_compact": "roll your own older diary entries into one summary; originals are archived",
+            "memory_retract": "mark your own drawer wrong when no corrected version exists",
             "prohibited": ["passwords", "access tokens", "private keys", "transfer codes"],
         },
         "relay_policy": {
@@ -1269,22 +1483,48 @@ def diary_write(agent: str, content: str) -> dict:
 
 
 @mcp.tool(annotations=READ_ONLY_TOOL)
-def diary_read(agent: str, limit: int = 10, since: str = "", until: str = "") -> dict:
+def diary_read(agent: str, limit: int = 10, since: str = "", until: str = "",
+               include_compacted: bool = False) -> dict:
     """Read this agent's most recent diary entries, newest first. Optional ISO
-    since/until bound created_at; each entry carries age_hours and surface."""
+    since/until bound created_at; each entry carries age_hours, surface and kind
+    ("entry" or "summary"). Entries already rolled into a summary are hidden unless
+    include_compacted=true."""
     got = drawers.get(where=_where(f"agent_{agent}", "diary"),
                       include=["documents", "metadatas"])
-    entries = sorted(
-        (
-            {"drawer_id": i, "content": d, "created_at": m.get("created_at"),
-             "surface": m.get("surface", ""), "age_hours": _age_hours(m.get("created_at"))}
-            for i, d, m in zip(got["ids"], got["documents"], got["metadatas"])
-            if _in_window(m.get("created_at"), since or None, until or None)
-        ),
-        key=lambda e: e["created_at"] or "",
-        reverse=True,
-    )[: max(1, min(limit, 100))]
-    return {"agent": agent, "count": len(entries), "entries": entries}
+    entries = []
+    hidden = 0
+    for i, d, m in zip(got["ids"], got["documents"], got["metadatas"]):
+        if not _in_window(m.get("created_at"), since or None, until or None):
+            continue
+        if m.get("compacted_into") and not include_compacted:
+            hidden += 1
+            continue
+        entry = {"drawer_id": i, "content": d, "created_at": m.get("created_at"),
+                 "surface": m.get("surface", ""), "age_hours": _age_hours(m.get("created_at")),
+                 "kind": m.get("kind") or "entry"}
+        if m.get("kind") == "summary":
+            entry.update(compacts=m.get("compacts"), covers_from=m.get("covers_from"),
+                         covers_to=m.get("covers_to"))
+        if m.get("compacted_into"):
+            entry["compacted_into"] = m["compacted_into"]
+        entries.append(entry)
+    entries.sort(key=lambda e: e["created_at"] or "", reverse=True)
+    entries = entries[: max(1, min(limit, 100))]
+    result = {"agent": agent, "count": len(entries), "entries": entries}
+    if hidden:
+        result["compacted_hidden"] = hidden
+    return result
+
+
+@mcp.tool(annotations=UPDATE_TOOL)
+def diary_compact(agent: str, drawer_ids: list[str], summary: str, period: str = "") -> dict:
+    """Roll several of your own diary entries into one summary entry. Read the entries,
+    write the summary a future session actually needs, then pass their ids. The summary
+    stays in your diary with kind="summary"; the originals are archived (hidden from
+    diary_read and default search, kept for audit, each pointing at the summary). Use it
+    when diary_read shows dozens of entries older than a week. Only the agent itself or
+    admin may compact its diary."""
+    return compact_diary(agent, drawer_ids, summary, period)
 
 
 @mcp.tool(annotations=UPDATE_TOOL)
@@ -1349,6 +1589,8 @@ mcp_app = mcp.streamable_http_app(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     migrate_legacy_metadata()
+    if CONSOLIDATE_AGENT_WINGS:
+        run_consolidation(_roster())
     async with mcp.session_manager.run():
         yield
 
@@ -1583,6 +1825,14 @@ def export_drawers(request: Request, record_class: str = "", wing: str = "",
 def list_tokens(request: Request):
     require_admin(request)
     return {"agents": sorted(load_tokens().keys())}
+
+
+@app.post("/api/consolidate")
+def api_consolidate(request: Request):
+    """Admin: fold per-machine agent wings into one wing per agent, chain Agent Cards,
+    retire cards of retired accounts (HEARTH_RETIRED_AGENTS). Idempotent; returns a report."""
+    require_admin(request)
+    return run_consolidation(_roster())
 
 
 @app.delete("/api/tokens/{agent}")

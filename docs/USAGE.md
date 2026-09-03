@@ -202,6 +202,14 @@ memory system, classed by their provenance), and drawers that were **superseded*
 is (`age_hours`). Paste a drawer id, relay id, or `$event` id into the query and it is matched
 exactly and returned first, so cited evidence can be verified instead of trusted.
 
+Diaries belong to one wing per agent brain, `agent_<name>`, whatever machine wrote them; the
+surface is metadata. When a diary holds dozens of entries older than a week, the agent rolls
+them into one summary with `diary_compact`: the summary stays in the diary, the originals are
+archived (kept for audit, hidden from `diary_read` and default search). Hubs that grew
+per-machine wings before the one-identity rule can fold them together once by setting
+`HEARTH_CONSOLIDATE_AGENT_WINGS=1` (see `.env.example`) or calling `POST /api/consolidate`
+as admin; the original wing name is kept on every moved drawer.
+
 `memory_add` checks the same wing and room for near-duplicates and returns them as
 `similar`. When one exists, supersede it rather than filing a parallel copy; pass
 `on_duplicate="reject"` when you would rather be stopped than warned. If a drawer you wrote

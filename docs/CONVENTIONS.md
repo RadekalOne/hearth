@@ -26,13 +26,21 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - `[OUTCOME]` — the later-known consequence of a past decision, referencing it
 - `[LESSON]` — a filed lesson ("When X, do Y because Z"), announced in #agent-logs
 - `[USAGE]` — an agent's periodic self-report of its token/credit consumption, posted in #agent-logs as `key=value` pairs the dashboard can parse, e.g. `[USAGE] provider=anthropic period=daily used=120k limit=500k`. Post at least daily if you know your quota; providers expose usage to their own apps, not to the hub, so self-reporting is the only source.
-- `[PLAN]` — an executor's proposed plan for a posted task: numbered steps, exact tools, deliverable location. Unattended execution happens only after the human replies `[APPROVED]`; `[REJECTED] <guidance>` gets one revision.
-- `[APPROVED]` / `[REJECTED]` — human response to a decision, proposal, or plan
+- `[PLAN]` — an executor's proposed plan for a posted task: numbered steps, exact tools, deliverable location. Unattended execution happens only after the human approves, by replying `[APPROVED]` or by reacting 👍 to the plan; `[REJECTED] <guidance>` (or a 👎) gets one revision.
+- `[APPROVED]` / `[REJECTED]` — human response to a decision, proposal, or plan. A 👍 / 👎 reaction on the message carries the same meaning and is preferred for plans, since it adds no room noise.
+
+## Reactions instead of acknowledgements
+
+Agents do not post `[ACK]` messages. Use a ✅ reaction (`react`) to say "seen, nothing to add"
+on a post that named you or that you handled. Reactions are visible to every reader through
+`read_messages` and `get_event`, and to the dashboard, so nothing is lost by not posting.
 
 ## The task loop
 
 1. Human (or agent) posts `[TASK]` in #agent-tasks.
-2. An agent replies `[CLAIM]` before starting — first claim wins; others stand down.
+2. An agent replies `[CLAIM]` before starting — first claim wins; others stand down. Keep the
+   task's `[PLAN]`, approval, status and outcome in one thread on the `[TASK]` message
+   (`post_message` with `thread_root`) so a task reads as one conversation.
 3. Claimer posts `[STATUS]` at meaningful milestones. If only the current chat/unattended
    surface is limited, it calls `relay_request` and posts `[RELAY]`; human approval,
    missing requester information, and external blockers use `[BLOCKED]`.
@@ -52,7 +60,13 @@ Start messages with a bracketed tag so both humans and agents can scan/filter:
 - **Rooms are for flow, memory is for facts.** Anything a future session needs must go into the memory service — chat scrollback is not durable memory.
 - File decisions in wing `<project>`, room `decisions`. Agent-to-agent context goes in room `notes-between-agents`.
 - Write a diary entry (`diary_write`) after a material working session. Recurring monitors
-  use `memory_checkpoint`; quiet heartbeats do not append durable memory.
+  use `memory_checkpoint`; quiet heartbeats do not append durable memory. When your diary
+  holds dozens of entries older than a week, roll them into one summary with `diary_compact`.
+- One memory wing per agent brain: your diary and continuity live in `agent_<name>`, never
+  in a per-machine wing. Surfaces are metadata, not wings.
+- A wrong drawer is superseded (`memory_add(..., supersedes=)`) when a corrected version
+  exists and retracted (`memory_retract`) when it does not. `memory_add` tells you about
+  near-duplicates; supersede one instead of filing another copy.
 - Chat/unattended surfaces use `relay_request` when their own interactive surface can
   continue within existing authority. Interactive sessions claim and resolve relays returned
   by `memory_bootstrap`; relays are durable delivery, not wake signals.

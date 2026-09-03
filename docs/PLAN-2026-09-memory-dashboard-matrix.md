@@ -113,8 +113,8 @@ Each phase is independently shippable and ordered cheap-to-expensive. Items mark
 | A8 **[done]** | `status()` cached for 30 s; `bootstrap(compact=true)` omits protocol prose and project list; `/api/recent` uses the same cache for metadata. | Two bootstraps within 30 s do one metadata scan. |
 | A9 **[done]** | `GET /api/export?class=&wing=` streams JSONL (admin). Mirror of `/api/import`; import accepts the export shape unchanged. | Export then import into an empty store yields identical ids/metadata. |
 | A10 **[done]** | Timestamp normalisation in the startup migration: naive `created_at` gets `+00:00`. | All rows parse as aware datetimes. |
-| A11 **[next]** | Diary compaction: reflection files one `diary-summary` drawer per agent per week and marks the originals `record_class="archive"`. Needs a `[DECISION]`. | `diary_read` cost bounded. |
-| A12 **[next, needs Rad]** | Wing consolidation: alias `agent_<name>-*`, `wing_<name>` into `agent_<name>`; supersede stale Agent Cards; merge `wing_agent/registry` into `agents/registry`. Visible rename; propose as `[DECISION]` first. | One wing per agent brain. |
+| A11 **[done]** | Diary compaction: `diary_compact(agent, drawer_ids, summary, period)` writes one summary entry (`kind="summary"`) and archives the originals (`compacted_into`), hidden from `diary_read` unless `include_compacted`. Each agent compacts its own diary; reflection flags overgrown ones. Approved by Rad 2026-09-03. | `diary_read` cost bounded. |
+| A12 **[done]** | Wing consolidation (approved by Rad 2026-09-03): opt-in `HEARTH_CONSOLIDATE_AGENT_WINGS=1` or `POST /api/consolidate` folds `agent_<name>-*`, `agent_<name> @ *`, `wing_<name>*` into `agent_<name>` (roster-derived, plus `HEARTH_WING_ALIASES` for `wing_agent=agents,wing_hearth=hearth`), keeping `original_wing` and deriving `surface`; chains each agent's Agent Cards oldest-to-newest; retires cards of `HEARTH_RETIRED_AGENTS`. Idempotent. | One wing per agent brain; one current card per agent. |
 
 ### Phase B. Matrix MCP v0.2
 
@@ -156,7 +156,7 @@ Frontend **[done]**: one static page plus `app.js` / `app.css`, no build step, n
 
 | Item | Change |
 |---|---|
-| D1 **[next, needs Rad]** | AGENT-SPEC v1.5: (a) `unread` + `mark_read` are the sweep primitive, "re-read twice" guidance retired; (b) reactions: a human's 👍 on a `[PLAN]` equals `[APPROVED]`, 👎 equals `[REJECTED]`; agents acknowledge with ✅ instead of `[ACK]` posts; (c) one thread per `[TASK]` in #agent-tasks; (d) `memory_retract` semantics and the `import` class; (e) `now` from tools is the only clock an unattended run may use. Bump + `[DECISION]`. |
+| D1 **[done on branch]** | AGENT-SPEC v1.5 and CONVENTIONS written (approved by Rad 2026-09-03): `unread` + `mark_read` as the sweep primitive; 👍/👎 on a `[PLAN]` equals `[APPROVED]`/`[REJECTED]`; ✅ reactions replace `[ACK]` posts; threads preferred per task; `memory_retract` and `diary_compact` duties; `now` is the only clock; one wing per agent brain. The version-bump `[DECISION]` is posted at merge time, so agents keep following v1.4 until then. |
 | D2 **[done]** | AGENT-ONBOARDING tool reference, USAGE memory/dashboard guides (and its stale relay note removed), README and PROJECT updated. CONVENTIONS untouched pending D1. |
 | D3 **[next]** | Worktree-per-agent rule in AGENT-SPEC (from the 09-01 `[PLAN]`). |
 | D4 **[next, Rad]** | Reset the desktop checkout to `origin/main`; enable commit signing on the desktop. |
@@ -175,14 +175,16 @@ Branch `claude/memory-dashboard-matrix-v2`, worktree `Projects/hearth-wt-claude-
 - CI: `.github/workflows/ci.yml` installs `mcp/matrix` deps for the Node tests and adds a Python job.
 - `docs/`: this plan; AGENT-ONBOARDING tool reference; USAGE memory + dashboard guides; README/PROJECT.
 
-Not done here: deployment (VPS, needs Rad or the laptop), the `[DECISION]` posts for D1 and A12, wing consolidation, diary compaction, SSE.
+Not done here: deployment (VPS, needs Rad or the laptop), the v1.5 version-bump `[DECISION]` (posted at merge), SSE live updates, the worktree-per-agent spec rule (D3).
 
-## 5. Decisions needed from Rad
+## 5. Decisions from Rad (2026-09-03)
 
-1. **Reactions as approvals** (D1b). Cheapest noise reduction available; changes how you approve.
-2. **Wing consolidation** (A12). Renames are visible in every search result.
-3. **Diary compaction** (A11). Archives old diaries behind weekly summaries.
-4. **Deploy order.** Suggested: merge this PR, deploy memory (image rebuild, with the usual pre-deploy volume backup), restart the Matrix MCP wrappers on both machines, then bump the spec.
+1. **Reactions as approvals** — APPROVED. Written into AGENT-SPEC v1.5 and CONVENTIONS on this branch.
+2. **Wing consolidation** — APPROVED. Implemented as an opt-in migration (A12); enable with `HEARTH_CONSOLIDATE_AGENT_WINGS=1`, `HEARTH_WING_ALIASES=wing_agent=agents,wing_hearth=hearth`, `HEARTH_RETIRED_AGENTS=claude-desktop,claude-laptop,codex-desktop,mavis-desktop` on the hub, or run `POST /api/consolidate` once as admin.
+3. **Diary compaction** — APPROVED. `diary_compact` tool shipped (A11); each agent compacts its own diary.
+4. **Desktop signing and the stale checkout** — DEFERRED until 1–3 are deployed. Until then this branch stays local to the desktop worktree.
+
+**Deploy order.** Sign and push (laptop, or desktop once signing exists), open the PR, merge; back up the memory volume; set the three consolidation variables in the hub `.env`; rebuild the image with all three compose overlays; confirm `/health` reports 0.8.0 and the consolidation report in the container log; restart the Matrix MCP wrappers and notifiers on both machines; then post the v1.5 `[DECISION]`.
 
 ## 6. Risks
 
