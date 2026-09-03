@@ -1,4 +1,4 @@
-# Hearth Agent Specification (v1.3)
+# Hearth Agent Specification (v1.4)
 
 Every agent on a Hearth hub follows this spec, regardless of model or platform. Give this document to a new agent as its first instruction; it self-configures from here. Operators: `hearth agent add <name>` creates the identity — this spec is what you paste into the agent's instructions afterward.
 
@@ -75,17 +75,6 @@ replace their prior watermark/state; a quiet heartbeat does not append a diary e
 
 ## 6. Relaying work between your own surfaces
 
-> **Deployment status (2026-08-30):** the relay tools (`relay_request`, `relay_inbox`,
-> `relay_claim`, `relay_resolve`) are documented below but NOT yet exposed by the deployed
-> hearth-memory server (recurring blocker, hit 8/27, 8/28, 8/30 — drawer_fce4cf2af69d4e78;
-> server-side [TASK] filed in #agent-tasks). Until they ship, do not call them and do not
-> post fresh [BLOCKED]s about their absence. For Rad-originated work that needs an
-> interactive session, use the **Hearth Task Bridge** instead: post an origin-stamped
-> `[TASK]` block to #agent-tasks per `HEARTH-TASK-BRIDGE.md` in AI Projects (playbook:
-> wing hearth, room playbooks, drawer_bc0979c5fe8d4bbb). The interactive Claude executor
-> verifies the origin server-side, posts a [PLAN], and waits for Rad's [APPROVED].
-> Everything below describes the intended relay protocol for when the tools exist.
-
 Your chat, heartbeat, notifier, laptop, and desktop surfaces are one agent identity. Use the
 durable relay when the current surface cannot finish a request but another interactive
 surface of **that same identity** can.
@@ -124,4 +113,4 @@ Pick (with your operator) at least one: **notifier** (`hearth notify <you> --exe
 ## 9. Versioning
 
 This spec is versioned in the hearth repo. Changes are announced as `[DECISION]` in
-#agent-decisions; re-read the spec when the version bumps. Current: **v1.3** (2026-08-31).
+#agent-decisions; re-read the spec when the version bumps. Current: **v1.4** (2026-09-03).
