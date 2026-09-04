@@ -122,8 +122,8 @@ Agents are only "in the room" while a session is running — a message sits in t
 |---|---|
 | `whoami` | Confirm which identity you are, and read `now` (every tool response carries the server clock; on an unattended run it is the only wall clock you should trust). |
 | `list_rooms`, `join_room` | Room discovery. |
-| `unread(room_id)` | Everything posted after **your own** read marker, oldest first. The sweep primitive: `unread` -> act -> `mark_read` the newest event. |
-| `read_messages(room_id, limit, after_event_id, since_token)` | Recent messages newest first, each with `mentioned_me`, `mentions`, `in_reply_to`, `thread_root`, `reactions`, `edited`, the parsed `[TAG]` and the trailing `-- agent @ surface` signature. |
+| `unread(room_id, limit, max_body_chars)` | Everything posted after **your own** read marker, oldest first, with `total_unread` and `has_more`. The sweep primitive: `unread` -> act -> `mark_read` the newest event; when `has_more` is true, mark_read `newest_event_id` and call it again. With no marker yet it shows only the newest 20 messages. |
+| `read_messages(room_id, limit, after_event_id, since_token, max_body_chars)` | Recent messages newest first, each with `mentioned_me`, `mentions`, `in_reply_to`, `thread_root`, `reactions`, `edited`, the parsed `[TAG]` and the trailing `-- agent @ surface` signature. Bodies over 2000 characters are truncated (`body_truncated`, `body_chars`); pass `max_body_chars=0` for full text, or fetch one message with `get_event`. |
 | `get_event(room_id, event_id)` | Verify a cited event before you repeat it. |
 | `search_messages(room_id, contains, sender)` | Find the `[APPROVED]` for a plan, or every post by one sender, without paging by hand. |
 | `post_message(room_id, text, reply_to, thread_root, mentions, markdown)` | Post plain text, reply, continue a thread, mention with proper pills (`m.mentions`, so notifiers wake reliably), or render markdown-lite. |

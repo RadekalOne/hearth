@@ -140,12 +140,31 @@ function enrich(e, relations = { reactions: new Map(), edits: new Map() }) {
   return out;
 }
 
-function digest(chunk) {
+// Long essays in a room (several thousand characters each) times a page of messages blow
+// past what an MCP client will accept in one tool result. Bodies are capped by default;
+// the full text is one get_event away and callers can pass max_body_chars=0.
+const DEFAULT_BODY_CHARS = 2000;
+const NO_MARKER_LIMIT = 20;
+
+function clampBody(message, maxChars) {
+  if (maxChars > 0 && message.body.length > maxChars) {
+    message.body_chars = message.body.length;
+    message.body = `${message.body.slice(0, maxChars).trimEnd()}…`;
+    message.body_truncated = true;
+  }
+  return message;
+}
+
+function digest(chunk, maxBodyChars = DEFAULT_BODY_CHARS) {
   const relations = indexRelations(chunk);
   return chunk
     .filter((e) => e.type === "m.room.message" && e.content?.["m.relates_to"]?.rel_type !== "m.replace")
-    .map((e) => enrich(e, relations));
+    .map((e) => clampBody(enrich(e, relations), maxBodyChars));
 }
+
+const bodyCapParam = z.number().int().min(0).max(20000).optional().describe(
+  `Truncate each body to this many characters (default ${DEFAULT_BODY_CHARS}; 0 = no limit). Truncated messages carry body_truncated and body_chars; use get_event for the full text.`
+);
 
 // Page backwards through /messages until `stop(rawEvent)` returns true or the room's
 // history or MAX_PAGES is exhausted. Returns raw events newest-first plus tokens.
@@ -230,7 +249,7 @@ function withPills(html, mentions) {
 
 // ---------------------------------------------------------------- server
 
-const server = new McpServer({ name: "hearth-matrix", version: "0.2.0" });
+const server = new McpServer({ name: "hearth-matrix", version: "0.2.1" });
 
 function tool(name, description, shape, handler) {
   server.tool(name, description, shape, async (args) => {
@@ -327,12 +346,14 @@ tool(
     limit: z.number().int().min(1).max(100).optional().describe("Default 20"),
     after_event_id: z.string().optional().describe("Return only messages newer than this event"),
     since_token: z.string().optional().describe("Pagination token from a previous response's `start`; reads forward from it"),
+    max_body_chars: bodyCapParam,
   },
-  async ({ room_id, limit, after_event_id, since_token }) => {
+  async ({ room_id, limit, after_event_id, since_token, max_body_chars }) => {
     const want = limit ?? 20;
+    const cap = max_body_chars ?? DEFAULT_BODY_CHARS;
     if (since_token) {
       const data = await api("GET", `/rooms/${rid(room_id)}/messages`, null, { dir: "f", limit: want, from: since_token });
-      const messages = digest(data.chunk ?? []).reverse();
+      const messages = digest(data.chunk ?? [], cap).reverse();
       return { room_id, count: messages.length, messages, start: data.end ?? null, end: data.start ?? null, direction: "forward" };
     }
     const { chunk, start, end, found } = await pageBack(room_id, {
@@ -340,7 +361,7 @@ tool(
       stop: after_event_id ? (e) => e.event_id === after_event_id : undefined,
       maxPages: after_event_id ? MAX_PAGES : 1,
     });
-    const messages = digest(chunk).slice(0, after_event_id ? 100 : want);
+    const messages = digest(chunk, cap).slice(0, after_event_id ? 100 : want);
     const out = { room_id, count: messages.length, messages, start, end };
     if (after_event_id) out.after_event_found = found;
     if (messages.length) {
@@ -353,37 +374,56 @@ tool(
 
 tool(
   "unread",
-  "Messages posted after this agent's own read marker in a room, oldest first — the primitive for a sweep: call unread, act, then mark_read the newest event. Returns marker_event_id (null when never marked) and marker_found (false when the marker is older than the paged history).",
+  "Messages posted after this agent's own read marker in a room, oldest first — the primitive for a sweep: call unread, act, then mark_read the newest event. Returns marker_event_id (null when never marked), marker_found (false when the marker is older than the paged history), total_unread and has_more; when has_more is true, mark_read the returned newest_event_id and call unread again to continue. With no marker yet it shows only the newest 20 messages.",
   {
     room_id: z.string(),
-    limit: z.number().int().min(1).max(200).optional().describe("Max messages to return, default 50"),
+    limit: z.number().int().min(1).max(200).optional().describe("Max messages to return, default 50 (20 when no read marker exists yet)"),
+    max_body_chars: bodyCapParam,
   },
-  async ({ room_id, limit }) => {
+  async ({ room_id, limit, max_body_chars }) => {
     const marker = await fullyReadMarker(room_id);
-    const want = limit ?? 50;
+    const cap = max_body_chars ?? DEFAULT_BODY_CHARS;
     if (!marker) {
-      const { chunk } = await pageBack(room_id, { limit: Math.min(want, 100), maxPages: 1 });
-      const messages = digest(chunk).reverse();
-      return { room_id, marker_event_id: null, marker_found: false, count: messages.length, messages, note: "no read marker yet; showing recent history — mark_read the newest event to start tracking" };
+      const want = Math.min(limit ?? NO_MARKER_LIMIT, NO_MARKER_LIMIT);
+      const { chunk } = await pageBack(room_id, { limit: want, maxPages: 1 });
+      const messages = digest(chunk, cap).reverse();
+      return {
+        room_id,
+        marker_event_id: null,
+        marker_found: false,
+        count: messages.length,
+        messages,
+        newest_event_id: messages.length ? messages[messages.length - 1].event_id : null,
+        note: `no read marker yet; showing only the newest ${want} messages — mark_read the newest event to start tracking, after which unread returns exactly what is new`,
+      };
     }
+    const want = limit ?? 50;
     const { chunk, found } = await pageBack(room_id, { limit: 100, stop: (e) => e.event_id === marker });
-    const messages = digest(chunk).reverse().slice(-want);
-    return {
+    const all = digest(chunk, cap).reverse(); // oldest first, everything after the marker
+    const messages = all.slice(0, want);
+    const out = {
       room_id,
       marker_event_id: marker,
       marker_found: found,
+      total_unread: all.length,
       count: messages.length,
+      has_more: all.length > messages.length,
       messages,
       newest_event_id: messages.length ? messages[messages.length - 1].event_id : marker,
     };
+    const notes = [];
+    if (out.has_more) notes.push(`showing the oldest ${messages.length} of ${all.length} unread; mark_read newest_event_id and call unread again to continue`);
+    if (!found) notes.push(`read marker not found within the last ${MAX_PAGES * 100} messages; the backlog may extend further back`);
+    if (notes.length) out.note = notes.join(". ");
+    return out;
   }
 );
 
 tool(
   "get_event",
-  "Fetch one event by id (verify a citation, read a replied-to message). Includes reactions when the server supports relations.",
-  { room_id: z.string(), event_id: z.string() },
-  async ({ room_id, event_id }) => {
+  "Fetch one event by id (verify a citation, read a replied-to message, or get the full text of a message a read truncated). Includes reactions when the server supports relations. Bodies are returned in full unless max_body_chars is given.",
+  { room_id: z.string(), event_id: z.string(), max_body_chars: bodyCapParam },
+  async ({ room_id, event_id, max_body_chars }) => {
     const e = await api("GET", `/rooms/${rid(room_id)}/event/${encodeURIComponent(event_id)}`);
     const relations = { reactions: new Map(), edits: new Map() };
     try {
@@ -397,7 +437,7 @@ tool(
     if (e.type !== "m.room.message") {
       return { room_id, event_id, type: e.type, sender: e.sender, timestamp: new Date(e.origin_server_ts).toISOString(), content: e.content };
     }
-    return { room_id, ...enrich(e, relations) };
+    return { room_id, ...clampBody(enrich(e, relations), max_body_chars ?? 0) };
   }
 );
 
@@ -422,17 +462,21 @@ tool(
     sender: z.string().optional().describe("Full user id or localpart to filter by"),
     limit: z.number().int().min(1).max(100).optional().describe("Max matches, default 20"),
     max_pages: z.number().int().min(1).max(20).optional().describe("Pages of 100 to scan, default 5"),
+    max_body_chars: bodyCapParam,
   },
-  async ({ room_id, contains, sender, limit, max_pages }) => {
+  async ({ room_id, contains, sender, limit, max_pages, max_body_chars }) => {
     if (!contains && !sender) throw new Error("provide contains and/or sender");
     const needle = (contains ?? "").toLowerCase();
     const who = sender ? (sender.startsWith("@") ? sender : `@${sender}:`) : null;
     const want = limit ?? 20;
     const { chunk, end } = await pageBack(room_id, { limit: 100, maxPages: max_pages ?? 5 });
     const scanned = chunk.filter((e) => e.type === "m.room.message").length;
-    const matches = digest(chunk)
+    // Match against the full body, then cap what is returned.
+    const cap = max_body_chars ?? DEFAULT_BODY_CHARS;
+    const matches = digest(chunk, 0)
       .filter((m) => (!needle || m.body.toLowerCase().includes(needle)) && (!who || m.sender.startsWith(who)))
-      .slice(0, want);
+      .slice(0, want)
+      .map((m) => clampBody(m, cap));
     return { room_id, scanned, count: matches.length, matches, end, more: Boolean(end) };
   }
 );
