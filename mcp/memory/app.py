@@ -2028,10 +2028,14 @@ _SIGNATURE_RE = re.compile(
 )
 APPROVE_KEYS = {"👍", "✅", "🆗", "👌"}
 REJECT_KEYS = {"👎", "❌", "🚫"}
+# A human's check mark or thumbs-down on an unclaimed [TASK] drops it from the inbox.
+DISMISS_TASK_KEYS = {"✅", "👎", "❌", "🚫"}
 # Roles/monitors that imply a schedule, and how often a tick is expected (minutes).
+# "executor" is deliberately absent: an executor only posts when there is work, so
+# silence from it is idleness, not a stall.
 _CADENCE_HINTS = (
     ("nightly", 1440), ("reflection", 1440), ("hourly", 60), ("sweep", 60),
-    ("heartbeat", 60), ("tick", 60), ("auto", 60), ("executor", 60),
+    ("heartbeat", 60), ("tick", 60), ("auto", 60),
 )
 
 
@@ -2211,11 +2215,27 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
         if base == "OUTCOME":
             for p in open_items(plans, rid, ev["ts"], sender=who):
                 p.update(resolved=True, resolution="executed")
+        if base in {"STATUS", "OUTCOME", "RELAY"}:
+            # Agents cite event ids when they resolve something on a peer's behalf
+            # ("resolves codex's [BLOCKED] $abc..."). A cited open item is closed, in any room.
+            for coll, resolution in ((blocked, None), (questions, None), (plans, "executed")):
+                for it in coll.values():
+                    if not it["resolved"] and it["ts"] < ev["ts"] and it["event_id"] in ev["body"]:
+                        it["resolved"] = True
+                        if resolution:
+                            it["resolution"] = resolution
         if base in {"CLAIM", "PLAN"}:
-            # A claim or plan picks up the most recent task still open in that room.
-            cands = open_items(tasks, rid, ev["ts"])
-            if cands:
-                max(cands, key=lambda t: t["ts"])["resolved"] = True
+            # A claim or plan picks up the task it cites; failing that, the most recent
+            # task still open in that room.
+            cited = [t for t in tasks.values()
+                     if not t["resolved"] and t["ts"] < ev["ts"] and t["event_id"] in ev["body"]]
+            if cited:
+                for t in cited:
+                    t["resolved"] = True
+            else:
+                cands = open_items(tasks, rid, ev["ts"])
+                if cands:
+                    max(cands, key=lambda t: t["ts"])["resolved"] = True
         item = {
             "event_id": eid, "room_id": rid, "room": ev["room"], "sender": _localpart(ev["sender"]),
             "surface": ev["sig_surface"], "ts": ev["ts"], "body": _excerpt(ev["body"]),
@@ -2246,6 +2266,8 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
         for coll in (blocked, questions):
             if r["target"] in coll:
                 coll[r["target"]]["resolved"] = True
+        if r["target"] in tasks and r["key"] in DISMISS_TASK_KEYS:
+            tasks[r["target"]]["resolved"] = True
 
     labels = {
         "approval": "Plan waiting for your approval",
