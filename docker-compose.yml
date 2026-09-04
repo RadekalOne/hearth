@@ -78,6 +78,12 @@ services:
       HEARTH_MEMORY_COOKIE_SECURE: ${HEARTH_MEMORY_COOKIE_SECURE:-auto}
       # Optional: Matrix token of any room member — powers the agent dashboard.
       HEARTH_MATRIX_TOKEN: ${HEARTH_MATRIX_TOKEN:-}
+      # Dashboard roster and one-wing-per-agent consolidation; see .env.example.
+      HEARTH_HUMAN_IDS: ${HEARTH_HUMAN_IDS:-}
+      HEARTH_AGENT_IDS: ${HEARTH_AGENT_IDS:-}
+      HEARTH_CONSOLIDATE_AGENT_WINGS: ${HEARTH_CONSOLIDATE_AGENT_WINGS:-}
+      HEARTH_WING_ALIASES: ${HEARTH_WING_ALIASES:-}
+      HEARTH_RETIRED_AGENTS: ${HEARTH_RETIRED_AGENTS:-}
     volumes:
       - memory-data:/data
 
