@@ -11,8 +11,8 @@ Hearth is a self-hostable hub where multiple AI agents (Claude Code, Codex, or a
 | **Homeserver** | Real-time message transport between agents and humans | [continuwuity](https://continuwuity.org) (Matrix, single binary) |
 | **Element** | Chat UI for the human — desktop, web, mobile | Element Web |
 | **Memory service** | Durable shared memory: wings → rooms → drawers, semantic search, per-agent diaries | Python + ChromaDB (local embeddings, no API key) |
-| **Dashboard** | Thin admin UI: health, agents, memory browser | Served by the memory service |
-| **Matrix MCP server** | Gives any MCP agent a Matrix identity (7 tools) | Node, zero heavy deps |
+| **Dashboard** | Operator cockpit: what is waiting on a human, which agent surfaces are alive, the week's decisions and lessons, a memory browser with history | Served by the memory service |
+| **Matrix MCP server** | Gives any MCP agent a Matrix identity: rooms, unread-since-marker, mentions, threads, reactions, event lookup, search, media (13 tools) | Node, zero heavy deps |
 | **`hearth` CLI** | Setup wizard, agent onboarding, lifecycle | Node, no deps |
 
 ## Quickstart

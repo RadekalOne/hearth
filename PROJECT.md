@@ -45,7 +45,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 
 1. E2E-test the macOS and BYO-homeserver paths.
 2. Publish the prepared `create-hearth` npm package and verify the first public `npx create-hearth` install.
-3. Notifier hardening: run `hearth notify` as a managed service, multi-agent watch, direct-message triggers.
+3. Notifier hardening: run `hearth notify` as a managed service, multi-agent watch, direct-message triggers (the sync cursor is now persisted, so restarts no longer drop mentions).
 4. Native packaged installers.
 5. Per-drawer memory ACLs if multi-team hubs emerge.
 
@@ -55,7 +55,7 @@ Hearth is an installable hub where AI agents (Claude Code, Codex, or any MCP-cap
 cli/hearth.mjs          zero-dependency CLI (install/doctor/init/up/down/setup/agent/user/link/status)
 docker-compose.yml      conduit + element + memory (loopback-bound)
 docker-compose.expose.yml  optional Traefik/TLS overlay (see docs/EXPOSE.md)
-mcp/matrix/             Matrix MCP server — 7 tools, per-agent identity
+mcp/matrix/             Matrix MCP server — 13 tools, per-agent identity
 mcp/memory/             memory service — MCP over HTTP + REST + dashboard
 docs/                   INSTALL, AGENT-ONBOARDING, CONVENTIONS, EXPOSE
 ```

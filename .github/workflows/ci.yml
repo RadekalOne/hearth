@@ -23,6 +23,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix mcp/matrix
       - run: npm run check
       - run: npm test
       - run: npm pack --dry-run
@@ -40,3 +41,15 @@ jobs:
           HEARTH_PUBLIC_MEMORY_HOST: hearth-memory.example.test
           HEARTH_MEMORY_ADMIN_TOKEN: ci-admin-token
         run: docker compose -f docker-compose.yml -f docker-compose.expose.yml -f docker-compose.expose-memory.yml config --quiet
+
+  memory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: mcp/memory/requirements.txt
+      - run: pip install -r mcp/memory/requirements.txt
+      - run: python -m unittest discover -s test -p "test_*.py"

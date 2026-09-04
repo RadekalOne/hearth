@@ -6,9 +6,19 @@ Run with:
 
 import importlib.util
 import os
+import pathlib
+import re
 import tempfile
 import unittest
 from pathlib import Path
+
+
+def _spec_version_from_docs() -> str:
+    """The version in docs/AGENT-SPEC.md's header; bootstrap must advertise the same."""
+    header = (pathlib.Path(__file__).parents[1] / "docs" / "AGENT-SPEC.md").read_text(
+        encoding="utf-8"
+    ).splitlines()[0]
+    return re.search(r"\(v(\d+\.\d+)\)", header).group(1)
 
 
 class MemoryServiceTests(unittest.TestCase):
@@ -109,7 +119,7 @@ class MemoryServiceTests(unittest.TestCase):
     def test_bootstrap_explains_default_retrieval_and_write_policy(self):
         result = self.memory.bootstrap(agent="codex", surface="laptop", project="hearth")
         self.assertEqual(result["authenticated_as"], "codex")
-        self.assertEqual(result["service"]["agent_spec_version"], "1.2")
+        self.assertEqual(result["service"]["agent_spec_version"], _spec_version_from_docs())
         self.assertEqual(result["default_search"]["mode"], "current")
         self.assertIn("diary", result["default_search"]["excludes"])
         self.assertIn("memory_checkpoint", result["write_policy"])

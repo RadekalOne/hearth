@@ -915,34 +915,67 @@ async function cmdNotify(name, rest) {
   const uid = agentEnv.MATRIX_USER_ID;
   const localpart = uid.slice(1).split(":")[0];
   const mentionRe = new RegExp(`@${localpart}\\b`, "i");
+  // The sync cursor is persisted next to the credentials so a restart resumes where
+  // the previous process stopped instead of dropping every mention that arrived while
+  // the notifier was down. The file holds only an opaque pagination token.
+  const cursorFile = path.join(SECRETS, "agents", `${name}.notify-cursor`);
+  const readCursor = () => {
+    try { return fs.readFileSync(cursorFile, "utf8").trim() || null; } catch { return null; }
+  };
+  const writeCursor = (token) => {
+    try { fs.writeFileSync(cursorFile, `${token}\n`); } catch (err) {
+      console.error(`could not persist sync cursor (${err.message})`);
+    }
+  };
 
-  async function syncOnce(since) {
+  async function syncOnce(since, { catchUp = false } = {}) {
     const url = new URL(`${base}/_matrix/client/v3/sync`);
     if (since) {
       url.searchParams.set("since", since);
-      url.searchParams.set("timeout", "30000");
+      // A catch-up sync after a restart returns immediately with whatever is pending.
+      url.searchParams.set("timeout", catchUp ? "0" : "30000");
     } else {
       // First sync: only fetch a token so we react to NEW messages, not history.
       url.searchParams.set("filter", JSON.stringify({ room: { timeline: { limit: 1 } } }));
     }
     const res = await fetch(url, { headers: { Authorization: `Bearer ${agentEnv.MATRIX_ACCESS_TOKEN}` } });
-    if (!res.ok) throw new Error(`sync HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(`sync HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     return res.json();
   }
 
   console.log(`👂 ${uid} listening for mentions ("@${localpart}") — Ctrl+C to stop`);
   if (command) console.log(`   on mention → ${command}`);
-  let since = (await syncOnce(null)).next_batch;
+  let since = readCursor();
+  let catchUp = Boolean(since);
+  if (catchUp) console.log(`   resuming from saved cursor (${cursorFile}); catching up on missed mentions`);
+  else {
+    since = (await syncOnce(null)).next_batch;
+    writeCursor(since);
+  }
   for (;;) {
     let data;
     try {
-      data = await syncOnce(since);
+      data = await syncOnce(since, { catchUp });
     } catch (err) {
+      if (catchUp && err.status && err.status < 500) {
+        // The saved cursor is no longer valid on this server; start fresh.
+        console.error(`saved cursor rejected (${err.message}); starting from now`);
+        catchUp = false;
+        since = (await syncOnce(null)).next_batch;
+        writeCursor(since);
+        continue;
+      }
       console.error(`sync error (${err.message}), retrying in 5s…`);
       await new Promise((r) => setTimeout(r, 5000));
       continue;
     }
+    catchUp = false;
     since = data.next_batch;
+    writeCursor(since);
     for (const [roomId, room] of Object.entries(data.rooms?.join ?? {})) {
       for (const ev of room.timeline?.events ?? []) {
         if (ev.type !== "m.room.message" || ev.sender === uid) continue;
