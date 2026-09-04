@@ -235,3 +235,62 @@ test("matrix MCP: enriched reads, unread from marker, reactions, threads, search
   const bySender = await call("search_messages", { room_id: ROOM, sender: "rad" });
   assert.equal(bySender.count, 3, "rad posted e1, e3 and e5; everything else came from the agent");
 });
+
+test("matrix MCP: unread caps the no-marker case, pages a big backlog, and truncates long bodies", { skip: !HAS_SDK && "mcp/matrix deps not installed" }, async (t) => {
+  const hs = fakeHomeserver();
+  const base = await startServer(hs.server);
+  const { client, call } = await connectClient(base);
+  t.after(async () => {
+    await client.close();
+    hs.server.close();
+  });
+
+  const essay = "A very long post. ".repeat(200); // 3600 chars
+  const seeded = [];
+  for (let i = 1; i <= 30; i++) {
+    seeded.push(hs.addEvent("m.room.message", RAD, { msgtype: "m.text", body: i % 10 === 0 ? essay : `message ${i}` }));
+  }
+
+  // No marker yet: only the newest 20, oldest-first, even when more is asked for.
+  const cold = await call("unread", { room_id: ROOM, limit: 100 });
+  assert.equal(cold.marker_event_id, null);
+  assert.equal(cold.count, 20);
+  assert.equal(cold.messages[0].event_id, seeded[10].event_id, "starts 20 back from the newest");
+  assert.equal(cold.messages.at(-1).event_id, seeded[29].event_id);
+  assert.equal(cold.newest_event_id, seeded[29].event_id);
+  assert.match(cold.note, /newest 20/);
+
+  // Long bodies are capped by default and flagged; the full text is available on request.
+  const long = cold.messages.find((m) => m.body_truncated);
+  assert.ok(long, "an essay in the window is truncated");
+  assert.equal(long.body_chars, essay.length);
+  assert.ok(long.body.length <= 2001 && long.body.endsWith("…"));
+  const full = await call("get_event", { room_id: ROOM, event_id: long.event_id });
+  assert.equal(full.body.length, essay.length, "get_event returns the full body by default");
+  assert.equal(full.body_truncated, undefined);
+  const uncapped = await call("read_messages", { room_id: ROOM, limit: 30, max_body_chars: 0 });
+  assert.ok(uncapped.messages.every((m) => !m.body_truncated), "max_body_chars=0 disables the cap");
+  const tight = await call("read_messages", { room_id: ROOM, limit: 5, max_body_chars: 10 });
+  assert.ok(tight.messages.every((m) => m.body.length <= 11));
+
+  // With a marker far back, unread pages the backlog oldest-first instead of dropping it.
+  await call("mark_read", { room_id: ROOM, event_id: seeded[2].event_id });
+  const page1 = await call("unread", { room_id: ROOM, limit: 10 });
+  assert.equal(page1.marker_found, true);
+  assert.equal(page1.total_unread, 27);
+  assert.equal(page1.count, 10);
+  assert.equal(page1.has_more, true);
+  assert.equal(page1.messages[0].event_id, seeded[3].event_id, "oldest unread first");
+  assert.equal(page1.newest_event_id, seeded[12].event_id);
+  assert.match(page1.note, /oldest 10 of 27/);
+  await call("mark_read", { room_id: ROOM, event_id: page1.newest_event_id });
+  const page2 = await call("unread", { room_id: ROOM, limit: 100 });
+  assert.equal(page2.total_unread, 17);
+  assert.equal(page2.has_more, false);
+  assert.equal(page2.messages[0].event_id, seeded[13].event_id, "continues exactly where the previous page stopped");
+  assert.equal(page2.note, undefined);
+  // Search matches against the full text even though the returned body is capped.
+  const found = await call("search_messages", { room_id: ROOM, contains: "very long post" });
+  assert.equal(found.count, 3);
+  assert.ok(found.matches.every((m) => m.body_truncated));
+});
