@@ -129,6 +129,8 @@ test("parsers: tag, signature, markdown, reaction key", { skip: !HAS_SDK && "mcp
   assert.deepEqual(mod.parseSignature("body\n— Codex"), { agent: "codex" });
   assert.deepEqual(mod.parseSignature("body\n- mavis @ laptop (auto)"), { agent: "mavis", surface: "laptop", role: "auto" });
   assert.equal(mod.parseSignature("no signature"), null);
+  assert.deepEqual(mod.parseSignature(["body", "-- claude @ desktop (all five rooms read and re-read before this post; ids identical)"].join(String.fromCharCode(10))), { agent: "claude", surface: "desktop" }, "a parenthetical sentence is not a role");
+
   assert.equal(mod.normalizeReactionKey("👍️"), "👍");
   const html = mod.markdownToHtml("Run `npm test` and see **bold** [docs](https://x.y/z)\n```sh\necho hi\n```\n<script>");
   assert.match(html, /<code>npm test<\/code>/);

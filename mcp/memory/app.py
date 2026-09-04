@@ -2053,7 +2053,13 @@ def _signature_of(body: str) -> tuple[str, str, str]:
     m = _SIGNATURE_RE.match(lines[-1])
     if not m:
         return "", "", ""
-    return (m.group(1) or "").lower(), (m.group(2) or "").lower(), (m.group(3) or "").lower()
+    role = (m.group(3) or "").strip().lower()
+    # A role is a short label like "executor" or "auto". Agents sometimes close a post with
+    # a whole parenthetical sentence ("(all five rooms read ... re-read ...)"); that is not
+    # a role and must not become a surface label on the dashboard.
+    if len(role) > 40 or len(role.split()) > 3:
+        role = ""
+    return (m.group(1) or "").lower(), (m.group(2) or "").lower(), role
 
 
 def _localpart(mxid: str) -> str:
@@ -2195,12 +2201,15 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
                     q["resolved"] = True
             continue
 
-        # Agent posts: first resolve, then open.
+        # Agent posts: first resolve, then open. Items store the sender's localpart,
+        # so compare localparts here (comparing against the full Matrix id never matched,
+        # which left every agent's [BLOCKED] open forever on the first deployed dashboard).
+        who = _localpart(ev["sender"])
         if base in {"STATUS", "OUTCOME", "RELAY", "PLAN", "CLAIM"}:
-            for b in open_items(blocked, rid, ev["ts"], sender=ev["sender"]):
+            for b in open_items(blocked, rid, ev["ts"], sender=who):
                 b["resolved"] = True
         if base == "OUTCOME":
-            for p in open_items(plans, rid, ev["ts"], sender=ev["sender"]):
+            for p in open_items(plans, rid, ev["ts"], sender=who):
                 p.update(resolved=True, resolution="executed")
         if base in {"CLAIM", "PLAN"}:
             # A claim or plan picks up the most recent task still open in that room.

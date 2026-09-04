@@ -84,6 +84,8 @@ EVENTS = {
         _msg("!tasks", "$e1", CLAUDE, "[TASK] Export memory to JSONL nightly.", NOW_MS - 10 * H),
         _msg("!tasks", "$e2", CODEX, "[PLAN] Nightly export\n1. cron\n-- codex @ laptop (executor)", NOW_MS - 9 * H),
         _msg("!tasks", "$e3", RAD, "[APPROVED]", NOW_MS - 8 * H),
+        _msg("!tasks", "$e14", CODEX, "[BLOCKED] cannot run the export unattended\n-- codex @ laptop (auto)", NOW_MS - int(7.8 * H)),
+        _msg("!tasks", "$e15", CODEX, "[PLAN] Export design\n-- codex @ laptop (executor)", NOW_MS - int(7.5 * H)),
         _msg("!tasks", "$e11", CODEX, "[PLAN] Rotate observer token\n-- codex @ laptop (executor)", NOW_MS - 7 * H),
         _reaction("!tasks", "$r1", RAD, "$e11", "👍️", NOW_MS - int(6.8 * H)),
         _msg("!tasks", "$e12", CODEX, "[OUTCOME] Nightly export shipped.\n-- codex @ laptop (executor)", NOW_MS - int(6.5 * H)),
@@ -479,8 +481,10 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         by_kind = {}
         for item in inbox["items"]:
             by_kind.setdefault(item["kind"], []).append(item["event_id"])
-        self.assertEqual(by_kind.get("approval"), ["$e4"], "e2 approved by text, e11 by 👍, e4 open")
-        self.assertEqual(by_kind.get("blocked"), ["$e5"])
+        self.assertEqual(by_kind.get("approval"), ["$e4"],
+                         "e2 approved by text, e11 by 👍, e15 executed via codex's own [OUTCOME] e12, e4 open")
+        self.assertEqual(by_kind.get("blocked"), ["$e5"],
+                         "codex's e14 was cleared by codex's own later [PLAN]; mavis's e5 has no follow-up")
         self.assertEqual(by_kind.get("question"), ["$e6"])
         self.assertEqual(by_kind.get("unclaimed_task"), ["$e13"],
                          "e1 was picked up by plan e2 and e10 by plan e4; a later [BLOCKED] does not claim")
@@ -494,7 +498,7 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("mavis@laptop", rows)
         self.assertEqual(rows["mavis@laptop"]["state"], "ok")
         self.assertEqual(rows["mavis@laptop"]["expected_every_minutes"], m.SURFACE_CADENCE_MINUTES)
-        self.assertEqual(rows["codex@laptop"]["roles"], ["executor"])
+        self.assertEqual(rows["codex@laptop"]["roles"], ["auto", "executor"])
         self.assertEqual(rows["claude@desktop"]["monitors"], ["hearth-room-sweep"])
         self.assertEqual(rows["claude@desktop"]["state"], "ok", "fresh checkpoint keeps it alive")
         self.assertIsNotNone(rows["claude@desktop"]["checkpoint_at"])
@@ -543,6 +547,11 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(m._signature_of("body\n- mavis @ laptop (auto)"), ("mavis", "laptop", "auto"))
         self.assertEqual(m._signature_of("body\n— Codex"), ("codex", "", ""))
         self.assertEqual(m._signature_of("no signature here"), ("", "", ""))
+        self.assertEqual(m._signature_of("body\n-- claude @ laptop (hourly executor)"), ("claude", "laptop", "hourly executor"))
+        long_tail = ("body\n-- claude @ desktop (all five rooms read 20:53:49Z-20:54:14Z and re-read "
+                     "immediately before this post; all five newest event ids identical across both batches)")
+        self.assertEqual(m._signature_of(long_tail), ("claude", "desktop", ""),
+                         "a parenthetical sentence after the surface is not a role")
         self.assertEqual(m._norm_reaction("👍️"), "👍")
         self.assertEqual(m._norm_reaction("👍🏽"), "👍")
 

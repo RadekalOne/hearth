@@ -233,7 +233,7 @@ async function renderOverview(view) {
     ? h("div", { class: "inbox" }, ...items.map(inboxRow))
     : h("div", { class: "empty", text: observerDown ? "Unavailable until the observer is configured." : "Nothing is waiting on you right now." });
   view.append(section("Waiting on you",
-    "Plans to approve, agents that are stuck, questions addressed to you, and tasks nobody has picked up.",
+    "Plans to approve, agents that are stuck, questions addressed to you, and tasks nobody has picked up. React in Element to clear one: a thumbs-up or thumbs-down on a plan decides it, a check mark on anything else marks it seen. An agent's own later [STATUS] or [OUTCOME] clears its items too.",
     inbox.ok ? inbox.v.total : null, inboxBody));
 
   // Who is awake
