@@ -89,6 +89,10 @@ EVENTS = {
         _msg("!tasks", "$e11", CODEX, "[PLAN] Rotate observer token\n-- codex @ laptop (executor)", NOW_MS - 7 * H),
         _reaction("!tasks", "$r1", RAD, "$e11", "👍️", NOW_MS - int(6.8 * H)),
         _msg("!tasks", "$e12", CODEX, "[OUTCOME] Nightly export shipped.\n-- codex @ laptop (executor)", NOW_MS - int(6.5 * H)),
+        _msg("!tasks", "$e17", CODEX, "[BLOCKED] need VPS reach for the rebuild\n-- codex @ laptop (auto)", NOW_MS - 6 * H),
+        _msg("!tasks", "$e18", CLAUDE, "[STATUS] Rebuilt from the desktop; resolves codex's [BLOCKED] $e17.\n-- claude @ desktop", NOW_MS - int(5.5 * H)),
+        _msg("!tasks", "$e16", CLAUDE, "[TASK] Old idea nobody wants.", NOW_MS - 5 * H),
+        _reaction("!tasks", "$r2", RAD, "$e16", "✅", NOW_MS - int(4.9 * H)),
         _msg("!tasks", "$e10", CLAUDE, "[TASK] Write the dashboard guide.", NOW_MS - 4 * H),
         _msg("!tasks", "$e4", CLAUDE, "[PLAN] Dashboard v2\n1. endpoints\n-- claude @ desktop", NOW_MS - 3 * H),
         _msg("!tasks", "$e13", CLAUDE, "[TASK] Rotate the observer token monthly.", NOW_MS - int(2.5 * H)),
@@ -100,6 +104,7 @@ EVENTS = {
         _msg("!decisions", "$e8", CLAUDE, "[DECISION] Hourly cadence adopted.\n-- claude @ desktop", NOW_MS - 5 * H),
     ],
     "!logs": [
+        _msg("!logs", "$e19", CODEX, "[STATUS] weekly upgrade check: nothing to do\n-- codex @ vps (executor)", NOW_MS - 3 * H),
         _msg("!logs", "$e7", MAVIS, "[tick 12:00 ET 9/3] [HB] quiet\n- mavis @ laptop (auto)", NOW_MS - 30 * 60 * 1000),
     ],
 }
@@ -484,10 +489,12 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(by_kind.get("approval"), ["$e4"],
                          "e2 approved by text, e11 by 👍, e15 executed via codex's own [OUTCOME] e12, e4 open")
         self.assertEqual(by_kind.get("blocked"), ["$e5"],
-                         "codex's e14 was cleared by codex's own later [PLAN]; mavis's e5 has no follow-up")
+                         "codex's e14 was cleared by codex's own later [PLAN], e17 by claude's [STATUS] citing "
+                         "its event id; mavis's e5 has no follow-up")
         self.assertEqual(by_kind.get("question"), ["$e6"])
         self.assertEqual(by_kind.get("unclaimed_task"), ["$e13"],
-                         "e1 was picked up by plan e2 and e10 by plan e4; a later [BLOCKED] does not claim")
+                         "e1 was picked up by plan e2, e10 by plan e4, e16 dismissed by rad's check mark; "
+                         "a later [BLOCKED] does not claim")
         self.assertEqual(inbox["total"], 4)
         blocked = next(i for i in inbox["items"] if i["kind"] == "blocked")
         self.assertEqual(blocked["surface"], "laptop")
@@ -503,6 +510,10 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows["claude@desktop"]["state"], "ok", "fresh checkpoint keeps it alive")
         self.assertIsNotNone(rows["claude@desktop"]["checkpoint_at"])
         self.assertEqual(rows["claude@unsigned"]["state"], "on-demand")
+        self.assertEqual(rows["codex@vps"]["roles"], ["executor"])
+        self.assertEqual(rows["codex@vps"]["state"], "on-demand", "an idle executor is not stalled")
+        self.assertIsNone(m._cadence_for("executor"))
+        self.assertEqual(m._cadence_for("auto"), m.SURFACE_CADENCE_MINUTES)
         self.assertNotIn("rad@unsigned", rows, "humans are not surfaces")
 
         kinds = [(i["kind"], i.get("event_id") or i.get("drawer_id")) for i in timeline["items"]]
