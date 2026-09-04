@@ -83,7 +83,8 @@ export function parseSignature(body) {
   if (!m) return null;
   const sig = { agent: m[1].toLowerCase() };
   if (m[2]) sig.surface = m[2].toLowerCase();
-  if (m[3]) sig.role = m[3].toLowerCase();
+  // A role is a short label like "executor"; a whole parenthetical sentence is not one.
+  if (m[3] && m[3].length <= 40 && m[3].trim().split(/\s+/).length <= 3) sig.role = m[3].trim().toLowerCase();
   return sig;
 }
 
