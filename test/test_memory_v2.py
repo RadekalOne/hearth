@@ -338,6 +338,49 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "on_duplicate must be"):
             self.memory.memory_add("hearth", "lessons", "x", source="s", on_duplicate="maybe")
 
+    # --- credential-shape write guard ---------------------------------------------------
+
+    def test_write_paths_reject_credential_shapes(self):
+        m = self.memory
+        # Synthetic shapes only; none of these is a real credential.
+        secrets = {
+            "matrix syt_": "notifier state: access_token syt_YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo_0123456789abcdef_ABCDEF",
+            "bearer": "curl -H 'Authorization: Bearer AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd' https://x",
+            "key assignment": "config: HEARTH_MEMORY_ADMIN_TOKEN=9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+            "sk- key": "used sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 for the call",
+            "github pat": "token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+            "private key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----",
+            "jwt": "session eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+        }
+        for label, text in secrets.items():
+            with self.subTest(path="checkpoint", shape=label):
+                with self.assertRaisesRegex(ValueError, "credential"):
+                    m.write_checkpoint("claude", "laptop", "familiarize", text)
+            with self.subTest(path="diary", shape=label):
+                with self.assertRaisesRegex(ValueError, "credential"):
+                    m.diary_write("claude", text)
+            with self.subTest(path="drawer", shape=label):
+                with self.assertRaisesRegex(ValueError, "credential"):
+                    m.memory_add("hearth", "lessons", text, source="test_memory_v2")
+            with self.subTest(path="drawer source", shape=label):
+                with self.assertRaisesRegex(ValueError, "credential"):
+                    m.memory_add("hearth", "lessons", "benign fact", source=text)
+        self.assertFalse(m.checkpoints.get()["ids"], "nothing was written")
+        self.assertFalse(m.drawers.get()["ids"], "nothing was written")
+        # The error names the shape, never the value.
+        try:
+            m.write_checkpoint("claude", "laptop", "familiarize", secrets["matrix syt_"])
+        except ValueError as exc:
+            self.assertNotIn("syt_YWJj", str(exc))
+        # Ordinary agent prose with ids, hashes and event ids still writes.
+        benign = ("Checked-through #agent-tasks !0SCHqdoKZOs53xq1DH4zTL0SLz4aKiD16y7Wo7xnIG0 = "
+                  "$babnDTQBsebNnRGjuE2IknVX1-NYGvnQupRL3lmzIwc; cites drawer_413d3b49e71943e5, "
+                  "checkpoint_claude-laptop-tick_0123456789ab, commit 6d32652, memory 0.8.2. "
+                  "Token rotation (part 1) held for Rad; HEARTH_MATRIX_TOKEN lives in claude.env.")
+        self.assertIn("checkpoint_id", m.write_checkpoint("claude", "laptop", "tick", benign))
+        self.assertIn("drawer_id", m.diary_write("claude", benign))
+        self.assertIn("drawer_id", m.memory_add("hearth", "outcomes", benign, source="test_memory_v2"))
+
     # --- batch get + date filters ------------------------------------------------------
 
     def test_get_many_preserves_order_and_reports_missing(self):
