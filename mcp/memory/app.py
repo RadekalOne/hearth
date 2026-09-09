@@ -404,6 +404,42 @@ def _require_own_agent(agent: str) -> None:
         )
 
 
+# Credential shapes refused at every write boundary. "Never store secrets" was prose
+# only until a plaintext Matrix access token landed in a checkpoint (2026-09-05); these
+# patterns make the policy enforceable. Errors name the shape and field, never the value.
+_CREDENTIAL_SHAPES = (
+    ("Matrix access token", re.compile(r"\bsyt_[A-Za-z0-9_-]{20,}")),
+    ("bearer token", re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}")),
+    ("sk- API key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}")),
+    ("GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})")),
+    ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
+    ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}")),
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
+    # NAME=value / name: value where the name ends in token/secret/password/key and the
+    # value is a long run with at least one digit (drawer ids and prose words stay clear).
+    ("secret assignment", re.compile(
+        r"(?i)\b[A-Z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|access[_-]?key)\b"
+        r"\s*[:=]\s*[\"']?(?=[A-Za-z0-9_\-./+=]*\d)[A-Za-z0-9_\-./+=]{16,}"
+    )),
+)
+
+
+def _reject_credential_shapes(**fields: str) -> None:
+    """Refuse content that looks like a credential, on any write path."""
+    for field, text in fields.items():
+        if not text:
+            continue
+        for shape, pattern in _CREDENTIAL_SHAPES:
+            hit = pattern.search(text)
+            if hit:
+                raise ValueError(
+                    f"{field} looks like it contains a {shape} (offset {hit.start()}); "
+                    "memory never stores credentials. Redact it and write again."
+                )
+
+
 def add_drawer(wing: str, room: str, content: str, added_by: str,
                source: str | None, surface: str = "", supersedes: str = "") -> dict:
     wing = (wing or "").strip()
@@ -412,6 +448,7 @@ def add_drawer(wing: str, room: str, content: str, added_by: str,
         raise ValueError("wing and room are required")
     if not content or not content.strip():
         raise ValueError("memory content is required")
+    _reject_credential_shapes(content=content, source=source or "")
     supersedes = (supersedes or "").strip()
     old_meta = None
     if supersedes:
@@ -1063,6 +1100,7 @@ def write_checkpoint(agent: str, surface: str, monitor: str, content: str) -> di
     if not content:
         raise ValueError("checkpoint content is required")
     _require_own_agent(agent)
+    _reject_credential_shapes(content=content)
     checkpoint_id = _checkpoint_id(agent, surface, monitor)
     replaced_previous = bool(checkpoints.get(ids=[checkpoint_id])["ids"])
     updated_at = _now()
