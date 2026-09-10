@@ -8,6 +8,7 @@ data/
 chat_log/
 scratch/
 sweeps/
+dist/
 # Room transcripts and pre-rewrite file backups (scripts/archive-rooms.mjs,
 # scripts/repin-room-ids.mjs). Deployment-specific and verbatim — never commit.
 archive/
