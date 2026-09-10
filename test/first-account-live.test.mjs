@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { provision } from '../installer/windows/openrouter.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 function command(file, args, options) {
@@ -42,10 +43,30 @@ test('fresh Docker hub completes bootstrap registration, rooms, observer and rep
     const response = await fetch('http://127.0.0.1:18020/health', { signal: AbortSignal.timeout(10000) });
     const health = await response.json();
     assert.equal(health.memory, 'ok');
+    const agent = await provision(hub, { name: 'testhelper', model: 'provider/test', key: 'nonfunctional-local-test-key' });
+    assert.equal(agent.userId, '@or-testhelper:bootstrap.localhost');
+    const retryAgent = await provision(hub, { name: 'testhelper', model: 'provider/test', key: 'nonfunctional-local-test-key' });
+    assert.equal(retryAgent.roomId, agent.roomId);
+    const integration = path.join(hub, 'integrations/openrouter');
+    fs.mkdirSync(integration, { recursive: true });
+    fs.mkdirSync(path.join(hub, 'data/openrouter'), { recursive: true });
+    fs.copyFileSync(path.join(repo, 'integrations/openrouter/agent.mjs'), path.join(integration, 'agent.mjs'));
+    fs.writeFileSync(path.join(integration, 'compose.yml'), fs.readFileSync(path.join(repo, 'integrations/openrouter/compose.yml'), 'utf8').replace('name: hearth_default', `name: ${project}_default`));
+    assert.equal(await command('docker', ['compose', '--project-name', project + '-agent', 'up', '-d'], { cwd: integration, env }), 0);
+    let connected = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try { connected = JSON.parse(fs.readFileSync(path.join(hub, 'data/openrouter/status.json'), 'utf8')).status === 'ready'; } catch {}
+      if (connected) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    assert.equal(connected, true, 'Real agent container must connect to its private room without a model call');
   } finally {
     // Delete only this test's randomly named Compose project and temp directory.
     if (fs.existsSync(path.join(hub, 'docker-compose.yml'))) {
       assert.match(project, /^hearth-bootstrap-test-[a-f0-9]{10}$/);
+      if (fs.existsSync(path.join(hub, 'integrations/openrouter/compose.yml'))) {
+        await command('docker', ['compose', '--project-name', project + '-agent', 'down'], { cwd: path.join(hub, 'integrations/openrouter'), env });
+      }
       await command('docker', ['compose', '--project-name', project, 'down', '--volumes'], { cwd: hub, env });
     }
     const resolved = path.resolve(folder);

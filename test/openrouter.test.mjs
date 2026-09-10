@@ -116,6 +116,7 @@ test('agent input and API-key budget checks fail closed', () => {
 test('Matrix registration handles registration-token auth without leaking it', async () => {
   const calls = [];
   const result = await register(async (url, options) => {
+    assert.equal(options.token, null);
     calls.push(options.body);
     return calls.length === 1 ? { session: 'session', flows: [{ stages: ['m.login.registration_token'] }] } : { user_id: '@or-helper:test', access_token: 'matrix-token' };
   }, 'or-helper', 'random-password', 'registration-secret');
@@ -135,7 +136,10 @@ test('provisioning creates one private account and room and safely resumes', asy
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
     let value = {};
-    if (url.endsWith('/register')) value = { access_token: 'bot-secret', user_id: config.userId };
+    if (url.endsWith('/register')) {
+      assert.equal(options.headers.Authorization, undefined, 'normal registration must not send an appservice credential');
+      value = { access_token: 'bot-secret', user_id: config.userId };
+    }
     if (url.endsWith('/createRoom')) {
       const body = JSON.parse(options.body);
       assert.equal(body.preset, 'private_chat'); assert.deepEqual(body.invite, [config.userId]);

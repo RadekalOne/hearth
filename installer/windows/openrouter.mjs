@@ -48,7 +48,9 @@ function compose(target, args) {
 export async function register(matrix, username, password, registrationToken) {
   let auth;
   for (let i = 0; i < 4; i++) {
-    const response = await matrix('/register', { method: 'POST', body: { username, password, initial_device_display_name: 'Hearth OpenRouter test', ...(auth ? { auth } : {}) }, challenge: true });
+    // Authorization on /register means application-service registration in
+    // Matrix. A human admin access token is not an application-service token.
+    const response = await matrix('/register', { token: null, method: 'POST', body: { username, password, initial_device_display_name: 'Hearth OpenRouter test', ...(auth ? { auth } : {}) }, challenge: true });
     if (response.access_token) return response;
     if (!response.session) break;
     const next = (response.flows || []).flatMap(flow => flow.stages || []).find(stage => !(response.completed || []).includes(stage));
@@ -59,8 +61,9 @@ export async function register(matrix, username, password, registrationToken) {
 }
 export async function provision(target, input) {
   const hub = JSON.parse(fs.readFileSync(path.join(target, 'hearth.config.json'), 'utf8'));
-  if (hub.mode !== 'local' || ![6167, '6167'].includes(hub.ports?.matrix) || ![8010, '8010'].includes(hub.ports?.memory))
-    throw new Error('This preview needs the local hub installed with the wizard defaults.');
+  const homeserver = new URL(hub.homeserverUrl || `http://127.0.0.1:${hub.ports?.matrix}`);
+  if (hub.mode !== 'local' || homeserver.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(homeserver.hostname))
+    throw new Error('This preview needs a local hub installed with the Windows wizard.');
   const env = envFile(path.join(target, '.env'));
   const admin = envFile(path.join(target, 'secrets/admin.env'));
   const folder = path.join(target, 'secrets/openrouter');
@@ -77,10 +80,10 @@ export async function provision(target, input) {
   const saved = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
   if (saved.name && saved.name !== input.name) throw new Error('This preview supports one test agent. Keep its original name to reconnect or change the model.');
   const persist = () => secretWrite(stateFile, saved);
-  const base = 'http://127.0.0.1:6167/_matrix/client/v3';
+  const base = homeserver.origin + '/_matrix/client/v3';
   const matrix = async (suffix, { token = admin.MATRIX_ACCESS_TOKEN, body, method = body ? 'POST' : 'GET', challenge = false } = {}) => {
     const response = await fetch(base + suffix, { method, redirect: 'error', signal: AbortSignal.timeout(15000),
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     if (!response.ok && !(challenge && response.status === 401)) throw new Error(`Hearth account setup failed (HTTP ${response.status}). Retry with the same agent name.`);
     return response.json();
   };
@@ -90,7 +93,7 @@ export async function provision(target, input) {
     let credentials;
     try { credentials = await register(matrix, account, saved.password, env.HEARTH_REGISTRATION_TOKEN); }
     catch {
-      credentials = await matrix('/login', { body: { type: 'm.login.password', identifier: { type: 'm.id.user', user: account }, password: saved.password } });
+      credentials = await matrix('/login', { token: null, body: { type: 'm.login.password', identifier: { type: 'm.id.user', user: account }, password: saved.password } });
     }
     saved.token = credentials.access_token; saved.userId = credentials.user_id;
     if (!saved.token || !saved.userId) throw new Error('Hearth did not return account credentials.');
