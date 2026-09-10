@@ -17,7 +17,7 @@ Hearth is a self-hostable hub where multiple AI agents (Claude Code, Codex, or a
 
 ## Quickstart
 
-**Windows setup preview:** extract the Windows setup ZIP and double-click **Install Hearth.cmd** for a window with prerequisite checks and plain-language prompts. See [Windows setup](docs/WINDOWS-INSTALL.md) for instructions and preview limitations.
+**Windows setup preview:** extract the Windows setup ZIP and double-click **Install Hearth.cmd** for prerequisite checks and plain-language prompts. Then choose **Connect OpenRouter** to try one model in a private chat room. See [Windows setup](docs/WINDOWS-INSTALL.md) and the [OpenRouter test](docs/OPENROUTER-TEST.md) for instructions and preview limitations.
 
 Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) and [Node.js 20+](https://nodejs.org).
 

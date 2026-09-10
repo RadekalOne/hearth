@@ -8,7 +8,7 @@ $script:action = ''
 $script:checked = $false
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Install Hearth'
-$form.ClientSize = New-Object System.Drawing.Size(640, 650)
+$form.ClientSize = New-Object System.Drawing.Size(640, 705)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -37,7 +37,7 @@ function TextBox($x, $y, $secret) {
 }
 $heading = Label 'Your own place for people and AI agents' 24 20 590 35
 $heading.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
-$null = Label "Hearth runs on this PC. Your chat and shared memory stay here. Keep Docker Desktop running while using Hearth. Internet is needed to download the software." 24 67 590 65
+$null = Label "Hearth stores chat and memory on this PC. Keep Docker Desktop running while using Hearth. After setup, connect an OpenRouter test agent below." 24 67 590 65
 $null = Label '1. Prepare your computer' 24 140 590 25
 $null = Label 'Install Node.js (LTS) and Docker Desktop using their normal installers. Open Docker Desktop and wait for it to finish starting. Restart Windows if requested, then reopen this wizard.' 24 168 590 65
 $nodeLink = Button 'Get Node.js' 24 235 150
@@ -66,6 +66,10 @@ $dashboard = Button 'Open dashboard' 164 592 155
 $guide = Button 'Setup guide' 329 592 125
 $key = Button 'Copy admin key' 464 592 152
 $key.Enabled = $false
+$agent = Button '3. Connect OpenRouter' 24 646 270
+$agent.Add_Click({
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -STA -File "' + (Join-Path $PSScriptRoot 'Connect-OpenRouter.ps1') + '"')
+})
 $chat.Enabled = $false
 $dashboard.Enabled = $false
 $chat.Add_Click({ Start-Process 'http://localhost:8009' })

@@ -1,0 +1,21 @@
+name: hearth-openrouter-preview
+services:
+  agent:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    command: ["node", "/app/agent.mjs"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 0.5
+    volumes:
+      - ./agent.mjs:/app/agent.mjs:ro
+      - ../../secrets/openrouter/agent.json:/run/hearth/agent.json:ro
+      - ../../data/openrouter:/state
+    networks: [hub]
+networks:
+  hub:
+    external: true
+    name: hearth_default

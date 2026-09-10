@@ -97,7 +97,7 @@ async function main() {
   });
   input.password = '';
   await ready();
-  return { ok: true, message: 'Hearth is ready! Open chat and sign in with the login and password you chose. Agent connections are a separate next step; see the guide.', target };
+  return { ok: true, message: 'Hearth is ready! Open chat and sign in with your login and password. Next, click Connect OpenRouter to add your test agent.', target };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().then(result => console.log(JSON.stringify(result))).catch(error => {

@@ -8,6 +8,7 @@ This is the first Windows wizard preview. It sets up a local Hearth hub, with ch
 4. Click **Check again**. This checks prerequisites and protects existing Hearth installations.
 5. Choose a login name and a password of at least 12 characters. Save these in your password manager, then click **Install Hearth**.
 6. Keep the window open during the download and startup. Once Hearth is ready, click **Open chat** and sign in with that login and password.
+7. Click **Connect OpenRouter** to add your first test agent. Follow the [OpenRouter test walkthrough](OPENROUTER-TEST.md).
 
 No terminal commands or configuration-file editing are needed for this hub setup. Prerequisite installers may require Windows administrator permission. Hearth's wizard runs as your normal Windows user. Docker Desktop must support Linux containers on your computer; its own installer explains system requirements and any applicable subscription terms.
 
@@ -15,7 +16,7 @@ No terminal commands or configuration-file editing are needed for this hub setup
 
 Hearth's files are in `%LOCALAPPDATA%\Hearth\hub`. Docker stores chat and memory in its persistent volumes. Keep both when moving or backing up Hearth. The wizard does not delete data, expose the hub to the internet, or turn on agent monitoring. Password input is sent privately to the setup process, without putting it in command arguments or a deployment file. Hearth saves account access tokens in its local `secrets` folder; protect this folder like a password.
 
-Keep Docker Desktop running to use Hearth. The chat address is <http://localhost:8009>; the dashboard is <http://localhost:8010>. For the dashboard, click **Copy admin key**, then **Open dashboard** and paste the key into its login box. Keep this key private: it grants administrator access. An agent connection screen is still future work. See [agent onboarding](AGENT-ONBOARDING.md) for connecting an agent.
+Keep Docker Desktop running to use Hearth. The chat address is <http://localhost:8009>; the dashboard is <http://localhost:8010>. For the dashboard, click **Copy admin key**, then **Open dashboard** and paste the key into its login box. Keep this key private: it grants administrator access. The first guided agent connection supports [OpenRouter](OPENROUTER-TEST.md). Other applications use the separate [agent onboarding guide](AGENT-ONBOARDING.md).
 
 ## If setup stops
 

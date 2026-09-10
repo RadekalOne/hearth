@@ -4,6 +4,8 @@ $stage = Join-Path ([IO.Path]::GetTempPath()) ('hearth-setup-' + [guid]::NewGuid
 $null = New-Item -ItemType Directory -Path $stage
 # Include current edits through an explicit public-file list for preview builds.
 $files = @('Install Hearth.cmd', 'installer/windows/Install-Hearth.ps1', 'installer/windows/runner.mjs',
+    'Connect OpenRouter.cmd', 'installer/windows/Connect-OpenRouter.ps1', 'installer/windows/openrouter.mjs',
+    'integrations/openrouter/agent.mjs', 'integrations/openrouter/compose.yml',
     '.env.example', 'docker-compose.yml', 'docker-compose.expose.yml', 'docker-compose.expose-memory.yml',
     'LICENSE', 'README.md', 'PROJECT.md', 'mcp/matrix/index.mjs', 'mcp/matrix/package.json',
     'mcp/matrix/package-lock.json', 'mcp/memory/app.py', 'mcp/memory/Dockerfile', 'mcp/memory/requirements.txt')
