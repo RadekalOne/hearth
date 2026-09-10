@@ -491,7 +491,12 @@ async function cmdSetup(options = {}) {
 
   let creds;
   try {
-    creds = await registerUser(cfg.homeserverUrl, username, password, env.HEARTH_REGISTRATION_TOKEN);
+    let registrationToken = env.HEARTH_REGISTRATION_TOKEN;
+    if (!readEnvFile(path.join(SECRETS, "admin.env")).MATRIX_ACCESS_TOKEN) {
+      const { firstAccountToken } = await import('./first-account.mjs');
+      registrationToken = firstAccountToken(ROOT, cfg, registrationToken);
+    }
+    creds = await registerUser(cfg.homeserverUrl, username, password, registrationToken);
     ok(`Registered ${creds.user_id}`);
   } catch (err) {
     console.log(`Registration failed (${err.message}); trying login instead…`);

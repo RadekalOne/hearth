@@ -2,6 +2,8 @@
 
 This is the first Windows wizard preview. It sets up a local Hearth hub, with chat and shared memory accessible on this computer.
 
+**Preview 3 fixes first-account setup.** If an earlier version failed after Docker started, close that wizard, extract the updated ZIP, and retry with the same login and password. Your installed configuration and data are preserved. The installer now handles the bundled chat server's one-time bootstrap token automatically without displaying it.
+
 1. Download the Windows setup ZIP from a release that includes it. Extract the entire ZIP to a folder you can keep. For a source checkout, use the files in that checkout.
 2. Double-click **Install Hearth.cmd** in the extracted folder.
 3. If needed, use **Get Node.js** and **Get Docker Desktop**. Install Node's LTS version. Follow Docker Desktop's prompts, including any Windows restart. Open Docker Desktop and wait until it is running, then reopen the Hearth installer.

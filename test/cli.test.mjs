@@ -15,6 +15,7 @@ function fixture() {
   fs.mkdirSync(path.join(root, "cli"), { recursive: true });
   fs.mkdirSync(path.join(root, "mcp", "matrix", "node_modules"), { recursive: true });
   fs.copyFileSync(path.join(REPO, "cli", "hearth.mjs"), path.join(root, "cli", "hearth.mjs"));
+  fs.copyFileSync(path.join(REPO, "cli", "first-account.mjs"), path.join(root, "cli", "first-account.mjs"));
   fs.copyFileSync(path.join(REPO, "cli", "create-hearth.mjs"), path.join(root, "cli", "create-hearth.mjs"));
   return root;
 }

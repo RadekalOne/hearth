@@ -7,6 +7,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const marker = '.hearth-wizard.json';
+export function installFailure(output) {
+  // Explain the category, not raw server output which may contain credentials.
+  if (/M_FORBIDDEN|M_UNKNOWN_TOKEN|registration failed|invalid.*token/i.test(output))
+    return 'Hearth is running, but account setup failed. Retry with the same login and password. If this is a new hub, use the latest installer with the first-account fix.';
+  if (/port is already allocated|address already in use/i.test(output))
+    return 'Another application is using a Hearth port. Close it and retry.';
+  if (/no space left|insufficient.*space/i.test(output))
+    return 'Docker has run out of storage. Free space in Docker Desktop and retry.';
+  if (/pull access denied|failed to resolve|failed to fetch|failed to solve|TLS handshake|network.*unreachable/i.test(output))
+    return 'Docker could not download or build a Hearth component. Check Docker Desktop and your internet connection, then retry.';
+  return 'Hearth setup could not finish. Docker may have more details in its Hearth containers. Retry with the same login and password; your configuration and data are kept.';
+}
 export function validateInput(input) {
   if (!/^[a-z0-9][a-z0-9._-]{0,31}$/.test(input.username || ''))
     throw new Error('Use 1–32 lowercase letters, numbers, dots, dashes or underscores for your login name. Start with a letter or number.');
@@ -88,12 +100,16 @@ async function main() {
   const config = path.join(target, 'wizard-deployment.json');
   fs.writeFileSync(config, JSON.stringify({ mode: 'local', adminUsername: input.username }));
   await new Promise((resolve, reject) => {
+    let output = '';
     const child = spawn(process.execPath, [path.join(target, 'cli/hearth.mjs'), 'install', '--yes', '--config', config], {
-      cwd: target, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'],
+      cwd: target, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, HEARTH_ROOT: target, HEARTH_ADMIN_PASSWORD: input.password },
     });
+    const capture = chunk => { output = (output + chunk.toString()).slice(-65536); };
+    child.stdout.on('data', capture);
+    child.stderr.on('data', capture);
     child.once('error', () => reject(new Error('Hearth could not start setup. Reopen the wizard and try again.')));
-    child.once('exit', code => code === 0 ? resolve() : reject(new Error('Hearth setup could not finish. Check that Docker Desktop is running and your internet connection works. Retry with the same login and password. If it still fails, ask for help using the installation folder shown below.')));
+    child.once('close', code => code === 0 ? resolve() : reject(new Error(installFailure(output))));
   });
   input.password = '';
   await ready();
