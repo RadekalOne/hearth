@@ -19,10 +19,14 @@ test('only direct human mentions wake the test agent', () => {
     { content: { msgtype: 'm.text', body: '@helper2 hello' } },
     { content: { msgtype: 'm.text', body: 'quoted @helper hello' } },
     { content: { msgtype: 'm.text', body: '@helper hello', 'm.mentions': { room: true, user_ids: [config.userId] } } },
-    { content: { msgtype: 'm.text', body: '@helper hello', 'm.mentions': { user_ids: [] } } },
+    { content: { msgtype: 'm.text', body: '@helper hello', 'm.mentions': { user_ids: ['@other:test'] } } },
     { content: { msgtype: 'm.text', body: '@helper edited', 'm.relates_to': { rel_type: 'm.replace' } } },
   ]) assert.equal(shouldReply(event(change), config, now), false, JSON.stringify(change));
   assert.equal(shouldReply(event({ content: { msgtype: 'm.text', body: 'hello helper', 'm.mentions': { user_ids: [config.userId] } } }), config, now), true);
+  for (const mentions of [{}, { user_ids: [] }]) {
+    assert.equal(shouldReply(event({ content: { msgtype: 'm.text', body: '@helper hello', 'm.mentions': mentions } }), config, now), true);
+    assert.equal(shouldReply(event({ content: { msgtype: 'm.text', body: 'hello', 'm.mentions': mentions } }), config, now), false);
+  }
 });
 
 test('event is persisted before billing and cannot be billed twice after restart', async () => {

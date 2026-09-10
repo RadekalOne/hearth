@@ -36,7 +36,10 @@ export function shouldReply(event, config, now = Date.now()) {
       typeof event.event_id !== 'string') return false;
   const mentions = event.content['m.mentions'];
   if (mentions?.room === true) return false;
-  if (mentions) return Array.isArray(mentions.user_ids) && mentions.user_ids.includes(config.userId);
+  if (Array.isArray(mentions?.user_ids) && mentions.user_ids.length > 0)
+    return mentions.user_ids.includes(config.userId);
+  // Element includes m.mentions:{} even for a typed @name. Empty metadata
+  // must retain the documented text fallback; explicit mentions of others do not.
   // Plain text fallback is anchored; quoted old replies cannot wake the agent.
   const escaped = config.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`^\\s*@${escaped}(?=[:\\s,]|$)`, 'i').test(event.content.body);
