@@ -278,6 +278,21 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(got["retracted"])
         self.assertEqual(got["retracted_by"], "claude")
 
+    def test_retracted_drawer_is_not_current_on_all_read_surfaces(self):
+        d = self.memory.memory_add("hearth", "lessons", "Retired claim with literal ID", source="event evidence")
+        self.memory.memory_retract(d["drawer_id"], "Evidence disproved it")
+        self.assertFalse(self.memory.memory_get(d["drawer_id"])["is_current"])
+        self.assertFalse(self.memory.get_drawers([d["drawer_id"]])["drawers"][0]["is_current"])
+        exact = self.memory.search_drawers(d["drawer_id"], None, None, 5, 1.5)
+        self.assertFalse(exact["results"][0]["is_current"])
+        recent = self.memory.api_recent(wing="hearth", room="lessons")
+        self.assertFalse(recent["entries"][0]["is_current"])
+
+    def test_search_failure_cannot_masquerade_as_empty_results(self):
+        with patch.object(self.memory.drawers, "query", side_effect=RuntimeError("index offline")):
+            with self.assertRaisesRegex(RuntimeError, "no absence conclusion"):
+                self.memory.search_drawers("any new outcomes", None, None, 5, 1.5)
+
     def test_only_author_or_admin_can_retract(self):
         d = self.memory.memory_add("hearth", "lessons", "Claude's lesson", source="s")
         token = self.memory.CURRENT_PRINCIPAL.set("codex")
@@ -474,6 +489,21 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({k: v[key] for k, v in rows.items()},
                              {k: v[key] for k, v in second.items()}, key)
         self.assertEqual(second["d-old"]["superseded_by"], "d-know")
+
+    async def test_idempotency_survives_export_restore(self):
+        args = dict(wing="hearth", room="outcomes", content="Restored outcome",
+                    source="event:restore", idempotency_key="restore-task:1")
+        first = self.memory.memory_add(**args)
+        exported = await self.client.get("/api/export")
+        rows = [json.loads(line) for line in exported.text.splitlines() if line.strip()]
+        self.assertIn("request_fingerprint", rows[0])
+        self.memory.drawers.delete(ids=[first["drawer_id"]])
+        restored = await self.client.post("/api/import", json={"drawers": rows})
+        self.assertEqual(restored.status_code, 200)
+        second = self.memory.memory_add(**args)
+        self.assertEqual(second["drawer_id"], first["drawer_id"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(self.memory.drawers.count(), 1)
 
     async def test_export_requires_admin(self):
         response = await self.client.get("/api/export", headers={"Authorization": "Bearer claude-test-token"})

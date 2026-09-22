@@ -17,6 +17,7 @@ import os
 import re
 import secrets as pysecrets
 import time
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -34,7 +35,7 @@ DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 APP_VERSION = os.environ.get("HEARTH_MEMORY_VERSION", "0.8.0")
 BUILD_COMMIT = os.environ.get("HEARTH_MEMORY_BUILD_COMMIT", "unknown")
-SCHEMA_VERSION = "1+checkpoints+relay+supersession+imports+retract+consolidation+compaction"
+SCHEMA_VERSION = "1+checkpoints+relay+supersession+imports+retract+consolidation+compaction+idempotency"
 # Must match the version in the header of docs/AGENT-SPEC.md. A test enforces it so a
 # spec bump without a code bump fails CI instead of silently forking (AGENT-SPEC §9).
 AGENT_SPEC_VERSION = os.environ.get("HEARTH_AGENT_SPEC_VERSION", "1.5")
@@ -77,6 +78,7 @@ ADMIN_TOKEN = os.environ.get("HEARTH_MEMORY_ADMIN_TOKEN", "")
 MATRIX_TOKEN = os.environ.get("HEARTH_MATRIX_TOKEN", "")
 TOKENS_PATH = os.path.join(DATA_DIR, "memory-tokens.json")
 CURRENT_PRINCIPAL: ContextVar[str] = ContextVar("hearth_memory_principal", default="anonymous")
+MEMORY_WRITE_LOCK = threading.RLock()
 SESSION_COOKIE = "hearth_session"
 SESSION_TTL_SECONDS = max(
     300,
@@ -441,7 +443,8 @@ def _reject_credential_shapes(**fields: str) -> None:
 
 
 def add_drawer(wing: str, room: str, content: str, added_by: str,
-               source: str | None, surface: str = "", supersedes: str = "") -> dict:
+               source: str | None, surface: str = "", supersedes: str = "",
+               drawer_id: str = "", request_fingerprint: str = "") -> dict:
     wing = (wing or "").strip()
     room = (room or "").strip()
     if not wing or not room:
@@ -461,7 +464,7 @@ def add_drawer(wing: str, room: str, content: str, added_by: str,
                 f"supersedes target {supersedes} already has successor "
                 f"{old_meta['superseded_by']}; supersede the current drawer instead"
             )
-    drawer_id = f"drawer_{uuid.uuid4().hex[:16]}"
+    drawer_id = drawer_id or f"drawer_{uuid.uuid4().hex[:16]}"
     meta = {
         "wing": wing,
         "room": room,
@@ -471,6 +474,8 @@ def add_drawer(wing: str, room: str, content: str, added_by: str,
         "record_class": _record_class(room),
         "created_at": _now(),
     }
+    if request_fingerprint:
+        meta["request_fingerprint"] = request_fingerprint
     if supersedes:
         meta["supersedes"] = supersedes
     drawers.add(ids=[drawer_id], documents=[content], metadatas=[meta])
@@ -584,7 +589,8 @@ def get_drawers(drawer_ids: list[str]) -> dict:
         i: {"drawer_id": i, "content": d, **m,
             "surface": m.get("surface", ""),
             "record_class": m.get("record_class") or _classify(m),
-            "is_current": not m.get("superseded_by"),
+            "is_current": not (m.get("superseded_by") or m.get("retracted")),
+            "source_status": "missing" if _is_placeholder_source(m.get("source", "")) else "provided",
             "age_hours": _age_hours(m.get("created_at"))}
         for i, d, m in zip(got["ids"], got["documents"], got["metadatas"])
     }
@@ -886,7 +892,8 @@ def _search_row(drawer_id: str, doc: str, meta: dict, distance: float,
         "age_hours": _age_hours(meta.get("created_at")),
         "distance": round(distance, 4),
         "match": match,
-        "is_current": not meta.get("superseded_by"),
+        "is_current": not (meta.get("superseded_by") or meta.get("retracted")),
+        "source_status": "missing" if _is_placeholder_source(meta.get("source", "")) else "provided",
     }
     if meta.get("superseded_by"):
         row["superseded_by"] = meta["superseded_by"]
@@ -932,8 +939,11 @@ def search_drawers(query: str, wing: str | None, room: str | None,
             n_results=max(requested, min(requested * 4, 100)),
             where=_where(wing, room, excluded_classes=excluded_classes),
         )
-    except Exception:
-        res = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+    except Exception as exc:
+        # An unavailable index is not evidence that a fact is absent. Propagate a
+        # clear failure so capture/reflection clients cannot turn an outage into
+        # duplicate knowledge or an incorrect "nothing happened" closeout.
+        raise RuntimeError("memory search unavailable; no absence conclusion is possible") from exc
     semantic = []
     for i, doc in enumerate(res["documents"][0]):
         distance = res["distances"][0][i]
@@ -1294,6 +1304,7 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         },
         "authenticated_as": _principal(),
         "now": _now(),
+        "capabilities": {"memory_add_idempotency_key": True},
         "protocol": PROTOCOL,
         "default_search": {
             "mode": "current",
@@ -1401,7 +1412,70 @@ def bootstrap_resource() -> str:
 @mcp.tool(annotations=CREATE_TOOL)
 def memory_add(wing: str, room: str, content: str, added_by: str = "agent",
                source: str = "", supersedes: str = "",
-               on_duplicate: str = "warn") -> dict:
+               on_duplicate: str = "warn", idempotency_key: str = "") -> dict:
+    """Save an evidenced durable fact, decision, lesson or outcome. Source is required.
+    wing = project; room = kind/aspect. Authenticated identity controls added_by;
+    a differing reported name is retained as surface metadata. Source may be a URL,
+    event/drawer id, citation, or verbatim evidence; placeholders are rejected.
+    Search before adding; on_duplicate=reject refuses semantic near-copies. Read back
+    the returned drawer_id. Pass supersedes=<current drawer id> for a correction.
+    Use one stable idempotency_key per logical write (task/event plus outcome index).
+    Retrying the identical request with the same key returns the original drawer,
+    including after a lost response or restart. A changed payload with that key is
+    rejected. Keys are scoped to the authenticated principal, not the reported author.
+    Never use credentials as keys. Without a key, writes retain append semantics.
+    Read responses expose source_status=missing/provided; provided does not mean verified.
+    """
+    key = (idempotency_key or "").strip()
+    if key and not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,128}", key):
+        raise ValueError("idempotency_key must be 1-128 letters, digits or _ . : / -")
+    _reject_credential_shapes(idempotency_key=key)
+    author, surface = _author(added_by)
+    fingerprint = ""
+    drawer_id = ""
+    if key:
+        # Persist the payload digest on the drawer itself, so a second index cannot
+        # get out of sync after a crash. No raw key or authentication token is stored.
+        fingerprint = hashlib.sha256(json.dumps(
+            [wing, room, content, author, surface, source, supersedes, on_duplicate],
+            ensure_ascii=False, separators=(",", ":"),
+        ).encode()).hexdigest()
+        drawer_id = "drawer_" + hashlib.sha256(
+            ("hm-write-v1\0" + _principal() + "\0" + key).encode()
+        ).hexdigest()[:32]
+    # The deployed service runs one Uvicorn worker. Serialize read/append/backlink
+    # across its thread pool; multiple independent writers to one Chroma path are
+    # not supported. Persistent IDs survive a process restart.
+    with MEMORY_WRITE_LOCK:
+        if drawer_id:
+            got = drawers.get(ids=[drawer_id], include=["metadatas"])
+            if got["ids"]:
+                meta = got["metadatas"][0]
+                if meta.get("request_fingerprint") != fingerprint:
+                    raise ValueError("idempotency_key was already used with a different payload")
+                if meta.get("supersedes"):
+                    previous = drawers.get(ids=[meta["supersedes"]], include=["metadatas"])
+                    if not previous["ids"]:
+                        raise ValueError("idempotent write has a missing predecessor; review required")
+                    old_meta = previous["metadatas"][0]
+                    if old_meta.get("superseded_by") not in (None, "", drawer_id):
+                        raise ValueError("idempotent write conflicts with another successor; review required")
+                    if old_meta.get("superseded_by") != drawer_id:
+                        # Recover a crash after append but before its backlink.
+                        drawers.update(ids=previous["ids"], metadatas=[{**old_meta, "superseded_by": drawer_id}])
+                        _invalidate_metadata_cache()
+                return {"drawer_id": drawer_id, "wing": meta["wing"], "room": meta["room"],
+                        "replayed": True, "is_current": not (meta.get("superseded_by") or meta.get("retracted"))}
+        result = _memory_add_impl(wing, room, content, added_by, source, supersedes,
+                                  on_duplicate, drawer_id, fingerprint)
+        if key:
+            result["replayed"] = False
+        return result
+
+
+def _memory_add_impl(wing: str, room: str, content: str, added_by: str = "agent",
+                     source: str = "", supersedes: str = "", on_duplicate: str = "warn",
+                     drawer_id: str = "", request_fingerprint: str = "") -> dict:
     """Store one durable fact, decision, lesson, playbook, preference, or outcome.
     wing = project; room = kind/aspect. Write a concise retrievable statement and put
     verbatim evidence in source or a referenced artifact. Authenticated identity wins over
@@ -1437,7 +1511,8 @@ def memory_add(wing: str, room: str, content: str, added_by: str = "agent",
             )
     author, surface = _author(added_by)
     result = add_drawer(wing, room, content, author, source, surface=surface,
-                        supersedes=supersedes)
+                        supersedes=supersedes, drawer_id=drawer_id,
+                        request_fingerprint=request_fingerprint)
     if similar:
         result["similar"] = similar
         result["hint"] = ("similar drawers already exist; consider superseding one "
@@ -1477,7 +1552,8 @@ def _drawer_detail(drawer_id: str) -> dict | None:
         **meta,
         "surface": meta.get("surface", ""),
         "record_class": meta.get("record_class") or _classify(meta),
-        "is_current": not meta.get("superseded_by"),
+        "is_current": not (meta.get("superseded_by") or meta.get("retracted")),
+        "source_status": "missing" if _is_placeholder_source(meta.get("source", "")) else "provided",
         "age_hours": _age_hours(meta.get("created_at")),
     }
     supersession = _supersession(drawer_id, meta)
@@ -1792,7 +1868,7 @@ async def bulk_import(request: Request):
     ids, docs, metas = [], [], []
     passthrough = (
         "supersedes", "superseded_by", "retracted", "retracted_by", "retracted_at",
-        "retraction_reason",
+        "retraction_reason", "request_fingerprint",
     )
     for it in items:
         content = (it.get("content") or "").strip()
@@ -1962,7 +2038,8 @@ def api_recent(limit: int = 20, record_class: str = "", wing: str = "", room: st
         {"drawer_id": i, "content": (content.get(i) or "")[:400],
          "truncated": len(content.get(i) or "") > 400, **m,
          "record_class": m.get("record_class") or _classify(m),
-         "is_current": not m.get("superseded_by"),
+         "is_current": not (m.get("superseded_by") or m.get("retracted")),
+         "source_status": "missing" if _is_placeholder_source(m.get("source", "")) else "provided",
          "age_hours": _age_hours(m.get("created_at"))}
         for i, m in ranked
     ]

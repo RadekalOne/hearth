@@ -5,12 +5,16 @@ Run with:
 """
 
 import importlib.util
+import gc
+import time
 import os
 import pathlib
 import re
 import tempfile
 import unittest
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 
 def _spec_version_from_docs() -> str:
@@ -36,7 +40,17 @@ class MemoryServiceTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.memory.chroma._system.stop()
         cls.memory.chroma.clear_system_cache()
-        cls.data_dir.cleanup()
+        cls.memory.drawers = cls.memory.checkpoints = cls.memory.relays = None
+        cls.memory.chroma = None
+        gc.collect()
+        for attempt in range(10):
+            try:
+                cls.data_dir.cleanup()
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.1)
 
     def setUp(self):
         for collection in (self.memory.drawers, self.memory.checkpoints, self.memory.relays):
@@ -47,6 +61,78 @@ class MemoryServiceTests(unittest.TestCase):
 
     def tearDown(self):
         self.memory.CURRENT_PRINCIPAL.reset(self.principal_token)
+
+    def test_idempotent_retry_returns_original_before_duplicate_guard(self):
+        args = dict(wing="hearth", room="outcomes", content="Verified release outcome",
+                    source="event:release-1", idempotency_key="task:one:outcome:1",
+                    on_duplicate="reject")
+        first = self.memory.memory_add(**args)
+        second = self.memory.memory_add(**args)
+        self.assertEqual(first["drawer_id"], second["drawer_id"])
+        self.assertFalse(first["replayed"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(self.memory.drawers.count(), 1)
+        with self.assertRaisesRegex(ValueError, "different payload"):
+            self.memory.memory_add(**{**args, "content": "Changed outcome"})
+
+    def test_idempotency_is_scoped_to_authenticated_principal(self):
+        args = dict(wing="hearth", room="outcomes", content="Shared outcome",
+                    source="event:release", idempotency_key="shared-key", on_duplicate="ignore")
+        first = self.memory.memory_add(**args)
+        token = self.memory.CURRENT_PRINCIPAL.set("claude")
+        try:
+            second = self.memory.memory_add(**args)
+        finally:
+            self.memory.CURRENT_PRINCIPAL.reset(token)
+        self.assertNotEqual(first["drawer_id"], second["drawer_id"])
+
+    def test_concurrent_retries_create_one_drawer(self):
+        def write(_):
+            token = self.memory.CURRENT_PRINCIPAL.set("codex")
+            try:
+                return self.memory.memory_add("hearth", "outcomes", "Concurrent outcome",
+                    source="event:concurrent", idempotency_key="concurrent", on_duplicate="ignore")
+            finally:
+                self.memory.CURRENT_PRINCIPAL.reset(token)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(write, range(8)))
+        self.assertEqual(len({r["drawer_id"] for r in results}), 1)
+        self.assertEqual(sum(not r["replayed"] for r in results), 1)
+        self.assertEqual(self.memory.drawers.count(), 1)
+
+    def test_retry_repairs_crash_between_append_and_backlink(self):
+        old = self.memory.memory_add("hearth", "outcomes", "Old result", source="event:old")
+        args = dict(wing="hearth", room="outcomes", content="Corrected result",
+                    source="event:new", supersedes=old["drawer_id"], idempotency_key="correction")
+        with patch.object(self.memory.drawers, "update", side_effect=RuntimeError("interrupted")):
+            with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                self.memory.memory_add(**args)
+        self.assertEqual(self.memory.drawers.count(), 2)
+        retried = self.memory.memory_add(**args)
+        self.assertTrue(retried["replayed"])
+        self.assertEqual(self.memory.memory_get(old["drawer_id"])["superseded_by"], retried["drawer_id"])
+
+    def test_retry_does_not_resurrect_retracted_drawer(self):
+        args = dict(wing="hearth", room="outcomes", content="Invalid outcome",
+                    source="event:invalid", idempotency_key="retracted")
+        first = self.memory.memory_add(**args)
+        self.memory.drawers.update(ids=[first["drawer_id"]], metadatas=[{"retracted": True}])
+        self.assertFalse(self.memory.memory_add(**args)["is_current"])
+        self.assertEqual(self.memory.drawers.count(), 1)
+
+    def test_invalid_idempotency_keys_are_rejected_before_write(self):
+        for key in ("bad key", "x" * 129, "sk-" + "a" * 40):
+            with self.subTest(key=key[:8]), self.assertRaises(ValueError):
+                self.memory.memory_add("hearth", "outcomes", "A result", source="event:x",
+                                       idempotency_key=key)
+        self.assertEqual(self.memory.drawers.count(), 0)
+
+    def test_source_presence_does_not_claim_verification(self):
+        old = self.memory.add_drawer("hearth", "outcomes", "Legacy fact", "codex", "")
+        new = self.memory.memory_add("hearth", "outcomes", "Sourced fact", source="event:new")
+        for drawer, status in ((old, "missing"), (new, "provided")):
+            self.assertEqual(self.memory.memory_get(drawer["drawer_id"])["source_status"], status)
+            self.assertEqual(self.memory.get_drawers([drawer["drawer_id"]])["drawers"][0]["source_status"], status)
 
     def test_authenticated_principal_controls_author(self):
         author, surface = self.memory._author("codex @ laptop")

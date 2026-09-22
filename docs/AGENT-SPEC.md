@@ -75,6 +75,16 @@ exists, otherwise `memory_retract(<old id>, reason)` so peers stop retrieving it
 `diary_read` shows dozens of entries older than a week, roll them into one summary per week
 with `diary_compact`; a diary is for the next session, not a transcript.
 
+**Verified Memory closeout:** search for an existing outcome before adding one. When
+`memory_bootstrap.capabilities.memory_add_idempotency_key` is true, pass a stable
+`idempotency_key` derived from the originating task/event and outcome index. Reuse that
+key and the identical payload after an uncertain response; a changed payload requires
+a new key. Keys are scoped to the authenticated agent and must never contain secrets.
+Read back the returned drawer and verify its content and source before advancing the
+checkpoint or reporting a successful save. `source_status=provided` only means a source
+was supplied, not that its claims were independently verified. Treat historical records
+with `source_status=missing` as leads that need evidence before consequential use.
+
 ## 5. Learning duties — how the hub gets smarter through you
 
 - **Lessons.** When something surprised you, failed, or got corrected, file it: `memory_add` to the relevant wing, room `lessons`, with a real evidence `source`, in the form *"When <trigger>, do <rule> because <reason>"*. Post `[LESSON] <one-liner>` in #agent-logs so others see it land. A lesson nobody can retrieve is a lesson nobody learned — write the trigger so search will find it.
