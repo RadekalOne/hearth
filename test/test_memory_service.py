@@ -5,6 +5,8 @@ Run with:
 """
 
 import importlib.util
+import gc
+import time
 import os
 import pathlib
 import re
@@ -36,7 +38,17 @@ class MemoryServiceTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.memory.chroma._system.stop()
         cls.memory.chroma.clear_system_cache()
-        cls.data_dir.cleanup()
+        cls.memory.drawers = cls.memory.checkpoints = cls.memory.relays = None
+        cls.memory.chroma = None
+        gc.collect()
+        for attempt in range(10):
+            try:
+                cls.data_dir.cleanup()
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.1)
 
     def setUp(self):
         for collection in (self.memory.drawers, self.memory.checkpoints, self.memory.relays):

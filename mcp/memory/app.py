@@ -584,7 +584,7 @@ def get_drawers(drawer_ids: list[str]) -> dict:
         i: {"drawer_id": i, "content": d, **m,
             "surface": m.get("surface", ""),
             "record_class": m.get("record_class") or _classify(m),
-            "is_current": not m.get("superseded_by"),
+            "is_current": not (m.get("superseded_by") or m.get("retracted")),
             "age_hours": _age_hours(m.get("created_at"))}
         for i, d, m in zip(got["ids"], got["documents"], got["metadatas"])
     }
@@ -886,7 +886,7 @@ def _search_row(drawer_id: str, doc: str, meta: dict, distance: float,
         "age_hours": _age_hours(meta.get("created_at")),
         "distance": round(distance, 4),
         "match": match,
-        "is_current": not meta.get("superseded_by"),
+        "is_current": not (meta.get("superseded_by") or meta.get("retracted")),
     }
     if meta.get("superseded_by"):
         row["superseded_by"] = meta["superseded_by"]
@@ -932,8 +932,11 @@ def search_drawers(query: str, wing: str | None, room: str | None,
             n_results=max(requested, min(requested * 4, 100)),
             where=_where(wing, room, excluded_classes=excluded_classes),
         )
-    except Exception:
-        res = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+    except Exception as exc:
+        # An unavailable index is not evidence that a fact is absent. Propagate a
+        # clear failure so capture/reflection clients cannot turn an outage into
+        # duplicate knowledge or an incorrect "nothing happened" closeout.
+        raise RuntimeError("memory search unavailable; no absence conclusion is possible") from exc
     semantic = []
     for i, doc in enumerate(res["documents"][0]):
         distance = res["distances"][0][i]
@@ -1477,7 +1480,7 @@ def _drawer_detail(drawer_id: str) -> dict | None:
         **meta,
         "surface": meta.get("surface", ""),
         "record_class": meta.get("record_class") or _classify(meta),
-        "is_current": not meta.get("superseded_by"),
+        "is_current": not (meta.get("superseded_by") or meta.get("retracted")),
         "age_hours": _age_hours(meta.get("created_at")),
     }
     supersession = _supersession(drawer_id, meta)
@@ -1962,7 +1965,7 @@ def api_recent(limit: int = 20, record_class: str = "", wing: str = "", room: st
         {"drawer_id": i, "content": (content.get(i) or "")[:400],
          "truncated": len(content.get(i) or "") > 400, **m,
          "record_class": m.get("record_class") or _classify(m),
-         "is_current": not m.get("superseded_by"),
+         "is_current": not (m.get("superseded_by") or m.get("retracted")),
          "age_hours": _age_hours(m.get("created_at"))}
         for i, m in ranked
     ]
