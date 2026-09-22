@@ -490,6 +490,21 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
                              {k: v[key] for k, v in second.items()}, key)
         self.assertEqual(second["d-old"]["superseded_by"], "d-know")
 
+    async def test_idempotency_survives_export_restore(self):
+        args = dict(wing="hearth", room="outcomes", content="Restored outcome",
+                    source="event:restore", idempotency_key="restore-task:1")
+        first = self.memory.memory_add(**args)
+        exported = await self.client.get("/api/export")
+        rows = [json.loads(line) for line in exported.text.splitlines() if line.strip()]
+        self.assertIn("request_fingerprint", rows[0])
+        self.memory.drawers.delete(ids=[first["drawer_id"]])
+        restored = await self.client.post("/api/import", json={"drawers": rows})
+        self.assertEqual(restored.status_code, 200)
+        second = self.memory.memory_add(**args)
+        self.assertEqual(second["drawer_id"], first["drawer_id"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(self.memory.drawers.count(), 1)
+
     async def test_export_requires_admin(self):
         response = await self.client.get("/api/export", headers={"Authorization": "Bearer claude-test-token"})
         self.assertEqual(response.status_code, 403)
