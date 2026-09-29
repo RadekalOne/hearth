@@ -544,6 +544,59 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get("/static/evil.txt")).status_code, 404)
         self.assertNotIn("unsafe-inline", js.headers["content-security-policy"])
 
+    # --- dashboard actions posted as the human ---------------------------------------------------
+
+    def _acting_client(self, sent):
+        class Acting(_MatrixObserver):
+            async def get(self_inner, url, headers=None, params=None):
+                if url.endswith("/account/whoami"):
+                    tok = (headers or {}).get("Authorization", "")
+                    who = {"Bearer rad-token": RAD, "Bearer codex-token": "@codex:hearth.test"}.get(tok)
+                    return _Response(200, {"user_id": who}) if who else _Response(401, {})
+                return await super().get(url, headers=headers, params=params)
+
+            async def put(self_inner, url, headers=None, json=None):
+                sent.append((url, json))
+                return _Response(200, {"event_id": f"$sent{len(sent)}"})
+
+        return Acting
+
+    async def test_dashboard_approve_posts_threaded_reply_and_reaction_as_human(self):
+        sent = []
+        body = {"action": "approve", "room_id": "!tasks", "event_id": "$e4", "thread_root": "$root", "text": "go"}
+        with patch.object(self.memory.httpx, "AsyncClient", self._acting_client(sent)):
+            ok = await self.client.post("/api/matrix/act", json=body, headers={"X-Matrix-Token": "rad-token"})
+            agent = await self.client.post("/api/matrix/act", json=body, headers={"X-Matrix-Token": "codex-token"})
+            expired = await self.client.post("/api/matrix/act", json=body, headers={"X-Matrix-Token": "nope"})
+            other_room = await self.client.post("/api/matrix/act", json={**body, "room_id": "!nowhere"},
+                                                headers={"X-Matrix-Token": "rad-token"})
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(len(sent), 2)
+        message, reaction = sent
+        self.assertIn("/rooms/!tasks/send/m.room.message/", message[0])
+        self.assertEqual(message[1]["body"], "[APPROVED] go")
+        rel = message[1]["m.relates_to"]
+        self.assertEqual((rel["rel_type"], rel["event_id"], rel["m.in_reply_to"]["event_id"]),
+                         ("m.thread", "$root", "$e4"))
+        self.assertIn("/send/m.reaction/", reaction[0])
+        self.assertEqual(reaction[1]["m.relates_to"], {"rel_type": "m.annotation", "event_id": "$e4", "key": "👍"})
+        self.assertEqual(agent.status_code, 403, "agent accounts cannot approve")
+        self.assertEqual(expired.status_code, 401)
+        self.assertEqual(other_room.status_code, 404)
+        self.assertEqual(len(sent), 2, "rejected calls posted nothing")
+
+    async def test_dashboard_reply_defaults_thread_root_to_target(self):
+        sent = []
+        with patch.object(self.memory.httpx, "AsyncClient", self._acting_client(sent)):
+            r = await self.client.post("/api/matrix/act", headers={"X-Matrix-Token": "rad-token"},
+                                       json={"action": "reply", "room_id": "!tasks", "event_id": "$e4", "text": "hi"})
+            empty = await self.client.post("/api/matrix/act", headers={"X-Matrix-Token": "rad-token"},
+                                           json={"action": "reply", "room_id": "!tasks", "event_id": "$e4"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(sent[0][1]["m.relates_to"]["event_id"], "$e4")
+        self.assertEqual(len(sent), 1, "reply posts no reaction")
+        self.assertEqual(empty.status_code, 400)
+
     # --- dashboard aggregates ------------------------------------------------------------------
 
     def test_inbox_folds_task_ack_into_parent(self):
