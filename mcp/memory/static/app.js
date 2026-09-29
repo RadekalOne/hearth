@@ -112,6 +112,7 @@ function showLogin(message = "") {
 }
 function showDashboard(principal, authEnabled = true) {
   state.authed = true;
+  state.principal = principal || "";
   state.authEnabled = authEnabled;
   $("login-shell").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
@@ -282,7 +283,86 @@ function inboxRow(i) {
       h("div", { class: "who" }, h("b", { text: i.sender }), i.surface ? ` @ ${i.surface}` : "", ` in ${i.room}`, i.tag ? [" · ", pill(i.tag)] : ""),
       h("div", { class: "body", text: i.body })),
     h("div", { class: "meta" }, `waiting ${minutes(i.age_minutes)}`, h("br"),
-      h("a", { href: permalink(i.room_id, i.event_id), target: "_blank", rel: "noopener", text: "open in Element" })));
+      h("a", { href: permalink(i.room_id, i.event_id), target: "_blank", rel: "noopener", text: "open in Element" })),
+    actionBar(i));
+}
+
+// ---------------------------------------------------------------- inbox actions (posted as you)
+// The Matrix token lives in this tab's sessionStorage only; the server relays each action and
+// never stores it. Actions land inside the task's thread, so they read as connected to it.
+const MATRIX_KEY = "hearth.matrix";
+function matrixSession() {
+  try { return JSON.parse(sessionStorage.getItem(MATRIX_KEY) || "null"); } catch { return null; }
+}
+function setMatrixSession(v) {
+  try { if (v) sessionStorage.setItem(MATRIX_KEY, JSON.stringify(v)); else sessionStorage.removeItem(MATRIX_KEY); } catch { /* ignore */ }
+}
+const ACTIONS_BY_KIND = {
+  approval: [["approve", "Approve", "primary"], ["reject", "Reject", ""], ["reply", "Reply", ""]],
+  blocked: [["reply", "Reply", "primary"], ["dismiss", "Dismiss", ""]],
+  question: [["reply", "Reply", "primary"], ["dismiss", "Dismiss", ""]],
+  unclaimed_task: [["dismiss", "Dismiss", ""], ["reply", "Reply", ""]],
+};
+async function matrixPost(path, body, token) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["X-Matrix-Token"] = token;
+  return api(path, { method: "POST", headers, body: JSON.stringify(body) });
+}
+function actionBar(i) {
+  const wrap = h("div", { class: "actions" });
+  const status = h("span", { class: "dim action-status" });
+  const panel = h("div", { class: "action-panel hidden" });
+  const setStatus = (t, bad) => { status.textContent = t; status.classList.toggle("bad", !!bad); };
+
+  async function run(action, text) {
+    const sess = matrixSession();
+    if (!sess) { showConnect(() => run(action, text)); return; }
+    setStatus("sending…");
+    try {
+      await matrixPost("/api/matrix/act", {
+        action, room_id: i.room_id, event_id: i.event_id, thread_root: i.thread_root, text,
+      }, sess.token);
+      setStatus("sent as " + sess.user + " — refreshing");
+      setTimeout(render, 700);
+    } catch (err) {
+      if (err instanceof AuthRequired) return;
+      if (err.status === 401) { setMatrixSession(null); showConnect(() => run(action, text)); return; }
+      setStatus(err.message, true);
+    }
+  }
+  function showConnect(then) {
+    clear(panel).classList.remove("hidden");
+    const user = h("input", { type: "text", placeholder: "@you:server", autocomplete: "username",
+      value: (state.principal || "").startsWith("@") ? state.principal : (localStorage.getItem("hearth.mxuser") || "") });
+    const pw = h("input", { type: "password", placeholder: "Matrix password", autocomplete: "current-password" });
+    const go = async () => {
+      try {
+        const res = await matrixPost("/api/matrix/connect", { username: user.value.trim(), password: pw.value });
+        pw.value = "";
+        try { localStorage.setItem("hearth.mxuser", res.user_id || user.value.trim()); } catch { /* ignore */ }
+        setMatrixSession({ token: res.access_token, user: res.user_id });
+        panel.classList.add("hidden");
+        then();
+      } catch (err) { if (!(err instanceof AuthRequired)) setStatus(err.message, true); }
+    };
+    pw.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    panel.append(h("span", { class: "dim", text: "Connect to post as you (kept in this tab only): " }), user, pw,
+      h("button", { class: "small", text: "Connect", onClick: go }));
+    pw.focus();
+  }
+  function showReply() {
+    clear(panel).classList.remove("hidden");
+    const box = h("textarea", { rows: "2", placeholder: "Reply in this task's thread…" });
+    const send = () => { const t = box.value.trim(); if (t) { panel.classList.add("hidden"); run("reply", t); } };
+    panel.append(box, h("button", { class: "small", text: "Send", onClick: send }));
+    box.focus();
+  }
+  for (const [action, label, tone] of ACTIONS_BY_KIND[i.kind] || []) {
+    wrap.append(h("button", { class: `small ${tone}`.trim(), text: label,
+      onClick: () => (action === "reply" ? showReply() : run(action, "")) }));
+  }
+  wrap.append(status);
+  return h("div", { class: "actions-row" }, wrap, panel);
 }
 function timelineRow(i) {
   const tone = { Decision: "accent", Outcome: "ok", Lesson: "info", Plan: "violet" }[i.kind] || "";
@@ -583,6 +663,12 @@ $("login-form").addEventListener("submit", (event) => {
 });
 $("token-button").addEventListener("click", () => signIn({ token: $("access-token").value.trim() }));
 $("logout").addEventListener("click", async () => {
+  const sess = matrixSession();
+  if (sess) {
+    // Revoke the dashboard's Matrix session so no token outlives the sign-out.
+    await matrixPost("/api/matrix/disconnect", {}, sess.token).catch(() => {});
+    setMatrixSession(null);
+  }
   await fetch("/api/auth/logout", { method: "POST" });
   showLogin();
 });

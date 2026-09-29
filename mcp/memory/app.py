@@ -2364,7 +2364,7 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
         item = {
             "event_id": eid, "room_id": rid, "room": ev["room"], "sender": _localpart(ev["sender"]),
             "surface": ev["sig_surface"], "ts": ev["ts"], "body": _excerpt(ev["body"]),
-            "tag": ev["tag"], "resolved": False,
+            "tag": ev["tag"], "thread_root": ev.get("thread_root"), "resolved": False,
         }
         if base == "PLAN":
             plans[eid] = item
@@ -2620,6 +2620,150 @@ async def api_agents():
     inbox = _build_inbox(data, roster)
     surfaces = _build_surfaces(data, roster)
     return _build_agents(data, roster, inbox, surfaces)
+
+
+# ---- dashboard actions posted to Matrix as the signed-in human -------------------------------
+# The browser holds a Matrix access token for the human (tab lifetime only) and sends it with
+# each action. The server relays the action and never stores the token, so the trusted-approver
+# rule of the Task Bridge (only the human's own account can approve) is preserved.
+
+_MATRIX_ACTIONS = {
+    # action -> (message prefix, reaction key or None)
+    "approve": ("[APPROVED]", "👍"),
+    "reject": ("[REJECTED]", "👎"),
+    "dismiss": (None, "✅"),
+    "reply": (None, None),
+}
+
+
+def _thread_reply_content(text: str, target_id: str, thread_root: str | None) -> dict:
+    """m.text reply that lives inside the target's thread (root = target when it has none)."""
+    return {
+        "msgtype": "m.text", "body": text,
+        "m.relates_to": {
+            "rel_type": "m.thread", "event_id": thread_root or target_id,
+            "is_falling_back": True, "m.in_reply_to": {"event_id": target_id},
+        },
+    }
+
+
+def _reaction_content(target_id: str, key: str) -> dict:
+    return {"m.relates_to": {"rel_type": "m.annotation", "event_id": target_id, "key": key}}
+
+
+def _matrix_token_header(request: Request) -> str:
+    return request.headers.get("x-matrix-token", "").strip()
+
+
+@app.post("/api/matrix/connect")
+async def matrix_connect(request: Request):
+    """Exchange the human's password for a dedicated 'Hearth dashboard' Matrix session."""
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    if not HOMESERVER_URL:
+        raise HTTPException(503, "Matrix is not configured")
+    body = await request.json()
+    username = str(body.get("username", "")).strip()
+    principal = _principal()
+    if not username and principal.startswith("@"):
+        username = principal
+    password = str(body.get("password", ""))
+    if not username or not password:
+        raise HTTPException(400, "username and password required")
+    if HUMAN_IDS and _localpart(username) not in HUMAN_IDS:
+        raise HTTPException(403, "only a human account can act from the dashboard")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"{HOMESERVER_URL.rstrip('/')}/_matrix/client/v3/login",
+                json={"type": "m.login.password", "identifier": {"type": "m.id.user", "user": username},
+                      "password": password, "initial_device_display_name": "Hearth dashboard",
+                      "refresh_token": False},
+            )
+    except httpx.HTTPError as err:
+        raise HTTPException(503, "Matrix is temporarily unavailable") from err
+    if r.status_code != 200:
+        raise HTTPException(401, "invalid Matrix username or password")
+    data = r.json()
+    return {"user_id": data.get("user_id"), "access_token": data.get("access_token")}
+
+
+@app.post("/api/matrix/disconnect")
+async def matrix_disconnect(request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    token = _matrix_token_header(request)
+    if token and HOMESERVER_URL:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(f"{HOMESERVER_URL.rstrip('/')}/_matrix/client/v3/logout",
+                                  headers={"Authorization": f"Bearer {token}"})
+        except httpx.HTTPError:
+            pass
+    return {"disconnected": True}
+
+
+@app.post("/api/matrix/act")
+async def matrix_act(request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    if not HOMESERVER_URL:
+        raise HTTPException(503, "Matrix is not configured")
+    token = _matrix_token_header(request)
+    if not token:
+        raise HTTPException(401, "connect Matrix first")
+    body = await request.json()
+    action = str(body.get("action", ""))
+    room_id = str(body.get("room_id", ""))
+    event_id = str(body.get("event_id", ""))
+    thread_root = str(body.get("thread_root") or "") or None
+    text = str(body.get("text", "")).strip()
+    if action not in _MATRIX_ACTIONS:
+        raise HTTPException(400, "unknown action")
+    if not (room_id.startswith("!") and event_id.startswith("$")):
+        raise HTTPException(400, "room_id and event_id required")
+    if action == "reply" and not text:
+        raise HTTPException(400, "reply text required")
+    if len(text) > 4000:
+        raise HTTPException(400, "text too long")
+
+    base = f"{HOMESERVER_URL.rstrip('/')}/_matrix/client/v3"
+    headers = {"Authorization": f"Bearer {token}"}
+    data = await _fetch_room_events()
+    if room_id not in data["rooms"]:
+        raise HTTPException(404, "room is not one the dashboard observes")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            who = await client.get(f"{base}/account/whoami", headers=headers)
+            if who.status_code != 200:
+                raise HTTPException(401, "Matrix session expired; connect again")
+            user_id = who.json().get("user_id", "")
+            if HUMAN_IDS and _localpart(user_id) not in HUMAN_IDS:
+                raise HTTPException(403, "only a human account can act from the dashboard")
+            if not HUMAN_IDS and _localpart(user_id) in _roster():
+                raise HTTPException(403, "agent accounts cannot act from the dashboard")
+
+            prefix, key = _MATRIX_ACTIONS[action]
+            posted = []
+            if prefix or action == "reply":
+                message = f"{prefix} {text}".strip() if prefix else text
+                r = await client.put(
+                    f"{base}/rooms/{room_id}/send/m.room.message/{uuid.uuid4().hex}",
+                    headers=headers, json=_thread_reply_content(message, event_id, thread_root))
+                if r.status_code != 200:
+                    raise HTTPException(502, f"Matrix rejected the message ({r.status_code})")
+                posted.append(r.json().get("event_id"))
+            if key:
+                r = await client.put(
+                    f"{base}/rooms/{room_id}/send/m.reaction/{uuid.uuid4().hex}",
+                    headers=headers, json=_reaction_content(event_id, key))
+                if r.status_code != 200:
+                    raise HTTPException(502, f"Matrix rejected the reaction ({r.status_code})")
+                posted.append(r.json().get("event_id"))
+    except httpx.HTTPError as err:
+        raise HTTPException(503, "Matrix is temporarily unavailable") from err
+    _ROOM_CACHE["value"] = None  # next inbox read reflects the action
+    return {"ok": True, "user_id": user_id, "event_ids": posted}
 
 
 @app.get("/api/inbox")
