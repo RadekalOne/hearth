@@ -2133,6 +2133,8 @@ EXTRA_AGENT_IDS = {
 }
 ROOM_FETCH_LIMIT = max(20, min(int(os.environ.get("HEARTH_ROOM_FETCH_LIMIT", "150")), 500))
 SURFACE_CADENCE_MINUTES = int(os.environ.get("HEARTH_SURFACE_CADENCE_MINUTES", "60"))
+# Element Web base used for "open in Element" links (falls back to matrix.to in the UI).
+ELEMENT_WEB_URL = os.environ.get("HEARTH_ELEMENT_URL", "https://hearth.radekal.me").rstrip("/")
 UNCLAIMED_TASK_MINUTES = int(os.environ.get("HEARTH_UNCLAIMED_TASK_MINUTES", "120"))
 _ROOM_CACHE: dict = {"at": 0.0, "value": None}
 
@@ -2281,6 +2283,14 @@ def _excerpt(body: str, n: int = 280) -> str:
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 
+def _task_ack_id(tag: str, body: str) -> str:
+    """Task id from an ack post like tag 'TASK CODEX-20260909-033109', or ''."""
+    m = re.match(r"\s*TASK\s+([A-Za-z0-9][A-Za-z0-9._-]*)\s*$", tag or "", re.I)
+    if not m:
+        m = re.match(r"\s*\[TASK\s+([A-Za-z0-9][A-Za-z0-9._-]*)\]", body or "", re.I)
+    return m.group(1).lower() if m else ""
+
+
 def _build_inbox(data: dict, agents: set[str]) -> dict:
     """Everything that is waiting on a human, derived from tags, replies and reactions."""
     events, reactions = data["events"], data["reactions"]
@@ -2361,7 +2371,18 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
         elif base == "BLOCKED":
             blocked[eid] = item
         elif base == "TASK":
-            tasks[eid] = item
+            # An ack ("[TASK <id>] queued ...", tag "TASK <ID>") is not a new task: fold it
+            # into the parent TASK in the same room whose body carries that id.
+            ack_id = _task_ack_id(ev["tag"], ev["body"])
+            parent = None
+            if ack_id:
+                for t in tasks.values():
+                    if t["room_id"] == rid and ack_id in t["_full"].lower() and t["ts"] < ev["ts"]:
+                        parent = t
+                        break
+            if parent is None:
+                item["_full"] = ev["body"].lower()
+                tasks[eid] = item
         to = {_localpart(m) for m in ev["mentions"] if _is_human(m, agents)}
         low = ev["body"].lower()
         for h in known_humans | HUMAN_IDS:
@@ -2399,7 +2420,7 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
             age = _age_minutes(it["ts"])
             if kind == "unclaimed_task" and age < UNCLAIMED_TASK_MINUTES:
                 continue
-            entry = {k: v for k, v in it.items() if k != "resolved"}
+            entry = {k: v for k, v in it.items() if k not in ("resolved", "_full")}
             entry.update(kind=kind, label=labels[kind], age_minutes=age,
                          at=datetime.fromtimestamp(it["ts"] / 1000, tz=timezone.utc).isoformat())
             items.append(entry)
@@ -2408,7 +2429,8 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
     counts: dict[str, int] = {}
     for i in items:
         counts[i["kind"]] = counts.get(i["kind"], 0) + 1
-    return {"generated_at": _now(), "counts": counts, "total": len(items), "items": items}
+    return {"generated_at": _now(), "counts": counts, "total": len(items), "items": items,
+            "element_url": ELEMENT_WEB_URL}
 
 
 def _build_surfaces(data: dict, agents: set[str]) -> dict:

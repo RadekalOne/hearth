@@ -56,7 +56,12 @@ function when(v) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const permalink = (roomId, eventId) => `https://matrix.to/#/${encodeURIComponent(roomId)}/${encodeURIComponent(eventId)}`;
+// Element Web base comes from /api/inbox (element_url); matrix.to is only the fallback,
+// because it shows a "Continue" client chooser before opening anything.
+let elementBase = "";
+const permalink = (roomId, eventId) => elementBase
+  ? `${elementBase}/#/room/${encodeURIComponent(roomId)}/${encodeURIComponent(eventId)}`
+  : `https://matrix.to/#/${encodeURIComponent(roomId)}/${encodeURIComponent(eventId)}`;
 
 // ---------------------------------------------------------------- state
 const state = {
@@ -204,6 +209,7 @@ async function renderOverview(view) {
     settle(api("/api/surfaces")), settle(api(`/api/timeline?days=${state.days}`)),
   ]);
   for (const r of [health, status, inbox, surfaces, timeline]) if (!r.ok && r.e instanceof AuthRequired) throw r.e;
+  if (inbox.ok && inbox.v.element_url) elementBase = String(inbox.v.element_url).replace(/\/+$/, "");
   clear(view);
   const observerDown = !inbox.ok && inbox.e?.status === 503;
   banner(observerDown ? "Room activity is unavailable: the dashboard's Matrix observer is not configured. Run `hearth dashboard configure` on the hub." : "");

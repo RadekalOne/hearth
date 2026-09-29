@@ -546,6 +546,25 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
 
     # --- dashboard aggregates ------------------------------------------------------------------
 
+    def test_inbox_folds_task_ack_into_parent(self):
+        m = self.memory
+        old = int(m.time.time() * 1000) - 3 * 24 * 3600 * 1000
+
+        def ev(eid, ts, tag, body, sender="@rad:hearth.radekal.me"):
+            return {"room_id": "!r", "event_id": eid, "tag_base": tag.split()[0], "sender": sender,
+                    "body": body, "reply_to": None, "ts": ts, "room": "agent-tasks",
+                    "sig_surface": "", "sig_agent": "", "sig_role": "", "tag": tag, "mentions": []}
+
+        events = [
+            ev("$t", old, "TASK", "[TASK] CODEX-20260909-033109 do the thing", "@claude:hearth.radekal.me"),
+            ev("$ack", old + 1000, "TASK CODEX-20260909-033109",
+               "[TASK CODEX-20260909-033109] queued for the interactive executor", "@codex:hearth.radekal.me"),
+        ]
+        inbox = m._build_inbox({"events": events, "reactions": []}, {"claude", "codex"})
+        self.assertEqual([i["event_id"] for i in inbox["items"]], ["$t"], "ack must not be a second task")
+        self.assertEqual(inbox["element_url"], m.ELEMENT_WEB_URL)
+        self.assertNotIn("_full", inbox["items"][0])
+
     async def test_inbox_surfaces_timeline_agents(self):
         m = self.memory
         m.memory_add("hearth", "decisions", "Hourly cadence adopted.", source="$e8")
