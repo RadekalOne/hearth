@@ -10,6 +10,7 @@ ARG HEARTH_MEMORY_BUILD_COMMIT=unknown
 LABEL org.opencontainers.image.version=$HEARTH_MEMORY_VERSION \
       org.opencontainers.image.revision=$HEARTH_MEMORY_BUILD_COMMIT
 COPY app.py work.py dashboard.py .
+COPY dashboard-watchers.json .
 COPY static ./static
 ENV HEARTH_DATA_DIR=/data
 ENV HEARTH_MEMORY_VERSION=$HEARTH_MEMORY_VERSION

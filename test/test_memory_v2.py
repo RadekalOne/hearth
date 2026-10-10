@@ -648,17 +648,16 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
 
         rows = {s["key"]: s for s in surfaces["surfaces"]}
         self.assertIn("mavis@laptop", rows)
-        self.assertEqual(rows["mavis@laptop"]["state"], "ok")
-        self.assertEqual(rows["mavis@laptop"]["expected_every_minutes"], m.SURFACE_CADENCE_MINUTES)
+        self.assertEqual(rows["mavis@laptop"]["state"], "unknown")
+        self.assertEqual(rows["mavis@laptop"]["expected_every_minutes"], 60, "declared schedule without a matching checkpoint remains unknown")
         self.assertEqual(rows["codex@laptop"]["roles"], ["auto", "executor"])
         self.assertEqual(rows["claude@desktop"]["monitors"], ["hearth-room-sweep"])
-        self.assertEqual(rows["claude@desktop"]["state"], "ok", "fresh checkpoint keeps it alive")
+        self.assertEqual(rows["claude@desktop"]["state"], "unknown", "an undeclared historical checkpoint is not an active watcher")
         self.assertIsNotNone(rows["claude@desktop"]["checkpoint_at"])
         self.assertEqual(rows["claude@unsigned"]["state"], "unknown")
         self.assertEqual(rows["codex@vps"]["roles"], ["executor"])
         self.assertEqual(rows["codex@vps"]["state"], "unknown", "executor role alone does not establish cadence")
-        self.assertIsNone(m._cadence_for("executor"))
-        self.assertEqual(m._cadence_for("auto"), m.SURFACE_CADENCE_MINUTES)
+        self.assertIsNone(rows["codex@vps"]["expected_every_minutes"])
         self.assertNotIn("rad@unsigned", rows, "humans are not surfaces")
 
         kinds = [(i["kind"], i.get("event_id") or i.get("drawer_id")) for i in timeline["items"]]
@@ -678,7 +677,9 @@ class MemoryV2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cards["mavis"]["last_heartbeat"]["event_id"], "$e7")
         self.assertNotIn("usage", cards["mavis"], "empty usage is omitted, not rendered as noise")
         self.assertFalse(cards["codex"]["awaiting_approval"], "codex's plans were approved/executed")
-        self.assertEqual(sorted(s["surface"] for s in cards["claude"]["surfaces"]), ["desktop", "unsigned"])
+        self.assertEqual(sorted(s["surface"] for s in cards["claude"]["surfaces"]),
+                         ["desktop", "desktop (auto)", "laptop", "laptop (reflection)", "unsigned"],
+                         "declared surfaces remain visible even before their first checkpoint")
 
     async def test_human_ids_override_replaces_token_roster(self):
         m = self.memory

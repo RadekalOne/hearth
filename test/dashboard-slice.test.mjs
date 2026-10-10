@@ -1,27 +1,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
+import axe from 'axe-core';
 
 const root = resolve('mcp/memory/static');
 const watchers = ['failed', 'stalled', 'late', 'ok', 'on-demand', 'unknown'].map((state, i) => ({
   key: `agent${i}@laptop`, agent: `agent${i}`, surface: 'laptop', monitor: i === 4 ? 'mention listener' : 'hourly sweep',
-  state, age_minutes: i * 60, expected_every_minutes: i === 4 ? null : 60,
-  source_refs: [`checkpoint_fixture_${i}`], receipt: state === 'failed' ? { process_exit: 1 } : {},
+  state, age_minutes: [2,240,120,30,10000,null][i], expected_every_minutes: i === 4 ? null : 60,
+  source_refs: [i===5?'watcher_fixture_5':`checkpoint_fixture_${i}`], receipt: state === 'failed' ? { process_exit: 1 } : {},
 }));
 const items = ['queued', 'claimed', 'running', 'review', 'blocked', 'done'].map((state, i) => ({
   id: `task_fixture_${i}`, title: ['Dashboard design', 'Memory audit', 'Fixture checks', 'Layout review', 'Missing receipt', 'Source reconciliation'][i],
   state, owner: 'codex', age_minutes: i * 30, source_refs: [`task_fixture_${i}`], age_basis: 'transition',
 }));
-const inbox = { total: 1, items: [{kind:'blocked', sender:'codex', label:'Missing receipt', body:'Review the failed runner receipt.',
-  event_id:'$fixture', room_id:'!fixture:test', room:'Agent Tasks', age_minutes:140, source_refs:['$fixture']}], element_url:'https://hearth.test' };
+items.unshift(
+  {id:'relay_overdue',title:'Review the dashboard design',state:'queued',owner:'codex',age_minutes:10000,source_refs:['relay_overdue'],age_basis:'relay state update'},
+  {id:'relay_auth',title:'Investigate authorization receipts',state:'queued',owner:'codex',age_minutes:6000,source_refs:['relay_auth'],age_basis:'relay state update'},
+);
+const inbox = { total: 3, items: [
+  {...watchers[0],kind:'failed_watcher',title:'agent0 / hourly sweep',body:'Latest runner receipt failed.',label:'Failed watcher needs attention'},
+  {id:'relay_overdue',kind:'overdue_work',title:'Review the dashboard design',body:'Review the dashboard design',label:'Queued for more than 3 days',owner:'codex',state:'queued',state_since:'2026-10-01T00:00:00Z',age_minutes:10000,source_refs:['relay_overdue']},
+  {kind:'blocked', sender:'codex', label:'Missing receipt', body:'Review the failed runner receipt.',event_id:'$fixture', room_id:'!fixture:test', room:'Agent Tasks', age_minutes:140, source_refs:['$fixture']}], element_url:'https://hearth.test' };
 const health = {knowledge_count:741,total_count:3057,noise_ratio:2316/3057,superseded_count:12,near_duplicate_pair_count:4,
   duplicate_coverage:{complete:false,scanned:250,total:741},source_refs:['drawer_fixture','drawer_other','drawer_unrelated'],
   metric_sources:{knowledge:['drawer_fixture','drawer_other'],noise:['drawer_fixture','drawer_other','drawer_unrelated'],superseded:['drawer_other']},near_duplicate_pairs:[['drawer_fixture','drawer_other']]};
 const drawer={drawer_id:'drawer_fixture',wing:'Hearth',room:'design',record_class:'knowledge',content:'Fixture knowledge',is_current:true};
-watchers.push({agent:'post-only',surface:'laptop',state:'unknown',source_refs:['$post_only'],last_post_room_id:'!source:test'});
 let eventRoom;
 let mode = 'normal';
 const server = createServer(async (req,res) => {
@@ -31,12 +37,12 @@ const server = createServer(async (req,res) => {
     '/api/auth/status': {authenticated:true,principal:'fixture-human',auth_enabled:false},
     '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
-    '/api/dashboard/work': {items:mode==='empty'?[]:items},
+    '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
     '/api/taxonomy': {total_drawers:741,wings:[]},
     '/api/recent': {entries:mode==='empty'?[]:[drawer]}, '/api/health': {},
     '/api/drawer/drawer_fixture':drawer,
-    '/api/activity/event':{event:{room_id:'!source:test',event_id:'$post_only',body:'Post-only evidence',sender:'fixture'},related:[]},
+    '/api/activity/event':{event:{room_id:'!fixture:test',event_id:'$fixture',body:'Blocked item evidence',sender:'fixture'},related:[]},
   };
   if (path.startsWith('/api/')) {
     res.writeHead(mode==='error' && path!=='/api/auth/status' ? 503 : 200, {'Content-Type':'application/json'});
@@ -66,21 +72,39 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
         await page.getByRole('heading',{name:route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${route} overflow at ${width}`);
         if(route==='now') {
-          await page.getByText('Failed',{exact:true}).waitFor();
+          await page.locator('.watcher-row').getByText('Failed',{exact:true}).waitFor();
+          assert.match(await page.locator('.takeaway').textContent(),/1 late watcher\./);
+          await page.locator('.inbox-with-source').getByText('Review the dashboard design',{exact:true}).waitFor();
+          assert.equal(await page.locator('.inbox-with-source').count(),3);
           assert.equal(await page.locator('.watcher-row:visible').count(),3);
           await page.getByText('Event-driven and unconfirmed').click();
           await page.getByText('mention listener',{exact:true}).waitFor();
         }
-        if(route==='work') await page.getByText('Queued',{exact:true}).first().waitFor();
+        if(route==='work') {
+          await page.getByRole('button',{name:'Queued: 3',exact:true}).waitFor();
+          await page.getByText('Investigate authorization receipts',{exact:true}).waitFor();
+          assert.equal(await page.locator('.stage-counts button').count(),6);
+          assert.equal(await page.getByText('Source reconciliation',{exact:true}).isVisible(),false);
+          await page.getByText('1 done item',{exact:true}).click();
+          await page.getByText('Source reconciliation',{exact:true}).waitFor();
+          await page.getByText('1 done item',{exact:true}).click();
+        }
         if(route==='memory') await page.getByText('Knowledge only',{exact:true}).waitFor();
         const contrast=await page.evaluate(()=>{
           const vars=getComputedStyle(document.documentElement);
           const luminance=hex=>{const rgb=hex.trim().replace('#','').match(/.{2}/g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
           const bg=luminance(vars.getPropertyValue('--card'));
-          return ['--text','--dim','--accent','--warn','--bad'].map(v=>{const fg=luminance(vars.getPropertyValue(v));return (Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05);});
+          return Object.fromEntries(['--text','--dim','--accent','--warn','--bad','--control-border'].map(v=>{const fg=luminance(vars.getPropertyValue(v));return [v,(Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)];}));
         });
-        assert.ok(contrast.every(r=>r>=4.5),`Light text contrast below AA: ${contrast}`);
-        if(process.env.SCREENSHOT_DIR) {await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`${route}-${width}.png`),fullPage:true});}
+        assert.ok(Object.entries(contrast).every(([v,r])=>r>=(v==='--control-border'?3:4.5)),`Light contrast below AA: ${JSON.stringify(contrast)}`);
+        await page.addScriptTag({content:axe.source});
+        const audit=await page.evaluate(async()=>await axe.run(document.querySelector('#dashboard'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}}));
+        assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${route} light theme AA violations`);
+        if(process.env.SCREENSHOT_DIR) {
+          await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+          await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`${route}-${width}.png`),fullPage:true});
+          await writeFile(resolve(process.env.SCREENSHOT_DIR,`${route}-${width}-audit.json`),JSON.stringify({route,width,theme:'light',engine:audit.testEngine,violations:audit.violations,contrast},null,2));
+        }
       }
     }
     await page.getByRole('tab',{name:'Now',exact:true}).focus();
@@ -93,14 +117,13 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     await page.goto(`http://127.0.0.1:${server.address().port}/#now`);
     await page.getByRole('heading',{name:'Now',exact:true}).waitFor({timeout:3000});
     await page.unroute('**/static/slice.js');
-    await page.getByRole('button',{name:'checkpoint_fixture_0',exact:true}).click();
+    await page.locator('.watcher-row').getByRole('button',{name:'checkpoint_fixture_0',exact:true}).click();
     await page.locator('#detail').getByText('Failed',{exact:true}).waitFor();
     assert.match(await page.locator('#detail').textContent(),/process_exit/);
     await page.getByRole('button',{name:'Close details',exact:true}).click();
-    await page.getByText('Event-driven and unconfirmed').click();
-    await page.getByRole('button',{name:'$post_only',exact:true}).click();
-    await page.getByText('Post-only evidence',{exact:true}).waitFor();
-    assert.equal(eventRoom,'!source:test');
+    await page.getByRole('button',{name:'$fixture',exact:true}).click();
+    await page.getByText('Blocked item evidence',{exact:true}).waitFor();
+    assert.equal(eventRoom,'!fixture:test');
     await page.goto(`http://127.0.0.1:${server.address().port}/#memory`);
     await page.setViewportSize({width:400,height:900});
     await page.locator('.drawer').waitFor();

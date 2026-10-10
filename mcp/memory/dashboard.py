@@ -45,6 +45,63 @@ def watcher_state(age, cadence, fields, event_driven=False):
     return 'stalled' if age > cadence * 3 else 'late' if age > cadence * 1.5 else 'ok'
 
 
+def watchers(rows, registry, now):
+    """Exact declared identities only. Runner results belong to their parent."""
+    result = []
+    for declaration in registry:
+        kind = declaration.get('kind')
+        cadence = declaration.get('cadence_minutes')
+        if declaration.get('active') is not True or kind not in ('recurring', 'event-driven'):
+            continue
+        if kind == 'recurring' and (type(cadence) not in (int, float) or not math.isfinite(cadence) or cadence <= 0):
+            continue
+        agent, surface, monitor = (declaration[k].lower() for k in ('agent', 'surface', 'monitor'))
+        runner_monitors = declaration.get('receipt_monitors', [])
+        names = [monitor, *runner_monitors]
+        matched = [(i, m, content) for i, m, content in rows
+                   if (m.get('agent', '').lower(), m.get('surface', '').lower()) == (agent, surface)
+                   and m.get('monitor') in names]
+        matched.sort(key=lambda r: (names.index(r[1]['monitor']), r[1].get('updated_at') or '', r[0]))
+        runners = [r for r in matched if r[1]['monitor'] in runner_monitors]
+        candidates = runners or matched
+        selected = max(candidates, key=lambda r: (timestamp(r[1].get('updated_at')) or float('-inf'), r[0])) if candidates else None
+        at = selected[1].get('updated_at') if selected else None
+        ts = timestamp(at)
+        age = (now - ts) / 60 if ts is not None else None
+        fields = receipt(selected[2]) if selected else {}
+        result.append({'id': declaration['id'], 'key': f'{agent}@{surface}', 'agent': agent, 'surface': surface,
+                       'monitor': monitor, 'active': True, 'kind': kind,
+                       'declaration_id': declaration['id'], 'declaration_source': declaration.get('source', ''),
+                       'expected_every_minutes': cadence if kind == 'recurring' else None,
+                       'age_minutes': round(age, 1) if age is not None else None, 'checkpoint_at': at,
+                       'state': watcher_state(age, cadence if kind == 'recurring' else None, fields, kind == 'event-driven'),
+                       'receipt': fields, 'receipt_source': selected[0] if selected else None,
+                       'source_refs': [r[0] for r in matched] or [declaration['id']],
+                       'evidence': [{'id': i, 'monitor': m['monitor'], 'at': m.get('updated_at'), 'receipt': receipt(content)}
+                                    for i, m, content in matched]})
+    return result
+
+
+def attention_inbox(inbox, monitors, work):
+    items = list(inbox.get('items', []))
+    for watcher in monitors:
+        if watcher['state'] == 'failed':
+            items.append({**watcher, 'kind': 'failed_watcher', 'label': 'Failed watcher needs attention',
+                          'title': f"{watcher['agent']} / {watcher['monitor']}",
+                          'body': 'The latest runner receipt reports a failure or unverified closeout.'})
+    for item in work:
+        age = item.get('age_minutes')
+        if item['state'] == 'queued' and age is not None and age > 3 * 24 * 60:
+            items.append({**item, 'kind': 'overdue_work', 'label': 'Queued for more than 3 days',
+                          'body': item.get('title', item['id'])})
+    items.sort(key=lambda i: (0 if i['kind'] == 'failed_watcher' else 1 if i['kind'] == 'blocked' else 2,
+                              -(i.get('age_minutes') or 0), i.get('id') or i.get('event_id', '')))
+    counts = {}
+    for item in items:
+        counts[item['kind']] = counts.get(item['kind'], 0) + 1
+    return {**inbox, 'items': items, 'total': len(items), 'counts': counts, 'queued_threshold_days': 3}
+
+
 def work_items(board, relays, now):
     items = []
     transitions = {'draft': {'task_proposed', 'revise', 'release'}, 'ready': {'ready'},
@@ -64,12 +121,15 @@ def work_items(board, relays, now):
                       'project_id': task.get('project_id'), 'source_refs': [task['id']]})
     for relay in relays:
         ts = timestamp(relay.get('updated_at'))
-        items.append({'id': relay['relay_id'], 'title': 'Interactive handoff',
+        summary = ' '.join(str(relay.get('request') or '').split())[:120]
+        title = summary or f"Handoff to {relay.get('target_agent') or 'unassigned'} · {relay['relay_id']}"
+        items.append({'id': relay['relay_id'], 'title': title,
                       'state': 'done' if relay.get('state') == 'resolved' else relay.get('state', 'unknown'),
                       'owner': relay.get('target_agent', ''), 'state_since': relay.get('updated_at'),
                       'age_minutes': round((now - ts) / 60, 1) if ts is not None and ts <= now else None,
                       'age_basis': 'relay state update', 'source_refs': [relay['relay_id']],
                       'source': relay.get('source', '')})
+    items.sort(key=lambda i: (i['state'] == 'done', -(i.get('age_minutes') or 0), i['id']))
     return items
 
 

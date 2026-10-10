@@ -18,6 +18,7 @@
     "mcp/memory/app.py",
     "mcp/memory/work.py",
     "mcp/memory/dashboard.py",
+    "mcp/memory/dashboard-watchers.json",
     "mcp/memory/Dockerfile",
     "mcp/memory/requirements.txt",
     "mcp/memory/static/",
@@ -57,6 +58,7 @@
     "provenance": true
   },
   "devDependencies": {
+    "axe-core": "4.14.0",
     "playwright": "^1.62.1"
   }
 }
