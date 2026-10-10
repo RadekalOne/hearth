@@ -44,8 +44,26 @@ class DashboardSliceAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status_code,200)
         self.assertNotIn('unsafe-inline',result.headers['content-security-policy'])
 
+    async def test_work_retains_old_unresolved_relays_beyond_recent_limit(self):
+        got = {'ids':['relay_old'] + [f'relay_{i}' for i in range(501)],
+               'metadatas':[{'state':'queued','updated_at':'2020-01-01'}] +
+                           [{'state':'resolved','updated_at':'2026-10-09'} for _ in range(501)],
+               'documents':['fixture'] * 502}
+        with patch.object(self.memory.relays, 'get', return_value=got):
+            result=self.memory.api_dashboard_work()
+        self.assertEqual(len([i for i in result['items'] if i['id'].startswith('relay_')]),502)
+        self.assertEqual(next(i for i in result['items'] if i['id']=='relay_old')['state'],'queued')
+
     async def test_listener_is_event_driven_even_if_name_contains_auto(self):
         self.assertIsNone(self.memory._cadence_for('auto-wake mention listener'))
+        self.assertTrue(self.memory._event_driven('auto-wake mention listener'))
+        self.assertFalse(self.memory._event_driven('unnamed monitor'))
+
+    async def test_unknown_monitor_has_unconfirmed_cadence(self):
+        got={'ids':['checkpoint_unknown'], 'metadatas':[{'agent':'codex','surface':'laptop','monitor':'custom monitor'}], 'documents':['{}']}
+        with patch.object(self.memory.checkpoints,'get',return_value=got):
+            result=self.memory._build_surfaces({'events':[]},{'codex'})
+        self.assertEqual(result['watchers'][0]['state'],'unknown')
 
     async def test_inbox_orders_oldest_after_failures(self):
         now=time.time()*1000

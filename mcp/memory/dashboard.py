@@ -35,11 +35,11 @@ def receipt(content):
     return safe
 
 
-def watcher_state(age, cadence, fields):
+def watcher_state(age, cadence, fields, event_driven=False):
     if fields.get('closeout_verified') is False or fields.get('process_exit') not in (None, 0, '0'):
         return 'failed'
     if cadence is None:
-        return 'on-demand'
+        return 'on-demand' if event_driven else 'unknown'
     if age is None or not math.isfinite(age) or age < 0 or cadence <= 0:
         return 'unknown'
     return 'stalled' if age > cadence * 3 else 'late' if age > cadence * 1.5 else 'ok'
@@ -81,18 +81,22 @@ def memory_health(rows, ids, embeddings, threshold):
     pairs = []
     if embeddings is not None:
         count = 0
+        # Normalize once, rather than repeating vector conversion for every pair.
+        vectors = []
+        for vector in embeddings:
+            values = [float(x) for x in vector]
+            norm = math.sqrt(sum(x * x for x in values))
+            vectors.append([x / norm for x in values] if norm else None)
         for a in range(len(ids)):
             ma = metadata.get(ids[a], {})
-            va = embeddings[a]
-            norm_a = math.sqrt(sum(float(x) ** 2 for x in va))
+            va = vectors[a]
             for b in range(a + 1, len(ids)):
                 mb = metadata.get(ids[b], {})
                 if (ma.get('wing'), ma.get('room')) != (mb.get('wing'), mb.get('room')):
                     continue
-                vb = embeddings[b]
-                norm_b = math.sqrt(sum(float(x) ** 2 for x in vb))
-                if norm_a and norm_b:
-                    distance = 1 - sum(float(x) * float(y) for x, y in zip(va, vb)) / (norm_a * norm_b)
+                vb = vectors[b]
+                if va and vb:
+                    distance = 1 - sum(x * y for x, y in zip(va, vb))
                     if distance <= threshold:
                         count += 1
                         pairs.append([ids[a], ids[b]])
@@ -103,4 +107,8 @@ def memory_health(rows, ids, embeddings, threshold):
             'near_duplicate_pair_count': count, 'near_duplicate_pairs': pairs,
             'duplicate_coverage': {'complete': embeddings is not None and len(ids) == len(knowledge),
                                    'scanned': len(ids), 'total': len(knowledge), 'threshold': threshold},
-            'source_refs': [i for i, _ in rows], 'availability': 'available' if embeddings is not None else 'Embeddings unavailable'}
+            'source_refs': [i for i, _ in rows],
+            'metric_sources': {'knowledge': [i for i, _ in knowledge],
+                               'noise': [i for i, _ in rows],
+                               'superseded': [i for i, m in rows if m.get('superseded_by')]},
+            'availability': 'available' if embeddings is not None else 'Embeddings unavailable'}

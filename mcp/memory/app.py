@@ -2400,9 +2400,14 @@ def _is_human(sender: str, agents: set[str]) -> bool:
     return lp not in agents
 
 
+def _event_driven(*hints: str) -> bool:
+    text = " ".join(h for h in hints if h).lower()
+    return any(hint in text for hint in ('listener', 'mention', 'event-driven', 'auto-wake', 'on-demand'))
+
+
 def _cadence_for(*hints: str) -> int | None:
     text = " ".join(h for h in hints if h).lower()
-    if any(hint in text for hint in ('listener', 'mention', 'event-driven', 'auto-wake', 'on-demand')):
+    if _event_driven(*hints):
         return None
     for hint, minutes in _CADENCE_HINTS:
         if hint in text:
@@ -2669,7 +2674,7 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
         fields = _dashboard.receipt(content)
         watchers.append({'key': s['key'], 'agent': s['agent'], 'surface': s['surface'],
                          'monitor': meta.get('monitor', ''), 'age_minutes': round(age, 1) if age is not None else None,
-                         'expected_every_minutes': cadence, 'state': _dashboard.watcher_state(age, cadence, fields),
+                         'expected_every_minutes': cadence, 'state': _dashboard.watcher_state(age, cadence, fields, _event_driven(meta.get('monitor', ''))),
                          'checkpoint_at': meta.get('updated_at'), 'source_refs': [checkpoint_id],
                          'receipt': fields})
 
@@ -2681,7 +2686,7 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
         last_seen_ms = max(s["last_post_ts"], cp_ms)
         cadence = _cadence_for(*s["roles"], *s["monitors"])
         age_min = (now_ms - last_seen_ms) / 60000 if last_seen_ms else None
-        state = _dashboard.watcher_state(age_min, cadence, {})
+        state = _dashboard.watcher_state(age_min, cadence, {}, _event_driven(*s['roles'], *s['monitors']))
         own_watchers = [w for w in watchers if w['key'] == s['key']]
         if any(w['state'] == 'failed' for w in own_watchers):
             state = 'failed'
@@ -3052,7 +3057,9 @@ def api_work_agents(capability: str = "", work_mode: str = "either"):
 
 @app.get('/api/dashboard/work')
 def api_dashboard_work():
-    return {'generated_at': _now(), 'items': _dashboard.work_items(work_store.snapshot(), api_relays()['entries'], time.time())}
+    got = relays.get(include=['metadatas'])
+    entries = [{'relay_id': i, **m} for i, m in zip(got['ids'], got['metadatas'])]
+    return {'generated_at': _now(), 'items': _dashboard.work_items(work_store.snapshot(), entries, time.time())}
 
 
 _HEALTH_CACHE = {'key': None, 'value': None, 'at': 0}

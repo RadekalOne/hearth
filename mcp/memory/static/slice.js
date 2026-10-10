@@ -15,13 +15,26 @@ function sourceLinks(refs,context={}) {
 }
 async function inspectSliceSource(ref,context) {
   if(ref.startsWith('drawer_'))return openDrawer(ref);
-  if(ref.startsWith('checkpoint_'))return openSurface(context);
-  if(ref.startsWith('$'))return openActivity(context.room_id,ref);
+  if(ref.startsWith('checkpoint_'))return openWatcherReceipt(ref,context);
+  if(ref.startsWith('$'))return openActivity(context.room_id||context.last_post_room_id,ref);
   try {
     if(ref.startsWith('task_')) {const board=await api('/api/work');const task=board.tasks.find(t=>t.id===ref);if(task)return openWorkTask(task,board);}
-    if(ref.startsWith('relay_')) {const relays=await api('/api/relays');const relay=relays.entries.find(r=>r.relay_id===ref);if(relay){const {panel}=inspectionPanel('Relay evidence');panel.lastChild.remove();panel.append(detailFields(['Relay',ref],['State',relay.state],['Created',relay.created_at],['Updated',relay.updated_at],['Source',relay.source||'Unconfirmed']));return;}}
+    if(ref.startsWith('relay_')) {const {panel}=inspectionPanel('Relay evidence');panel.lastChild.remove();panel.append(detailFields(['Relay',ref],['State',context.state],['Updated',context.state_since],['Source',context.source||'Unconfirmed']));return;}
     throw Error('Source unavailable');
   } catch(error) {if(error instanceof AuthRequired)return;const {panel}=inspectionPanel('Source evidence');panel.lastChild.textContent='Failed to load';}
+}
+function openWatcherReceipt(ref,w) {
+  const {panel}=inspectionPanel('Watcher receipt');panel.lastChild.remove();
+  const reason=w.state==='failed'?'The receipt reports an unsuccessful process exit or an unverified closeout.':
+    w.state==='stalled'?'Receipt age exceeds 3× the expected cadence.':
+    w.state==='late'?'Receipt age exceeds 1.5× the expected cadence.':
+    w.state==='ok'?'Receipt age is within 1.5× the expected cadence.':
+    w.state==='on-demand'?'Explicit event-driven evidence; no recurring cadence is expected.':'Cadence or receipt time is unconfirmed.';
+  panel.append(h('span',{class:`pill ${stateTone(w.state)}`,text:stateName(w.state)}),h('p',{text:reason}),
+    detailFields(['Checkpoint',ref],['Monitor',w.monitor||'Unconfirmed'],['Receipt time',when(w.checkpoint_at)||'Unconfirmed'],
+      ['Receipt age',minutes(w.age_minutes)],['Expected cadence',w.expected_every_minutes?minutes(w.expected_every_minutes):'Unconfirmed / event-driven'],
+      ['process_exit',String(w.receipt?.process_exit??'Unconfirmed')],['closeout_verified',String(w.receipt?.closeout_verified??'Unconfirmed')]),
+    h('button',{class:'link',text:'Inspect separate surface activity',onClick:()=>openSurface(w)}));
 }
 function watcherRow(w) {
   return h('div',{class:'watcher-row'},h('div',null,h('strong',{text:w.agent}),h('span',{class:'dim',text:` / ${w.surface}`}),h('p',{text:w.monitor||'Observed activity'})),
@@ -81,17 +94,20 @@ async function renderMemorySlice(view) {
   if(health.ok) {
     const data=health.value;
     view.querySelector('.takeaway').textContent=`${data.knowledge_count.toLocaleString()} knowledge drawers · ${(100*data.noise_ratio).toFixed(1)}% noise · ${data.superseded_count} superseded records.`;
-    const metrics=[['Knowledge only',data.knowledge_count],['Noise ratio',`${(100*data.noise_ratio).toFixed(1)}%`],['Superseded',data.superseded_count],['Near-duplicate pairs',data.near_duplicate_pair_count??'Unavailable']];
+    const metrics=[['Knowledge only',data.knowledge_count,'knowledge'],['Noise ratio',`${(100*data.noise_ratio).toFixed(1)}%`,'noise'],['Superseded',data.superseded_count,'superseded'],['Near-duplicate pairs',data.near_duplicate_pair_count??'Unavailable','pairs']];
     const grid=clear(card.querySelector('.reserved-body'));
-    for(const [label,value] of metrics)grid.append(h('div',{class:'health-metric'},h('p',{class:'dim',text:label}),h('strong',{text:typeof value==='number'?value.toLocaleString():value}),h('button',{class:'link',text:'View source drawers',onClick:()=>{const {panel}=inspectionPanel(label+' sources');panel.lastChild.remove();panel.append(h('p',{text:'Counts derived from these source records.'}),sourceLinks(data.source_refs));}})));
+    for(const [label,value,key] of metrics)grid.append(h('div',{class:'health-metric'},h('p',{class:'dim',text:label}),h('strong',{text:typeof value==='number'?value.toLocaleString():value}),h('button',{class:'link',text:'View source drawers',onClick:()=>{
+      const {panel}=inspectionPanel(label+' sources');panel.lastChild.remove();
+      panel.append(h('p',{text:key==='noise'?'Noise is nonknowledge drawers divided by all drawers; these are the denominator records.':'Counts derived from these source records.'}));
+      if(key==='pairs') {
+        panel.append(h('p',{text:data.near_duplicate_pair_count===null?'Embeddings unavailable.':`${data.near_duplicate_pairs.length} pairs found in ${data.duplicate_coverage.scanned} scanned knowledge drawers.`}));
+        for(const pair of data.near_duplicate_pairs)panel.append(h('article',{class:'evidence-card'},sourceLinks(pair)));
+      } else panel.append(sourceLinks(data.metric_sources?.[key]||[]));
+    }})));
     card.append(h('p',{class:'coverage',text:data.duplicate_coverage.complete?'Duplicate scan covers all knowledge drawers.':`Duplicate scan covers ${data.duplicate_coverage.scanned} of ${data.duplicate_coverage.total} knowledge drawers; the pair count is a lower bound.`}));
   }
   const browser=h('div',{class:'memory-browser'});view.append(browser);
   try {await renderMemory(browser);}catch(error){if(error instanceof AuthRequired)throw error;view.querySelector('.load-status').textContent='Failed to load';}
-  for(const el of browser.querySelectorAll('.wing,.room,.drawer')) {
-    el.setAttribute('tabindex','0');el.setAttribute('role','button');
-    el.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();el.click();}});
-  }
 }
 VIEWS.now=renderNow;VIEWS.overview=renderNow;VIEWS.work=renderWorkSlice;VIEWS.memory=renderMemorySlice;
 const sliceTabs=[...document.querySelectorAll('#tabs a')];

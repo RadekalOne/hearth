@@ -190,11 +190,8 @@ const classTone = { knowledge: "accent", diary: "info", archive: "", import: "vi
 const classLabel = { knowledge: "knowledge", diary: "diary", archive: "archive", import: "import" };
 function stateDot(s) { return h("span", { class: `dot ${s}`, title: s }); }
 function chip(label, on, onToggle) {
-  const c = h("label", { class: `chip${on ? " on" : ""}` }, label);
-  const input = h("input", { type: "checkbox" });
-  input.checked = on;
-  input.addEventListener("change", () => onToggle(input.checked));
-  c.prepend(input);
+  const c = h("button", { type:'button', class: `chip${on ? " on" : ""}`, 'aria-pressed':String(on), text:label });
+  c.addEventListener('click',()=>{on=!on;c.classList.toggle('on',on);c.setAttribute('aria-pressed',String(on));onToggle(on);});
   return c;
 }
 function table(columns, rows, emptyText) {
@@ -489,20 +486,20 @@ function renderPalace(el, tax) {
     h("div", { class: "legend" }, ...Object.keys(classLabel).map((c) => h("span", null, h("i", { class: c, style: { background: `var(--${{ knowledge: "accent", diary: "info", archive: "dim", import: "violet" }[c]})` } }), classLabel[c]))));
   const all = h("div", { class: `wing${!state.mem.wing ? " on" : ""}` }, h("b", { text: "All wings" }), h("span", { class: "n", text: String(tax.total_drawers) }));
   all.addEventListener("click", () => { state.mem.wing = ""; state.mem.room = ""; persist(); render(); });
-  el.append(all);
+  el.append(keyboardCard(all));
   for (const w of tax.wings) {
     const row = h("div", { class: `wing${state.mem.wing === w.wing && !state.mem.room ? " on" : ""}` }, h("b", { text: w.wing, title: w.wing }), h("span", { class: "n", text: String(w.total) }));
     row.addEventListener("click", () => { state.mem.wing = w.wing; state.mem.room = ""; persist(); render(); });
     const bar = h("div", { class: "classbar" });
     for (const [cls, n] of Object.entries(w.classes)) bar.append(h("i", { class: cls, style: { width: `${(100 * n) / w.total}%` }, title: `${n} ${cls}` }));
-    el.append(row, bar);
+    el.append(keyboardCard(row), bar);
     if (state.mem.wing === w.wing) {
       const rooms = h("div", { class: "rooms" });
       for (const r of w.rooms) {
         const rr = h("div", { class: `room${state.mem.room === r.room ? " on" : ""}` }, h("span", { text: r.room }),
           h("span", { class: "n", text: `${r.total}${r.superseded ? ` · ${r.superseded} old` : ""}` }));
         rr.addEventListener("click", () => { state.mem.room = r.room; persist(); render(); });
-        rooms.append(rr);
+        rooms.append(keyboardCard(rr));
       }
       el.append(rooms);
     }
@@ -576,6 +573,11 @@ async function runSearch(results) {
   if (!entries.length) results.append(h("div", { class: "empty", text: "No drawers match." }));
   for (const e of entries) results.append(drawerCard(e));
 }
+function keyboardCard(card) {
+  card.setAttribute('tabindex','0');card.setAttribute('role','button');
+  card.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();card.click();}});
+  return card;
+}
 function drawerCard(e) {
   const card = h("div", { class: `drawer${e.is_current === false ? " superseded" : ""}${e.retracted ? " retracted" : ""}` });
   const head = h("div", { class: "head" },
@@ -593,7 +595,7 @@ function drawerCard(e) {
     h("span", { class: "mono", text: e.drawer_id }));
   card.append(head, content, foot);
   card.addEventListener("click", () => openDrawer(e.drawer_id));
-  return card;
+  return keyboardCard(card);
 }
 async function openDrawer(id) {
   const request = ++inspectionRequest;
@@ -771,10 +773,10 @@ $("refresh").addEventListener("click", () => { taxonomyCache = null; render(); }
 window.addEventListener("hashchange", render);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
-fetch("/api/auth/status")
+document.addEventListener('DOMContentLoaded', () => fetch("/api/auth/status")
   .then((res) => res.json())
   .then((auth) => {
     if (auth.authenticated || !auth.auth_enabled) showDashboard(auth.principal, auth.auth_enabled);
     else if (!auth.matrix_login_available) $("login-error").textContent = "Matrix sign-in is unavailable; use an access token.";
   })
-  .catch(() => showLogin("Hearth Memory is unavailable."));
+  .catch(() => showLogin("Hearth Memory is unavailable.")));

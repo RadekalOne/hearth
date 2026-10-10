@@ -18,10 +18,15 @@ const items = ['queued', 'claimed', 'running', 'review', 'blocked', 'done'].map(
 const inbox = { total: 1, items: [{kind:'blocked', sender:'codex', label:'Missing receipt', body:'Review the failed runner receipt.',
   event_id:'$fixture', room_id:'!fixture:test', room:'Agent Tasks', age_minutes:140, source_refs:['$fixture']}], element_url:'https://hearth.test' };
 const health = {knowledge_count:741,total_count:3057,noise_ratio:2316/3057,superseded_count:12,near_duplicate_pair_count:4,
-  duplicate_coverage:{complete:false,scanned:250,total:741},source_refs:['drawer_fixture'],near_duplicate_pairs:[['drawer_fixture','drawer_other']]};
+  duplicate_coverage:{complete:false,scanned:250,total:741},source_refs:['drawer_fixture','drawer_other','drawer_unrelated'],
+  metric_sources:{knowledge:['drawer_fixture','drawer_other'],noise:['drawer_fixture','drawer_other','drawer_unrelated'],superseded:['drawer_other']},near_duplicate_pairs:[['drawer_fixture','drawer_other']]};
+const drawer={drawer_id:'drawer_fixture',wing:'Hearth',room:'design',record_class:'knowledge',content:'Fixture knowledge',is_current:true};
+watchers.push({agent:'post-only',surface:'laptop',state:'unknown',source_refs:['$post_only'],last_post_room_id:'!source:test'});
+let eventRoom;
 let mode = 'normal';
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
+  if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
   const api = {
     '/api/auth/status': {authenticated:true,principal:'fixture-human',auth_enabled:false},
     '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
@@ -29,7 +34,9 @@ const server = createServer(async (req,res) => {
     '/api/dashboard/work': {items:mode==='empty'?[]:items},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
     '/api/taxonomy': {total_drawers:741,wings:[]},
-    '/api/recent': {entries:[]}, '/api/health': {},
+    '/api/recent': {entries:mode==='empty'?[]:[drawer]}, '/api/health': {},
+    '/api/drawer/drawer_fixture':drawer,
+    '/api/activity/event':{event:{room_id:'!source:test',event_id:'$post_only',body:'Post-only evidence',sender:'fixture'},related:[]},
   };
   if (path.startsWith('/api/')) {
     res.writeHead(mode==='error' && path!=='/api/auth/status' ? 503 : 200, {'Content-Type':'application/json'});
@@ -81,6 +88,36 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Work');
     await page.keyboard.press('Enter');
     await page.getByRole('heading',{name:'Work',exact:true}).waitFor();
+    // Immediate authentication must wait for delayed route registration.
+    await page.route('**/static/slice.js',async route=>{await new Promise(r=>setTimeout(r,500));await route.continue();});
+    await page.goto(`http://127.0.0.1:${server.address().port}/#now`);
+    await page.getByRole('heading',{name:'Now',exact:true}).waitFor({timeout:3000});
+    await page.unroute('**/static/slice.js');
+    await page.getByRole('button',{name:'checkpoint_fixture_0',exact:true}).click();
+    await page.locator('#detail').getByText('Failed',{exact:true}).waitFor();
+    assert.match(await page.locator('#detail').textContent(),/process_exit/);
+    await page.getByRole('button',{name:'Close details',exact:true}).click();
+    await page.getByText('Event-driven and unconfirmed').click();
+    await page.getByRole('button',{name:'$post_only',exact:true}).click();
+    await page.getByText('Post-only evidence',{exact:true}).waitFor();
+    assert.equal(eventRoom,'!source:test');
+    await page.goto(`http://127.0.0.1:${server.address().port}/#memory`);
+    await page.setViewportSize({width:400,height:900});
+    await page.locator('.drawer').waitFor();
+    await page.getByRole('button',{name:'Search',exact:true}).click();
+    await page.getByText('Newest 1 drawer',{exact:true}).waitFor();
+    assert.equal(await page.locator('.drawer').getAttribute('tabindex'),'0');
+    await page.locator('.drawer').focus();await page.keyboard.press('Enter');
+    await page.locator('#detail .content').getByText('Fixture knowledge',{exact:true}).waitFor();
+    await page.locator('#detail .close').click();
+    await page.getByRole('button',{name:'show superseded',exact:true}).focus();
+    await page.keyboard.press('Space');
+    assert.equal(await page.getByRole('button',{name:'show superseded',exact:true}).getAttribute('aria-pressed'),'true');
+    await page.locator('.drawer').waitFor();
+    assert.equal(await page.locator('.drawer').getAttribute('tabindex'),'0');
+    await page.getByRole('button',{name:'View source drawers',exact:true}).nth(3).click();
+    await page.locator('#detail').getByRole('button',{name:'drawer_other',exact:true}).waitFor();
+    assert.equal(await page.locator('#detail').getByText('drawer_unrelated',{exact:true}).count(),0);
     for (mode of ['empty','error']) {
       for(const route of ['now','work','memory']) {
         await page.goto(`http://127.0.0.1:${server.address().port}/#${route}`);

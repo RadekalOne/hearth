@@ -22,6 +22,8 @@ npx playwright install chromium
 npm run test:dashboard
 ```
 
-The browser test serves real static assets against synthetic API fixtures and checks the three routes at 400px and 1280px, collapsed ordinary watchers, event-driven labels, queued wording, keyboard tab navigation, empty/error states, page overflow and script errors. Set `SCREENSHOT_DIR` to save the screenshots; no live tokens or real records enter the fixtures. The Python API fixtures additionally enforce authentication, agent write denial and static CSP.
+The browser test serves real static assets against synthetic API fixtures and checks the three routes at 400px and 1280px, collapsed ordinary watchers, event-driven labels, queued wording, keyboard tab navigation, empty/error states, page overflow and script errors. It also checks delayed route registration, selected receipt evidence, post-only event room provenance, keyboard access after search/filter updates, and duplicate-pair sources. The dashboard CI job installs Chromium and runs this suite. Set `SCREENSHOT_DIR` to save the screenshots; no live tokens or real records enter the fixtures. The Python API fixtures additionally enforce authentication, agent write denial, complete relay coverage and static CSP.
+
+Unrecognized cadence remains Unconfirmed. Only explicit listener/event-driven hints receive the Event-driven label. Selected checkpoint evidence uses the same receipt calculation as its Now row; aggregate surface activity is available separately. A shared Matrix thread or title is insufficient to establish task/relay identity, so records remain separate until an explicit identity link is available.
 
 Screenshots in `dashboard-first-slice/screenshots/` are synthetic fixtures, not evidence of production execution.

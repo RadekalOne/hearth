@@ -24,7 +24,8 @@ class DashboardSliceTests(unittest.TestCase):
         self.assertEqual(dashboard.watcher_state(0, None, {'process_exit': 1}), 'failed')
 
     def test_event_driven_and_unknown(self):
-        self.assertEqual(dashboard.watcher_state(9000, None, {}), 'on-demand')
+        self.assertEqual(dashboard.watcher_state(9000, None, {}, event_driven=True), 'on-demand')
+        self.assertEqual(dashboard.watcher_state(None, None, {}), 'unknown')
         self.assertEqual(dashboard.watcher_state(None, 60, {}), 'unknown')
         self.assertEqual(dashboard.watcher_state(-1, 60, {}), 'unknown')
 
@@ -48,8 +49,8 @@ class DashboardSliceTests(unittest.TestCase):
         self.assertEqual(result[0]['source_refs'], ['task_a'])
 
     def test_unverified_relay_identity_is_not_folded(self):
-        board = {'tasks': [{'id': 'task_a', 'state': 'ready', 'title': 'Shared title'}]}
-        result = dashboard.work_items(board, [{'relay_id': 'relay_a', 'state': 'queued', 'request': 'Shared title'}], 0)
+        board = {'tasks': [{'id': 'task_a', 'state': 'ready', 'title': 'Shared title', 'source': '$shared_thread'}]}
+        result = dashboard.work_items(board, [{'relay_id': 'relay_a', 'state': 'queued', 'request': 'Shared title', 'source': '$shared_thread'}], 0)
         self.assertEqual(len(result), 2)
         self.assertIsNone(result[0]['age_minutes'])
 
@@ -69,6 +70,9 @@ class DashboardSliceTests(unittest.TestCase):
         self.assertAlmostEqual(result['noise_ratio'], 1 / 3)
         self.assertEqual(result['superseded_count'], 1)
         self.assertEqual(result['near_duplicate_pair_count'], 1)
+        self.assertEqual(result['metric_sources']['knowledge'], ['drawer_a', 'drawer_b'])
+        self.assertEqual(result['metric_sources']['superseded'], ['drawer_b'])
+        self.assertEqual(result['near_duplicate_pairs'], [['drawer_a', 'drawer_b']])
 
     def test_unavailable_embeddings_are_not_zero_duplicates(self):
         result = dashboard.memory_health([('drawer_a', {'record_class': 'knowledge'})], [], None, .18)
