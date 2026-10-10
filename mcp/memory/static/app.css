@@ -164,6 +164,7 @@ tr:last-child td { border-bottom: 0; }
 .memory { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
 @media (max-width: 900px) { .memory { grid-template-columns: 1fr; } }
 .palace { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
+@media (max-width: 900px) { .palace { position: static; } }
 .palace .wing { padding: .35rem .5rem; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
 .palace .wing:hover, .palace .room:hover { background: var(--card-2); }
 .palace .wing.on, .palace .room.on { background: var(--card-2); color: var(--accent); }

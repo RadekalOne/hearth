@@ -30,6 +30,7 @@ const health = {knowledge_count:741,total_count:3057,noise_ratio:2316/3057,super
 const drawer={drawer_id:'drawer_fixture',wing:'Hearth',room:'design',record_class:'knowledge',content:'Fixture knowledge',is_current:true};
 let eventRoom;
 let mode = 'normal';
+let taxonomyWings = [];
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
@@ -39,7 +40,7 @@ const server = createServer(async (req,res) => {
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
-    '/api/taxonomy': {total_drawers:741,wings:[]},
+    '/api/taxonomy': {total_drawers:741,wings:taxonomyWings},
     '/api/recent': {entries:mode==='empty'?[]:[drawer]}, '/api/health': {},
     '/api/drawer/drawer_fixture':drawer,
     '/api/activity/event':{event:{room_id:'!fixture:test',event_id:'$fixture',body:'Blocked item evidence',sender:'fixture'},related:[]},
@@ -133,6 +134,16 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     await page.getByRole('button',{name:'$fixture',exact:true}).click();
     await page.getByText('Blocked item evidence',{exact:true}).waitFor();
     assert.equal(eventRoom,'!fixture:test');
+    taxonomyWings = Array.from({length:30}, (_,i)=>({wing:`Project ${i}`,total:10,classes:{knowledge:10},rooms:[]}));
+    for(const width of [375,400,900]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(`http://127.0.0.1:${server.address().port}/#memory`);
+      await page.reload();
+      await page.locator('.palace .wing').nth(30).waitFor();
+      await page.getByRole('button',{name:'Search',exact:true}).click({timeout:3000});
+      await page.getByText('Newest 1 drawer',{exact:true}).waitFor();
+    }
+    taxonomyWings = [];
     await page.goto(`http://127.0.0.1:${server.address().port}/#memory`);
     await page.setViewportSize({width:400,height:900});
     await page.locator('.drawer').waitFor();
