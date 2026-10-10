@@ -67,6 +67,7 @@ const permalink = (roomId, eventId) => elementBase
 const state = {
   route: "overview",
   days: 7,
+  surfaceSort: "attention",
   mem: { q: "", wing: "", room: "", classes: { knowledge: true, diary: false, archive: false, import: false },
          superseded: false, retracted: false, author: "" },
   authed: false,
@@ -77,10 +78,11 @@ const state = {
 try {
   const saved = JSON.parse(localStorage.getItem("hearth.dashboard") || "{}");
   if (saved.days) state.days = saved.days;
+  if (["attention", "agent", "recent"].includes(saved.surfaceSort)) state.surfaceSort = saved.surfaceSort;
   if (saved.mem) state.mem = { ...state.mem, ...saved.mem, classes: { ...state.mem.classes, ...(saved.mem.classes || {}) } };
 } catch { /* storage unavailable: defaults are fine */ }
 function persist() {
-  try { localStorage.setItem("hearth.dashboard", JSON.stringify({ days: state.days, mem: state.mem })); } catch { /* ignore */ }
+  try { localStorage.setItem("hearth.dashboard", JSON.stringify({ days: state.days, surfaceSort: state.surfaceSort, mem: state.mem })); } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------- API
@@ -141,8 +143,8 @@ async function signIn(body) {
 // ---------------------------------------------------------------- router + refresh
 const VIEWS = { overview: renderOverview, memory: renderMemory, agents: renderAgents, relays: renderRelays };
 function currentRoute() {
-  const r = (location.hash || "#overview").slice(1).split("/")[0];
-  return VIEWS[r] ? r : "overview";
+  const r = (location.hash || "#now").slice(1).split("/")[0];
+  return r === 'overview' ? 'now' : VIEWS[r] ? r : "now";
 }
 async function render() {
   if (!state.authed) return;
@@ -188,11 +190,8 @@ const classTone = { knowledge: "accent", diary: "info", archive: "", import: "vi
 const classLabel = { knowledge: "knowledge", diary: "diary", archive: "archive", import: "import" };
 function stateDot(s) { return h("span", { class: `dot ${s}`, title: s }); }
 function chip(label, on, onToggle) {
-  const c = h("label", { class: `chip${on ? " on" : ""}` }, label);
-  const input = h("input", { type: "checkbox" });
-  input.checked = on;
-  input.addEventListener("change", () => onToggle(input.checked));
-  c.prepend(input);
+  const c = h("button", { type:'button', class: `chip${on ? " on" : ""}`, 'aria-pressed':String(on), text:label });
+  c.addEventListener('click',()=>{on=!on;c.classList.toggle('on',on);c.setAttribute('aria-pressed',String(on));onToggle(on);});
   return c;
 }
 function table(columns, rows, emptyText) {
@@ -230,7 +229,7 @@ async function renderOverview(view) {
       : ""),
     tile("Scheduled surfaces", scheduled.length ? `${okCount} / ${scheduled.length}` : "—",
       scheduled.length ? (okCount === scheduled.length ? "ok" : okCount === 0 ? "bad" : "warn") : "",
-      scheduled.length ? "ticking on time" : "no scheduled surfaces seen"),
+      scheduled.length ? `${okCount} on time · ${scheduled.length - okCount} overdue` : "no scheduled surfaces seen"),
   );
   view.append(tiles);
 
@@ -244,19 +243,33 @@ async function renderOverview(view) {
     inbox.ok ? inbox.v.total : null, inboxBody));
 
   // Who is awake
-  const rows = alive.slice().sort((a, b) => rank(a.state) - rank(b.state) || a.agent.localeCompare(b.agent));
+  const sort = h("select", { "aria-label": "Sort agent activity" },
+    ...[["attention", "Needs attention"], ["agent", "Agent A–Z"], ["recent", "Most recent activity"]].map(([value, text]) =>
+      h("option", { value, text, selected: value === state.surfaceSort })));
+  const activityTable = h("div");
+  const activityColumns = [
+      { label: "", cell: (s) => stateDot(s.state) },
+      { label: "Agent · surface", cell: (s) => h("button", { class: "link inspect-link", onClick: () => openSurface(s), "aria-label": `Details for ${s.agent} @ ${s.surface}` }, h("b", { text: s.agent }), ` @ ${s.surface}`, s.roles.length ? h("span", { class: "dim", text: ` (${s.roles.join(", ")})` }) : "") },
+      { label: "State", cell: (s) => h("button", { class: "status-detail", onClick: () => openSurface(s), title: "See status evidence", "aria-label": `${s.state}: details for ${s.agent} @ ${s.surface}` }, pill(s.state, { ok: "ok", late: "warn", stalled: "bad", "on-demand": "info" }[s.state] || "")) },
+      { label: "Last seen", cell: (s) => h("span", { title: s.last_seen_at || "" }, s.last_seen_at ? ago(s.last_seen_at) : "never") },
+      { label: "Expected", cell: (s) => s.expected_every_minutes ? `every ${minutes(s.expected_every_minutes)}` : h("span", { class: "dim", text: "on demand" }) },
+      { label: "Last post", cell: (s) => s.last_post_at ? h("button", { class: "link inspect-link", onClick: () => openActivity(s.last_post_room_id, s.last_post_event), title: "Read the full post" }, s.last_post_tag ? pill(s.last_post_tag.split(/[\s/-]/)[0]) : "", ` ${s.last_post_room || ""} · ${ago(s.last_post_at)}`) : h("span", { class: "dim", text: "—" }) },
+      { label: "Checkpoint", cell: (s) => s.checkpoint_at ? h("button", { class: "link inspect-link", onClick: () => openSurface(s), title: "Read monitor checkpoints" }, ago(s.checkpoint_at)) : h("span", { class: "dim", text: "—" }) },
+    ];
+  function showActivity() {
+    const byAgent = (a, b) => a.agent.localeCompare(b.agent) || a.surface.localeCompare(b.surface);
+    const rows = alive.slice().sort((a, b) => state.surfaceSort === "agent" ? byAgent(a, b)
+      : state.surfaceSort === "recent" ? (toMs(b.last_seen_at) || 0) - (toMs(a.last_seen_at) || 0) || byAgent(a, b)
+      : rank(a.state) - rank(b.state) || byAgent(a, b));
+    clear(activityTable).append(table(activityColumns, rows,
+      observerDown ? "Unavailable until the observer is configured." : "No agent activity in the observed rooms yet."));
+  }
+  sort.addEventListener("change", () => { state.surfaceSort = sort.value; persist(); showActivity(); });
+  showActivity();
   view.append(section("Who is awake",
     "One row per agent and machine. A surface is late after 1.5× its expected cadence and stalled after 3×.",
     alive.length || null,
-    table([
-      { label: "", cell: (s) => stateDot(s.state) },
-      { label: "Agent · surface", cell: (s) => h("span", null, h("b", { text: s.agent }), ` @ ${s.surface}`, s.roles.length ? h("span", { class: "dim", text: ` (${s.roles.join(", ")})` }) : "") },
-      { label: "State", cell: (s) => pill(s.state, { ok: "ok", late: "warn", stalled: "bad", "on-demand": "info" }[s.state] || "") },
-      { label: "Last seen", cell: (s) => h("span", { title: s.last_seen_at || "" }, s.last_seen_at ? ago(s.last_seen_at) : "never") },
-      { label: "Expected", cell: (s) => s.expected_every_minutes ? `every ${minutes(s.expected_every_minutes)}` : h("span", { class: "dim", text: "on demand" }) },
-      { label: "Last post", cell: (s) => s.last_post_at ? h("span", null, s.last_post_tag ? pill(s.last_post_tag.split(/[\s/-]/)[0]) : "", ` ${s.last_post_room || ""} · ${ago(s.last_post_at)}`) : h("span", { class: "dim", text: "—" }) },
-      { label: "Checkpoint", cell: (s) => s.checkpoint_at ? h("span", { title: s.monitors.join(", ") }, ago(s.checkpoint_at)) : h("span", { class: "dim", text: "—" }) },
-    ], rows, observerDown ? "Unavailable until the observer is configured." : "No agent activity in the observed rooms yet.")));
+    h("label", { class: "activity-sort" }, "Sort by ", sort), activityTable));
 
   // Timeline
   const dayChips = h("div", { class: "chips" }, ...[7, 14, 30].map((d) =>
@@ -281,8 +294,9 @@ function inboxRow(i) {
     h("div", { class: "kind" }, kindText, h("small", { text: i.label })),
     h("div", null,
       h("div", { class: "who" }, h("b", { text: i.sender }), i.surface ? ` @ ${i.surface}` : "", ` in ${i.room}`, i.tag ? [" · ", pill(i.tag)] : ""),
-      h("div", { class: "body", text: i.body })),
+      h("button", { class: "link inspect-link body", text: i.body, onClick: () => openActivity(i.room_id, i.event_id), "aria-label": `Read ${kindText.toLowerCase()} details from ${i.sender}` })),
     h("div", { class: "meta" }, `waiting ${minutes(i.age_minutes)}`, h("br"),
+      h("button", { class: "link", text: "View details", onClick: () => openActivity(i.room_id, i.event_id) }), h("br"),
       h("a", { href: permalink(i.room_id, i.event_id), target: "_blank", rel: "noopener", text: "open in Element" })),
     actionBar(i));
 }
@@ -366,8 +380,9 @@ function actionBar(i) {
 }
 function timelineRow(i) {
   const tone = { Decision: "accent", Outcome: "ok", Lesson: "info", Plan: "violet" }[i.kind] || "";
-  const body = h("div", { class: "body clamp", text: i.body });
-  body.addEventListener("click", () => body.classList.toggle("clamp"));
+  const body = h("button", { class: "link inspect-link body clamp", text: i.body,
+    "aria-label": `Read ${i.kind.toLowerCase()} details from ${i.who}`,
+    onClick: () => i.event_id ? openActivity(i.room_id, i.event_id) : openDrawer(i.drawer_id) });
   const link = i.event_id
     ? h("a", { href: permalink(i.room_id, i.event_id), target: "_blank", rel: "noopener", text: i.room })
     : h("button", { class: "link", text: `${i.wing}/${i.room}`, onClick: () => openDrawer(i.drawer_id) });
@@ -375,6 +390,79 @@ function timelineRow(i) {
     h("div", null, pill(i.kind, tone), h("div", { class: "when", text: when(i.at) })),
     h("div", null, h("div", { class: "who" }, h("b", { text: i.who }), i.human ? " (human) · " : " · ", link,
       i.source === "memory" ? h("span", { class: "dim", text: " · memory" }) : ""), body));
+}
+
+// Read-only drilldowns. Opening one never dismisses, approves or posts a message.
+let inspectionRequest = 0;
+let inspectionTrigger = null;
+function inspectionPanel(title) {
+  inspectionTrigger = document.activeElement;
+  stopAutoRefresh();
+  const panel = clear($("detail"));
+  panel.classList.remove("hidden");
+  const close = h("button", { class: "secondary small close", text: "✕", "aria-label": "Close details", onClick: closeDetail });
+  panel.append(close, h("h2", { text: title }), h("p", { class: "dim", text: "Loading…" }));
+  close.focus();
+  return { panel, request: ++inspectionRequest };
+}
+function detailFields(...pairs) {
+  return h("dl", null, ...pairs.flatMap(([label, value]) => [h("dt", { text: label }), h("dd", { text: value || "—" })]));
+}
+function activityCard(ev) {
+  return h("article", { class: "evidence-card" },
+    h("p", { class: "dim", text: `${ev.sender} · ${ev.room} · ${when(ev.ts)}` }),
+    h("div", { class: "content", text: ev.body }),
+    h("a", { class: "link", href: permalink(ev.room_id, ev.event_id), target: "_blank", rel: "noopener", text: "Open full conversation in Element" }));
+}
+async function openSurface(row) {
+  const { panel, request } = inspectionPanel(`${row.agent} @ ${row.surface}`);
+  try {
+    const data = await api(`/api/surfaces/detail?key=${encodeURIComponent(row.key)}`);
+    if (request !== inspectionRequest) return;
+    if (data.element_url) elementBase = String(data.element_url).replace(/\/+$/, "");
+    panel.lastChild.remove();
+    const s = data.surface, cadence = s.expected_every_minutes;
+    const reason = s.state === "stalled" ? `No observed activity for ${minutes(s.age_minutes)}. This exceeds the stalled threshold of ${minutes(cadence * 3)} (3× the expected cadence).`
+      : s.state === "late" ? `Last observed activity was ${minutes(s.age_minutes)} ago, beyond the late threshold of ${minutes(cadence * 1.5)} (1.5× the expected cadence).`
+      : s.state === "ok" ? `Observed activity is within the ${minutes(cadence * 1.5)} on-time window.`
+      : s.state === "on-demand" ? "No recurring cadence is inferred for this surface; elapsed time alone does not mark it stalled."
+      : "There is not enough observed activity to calculate freshness.";
+    panel.append(pill(s.state, { ok: "ok", late: "warn", stalled: "bad" }[s.state] || "info"),
+      h("h3", { text: "Why this status?" }), h("p", { text: reason }),
+      h("p", { class: "dim", text: "This is an activity estimate from signed room posts and memory checkpoints. It does not confirm that a process failed or explain its underlying cause. A retired surface can still appear here." }),
+      detailFields(["Last observed", s.last_seen_at ? `${when(s.last_seen_at)} · ${ago(s.last_seen_at)}` : "Never"],
+        ["Expected cadence", cadence ? `Every ${minutes(cadence)}` : "On demand / not inferred"],
+        ["Cadence hints", [...s.roles, ...s.monitors].join(", ")], ["Observed posts", String(s.posts)],
+        ["Snapshot", when(data.generated_at)]),
+      h("h3", { text: "Latest checkpoints" }));
+    if (!data.checkpoints.length) panel.append(h("p", { class: "dim", text: "No checkpoint is recorded for this surface." }));
+    data.checkpoints.forEach(c => panel.append(h("article", { class: "evidence-card" },
+      h("p", { class: "dim", text: `${c.monitor || "Monitor"} · ${when(c.updated_at)} · ${ago(c.updated_at)}` }), h("div", { class: "content", text: c.content }))));
+    panel.append(h("h3", { text: "Recent room activity" }), h("p", { class: "dim", text: data.coverage }));
+    if (!data.posts.length) panel.append(h("p", { class: "dim", text: "No posts from this surface are in the observed history." }));
+    data.posts.forEach(ev => panel.append(activityCard(ev)));
+  } catch (err) {
+    if (!(err instanceof AuthRequired) && request === inspectionRequest) panel.lastChild.textContent = err.message;
+  }
+}
+async function openActivity(roomId, eventId) {
+  const { panel, request } = inspectionPanel("Activity details");
+  try {
+    const data = await api(`/api/activity/event?room_id=${encodeURIComponent(roomId)}&event_id=${encodeURIComponent(eventId)}`);
+    if (request !== inspectionRequest) return;
+    if (data.element_url) elementBase = String(data.element_url).replace(/\/+$/, "");
+    panel.lastChild.remove();
+    panel.append(activityCard(data.event), detailFields(["Event", data.event.event_id],
+      ["Thread", data.event.thread_root || data.event.reply_to || "No thread recorded"]),
+      h("h3", { text: "Related replies" }), h("p", { class: "dim", text: data.coverage }));
+    if (!data.related.length) panel.append(h("p", { class: "dim", text: "No related replies are in the observed history." }));
+    data.related.forEach(ev => panel.append(activityCard(ev)));
+  } catch (err) {
+    if (!(err instanceof AuthRequired) && request === inspectionRequest) {
+      panel.lastChild.textContent = err.message;
+      panel.append(h("a", { class: "link", href: permalink(roomId, eventId), target: "_blank", rel: "noopener", text: "Open in Element" }));
+    }
+  }
 }
 
 // ---------------------------------------------------------------- Memory
@@ -398,20 +486,20 @@ function renderPalace(el, tax) {
     h("div", { class: "legend" }, ...Object.keys(classLabel).map((c) => h("span", null, h("i", { class: c, style: { background: `var(--${{ knowledge: "accent", diary: "info", archive: "dim", import: "violet" }[c]})` } }), classLabel[c]))));
   const all = h("div", { class: `wing${!state.mem.wing ? " on" : ""}` }, h("b", { text: "All wings" }), h("span", { class: "n", text: String(tax.total_drawers) }));
   all.addEventListener("click", () => { state.mem.wing = ""; state.mem.room = ""; persist(); render(); });
-  el.append(all);
+  el.append(keyboardCard(all));
   for (const w of tax.wings) {
     const row = h("div", { class: `wing${state.mem.wing === w.wing && !state.mem.room ? " on" : ""}` }, h("b", { text: w.wing, title: w.wing }), h("span", { class: "n", text: String(w.total) }));
     row.addEventListener("click", () => { state.mem.wing = w.wing; state.mem.room = ""; persist(); render(); });
     const bar = h("div", { class: "classbar" });
     for (const [cls, n] of Object.entries(w.classes)) bar.append(h("i", { class: cls, style: { width: `${(100 * n) / w.total}%` }, title: `${n} ${cls}` }));
-    el.append(row, bar);
+    el.append(keyboardCard(row), bar);
     if (state.mem.wing === w.wing) {
       const rooms = h("div", { class: "rooms" });
       for (const r of w.rooms) {
         const rr = h("div", { class: `room${state.mem.room === r.room ? " on" : ""}` }, h("span", { text: r.room }),
           h("span", { class: "n", text: `${r.total}${r.superseded ? ` · ${r.superseded} old` : ""}` }));
         rr.addEventListener("click", () => { state.mem.room = r.room; persist(); render(); });
-        rooms.append(rr);
+        rooms.append(keyboardCard(rr));
       }
       el.append(rooms);
     }
@@ -485,6 +573,11 @@ async function runSearch(results) {
   if (!entries.length) results.append(h("div", { class: "empty", text: "No drawers match." }));
   for (const e of entries) results.append(drawerCard(e));
 }
+function keyboardCard(card) {
+  card.setAttribute('tabindex','0');card.setAttribute('role','button');
+  card.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();card.click();}});
+  return card;
+}
 function drawerCard(e) {
   const card = h("div", { class: `drawer${e.is_current === false ? " superseded" : ""}${e.retracted ? " retracted" : ""}` });
   const head = h("div", { class: "head" },
@@ -502,15 +595,18 @@ function drawerCard(e) {
     h("span", { class: "mono", text: e.drawer_id }));
   card.append(head, content, foot);
   card.addEventListener("click", () => openDrawer(e.drawer_id));
-  return card;
+  return keyboardCard(card);
 }
 async function openDrawer(id) {
+  const request = ++inspectionRequest;
+  stopAutoRefresh();
   const panel = $("detail");
   clear(panel).append(h("p", { class: "dim", text: "Loading…" }));
   panel.classList.remove("hidden");
   let d;
   try { d = await api(`/api/drawer/${encodeURIComponent(id)}`); }
   catch (err) { if (err instanceof AuthRequired) return; clear(panel).append(h("p", { class: "bad", text: err.message })); return; }
+  if (request !== inspectionRequest) return;
   clear(panel);
   panel.append(h("button", { class: "secondary small close", text: "✕", onClick: closeDetail }));
   panel.append(h("div", { class: "head", style: { display: "flex", gap: ".5rem", flexWrap: "wrap", alignItems: "center", marginTop: ".4rem" } },
@@ -542,21 +638,22 @@ async function openDrawer(id) {
     panel.append(h("h3", { text: "History of this fact" }), h("p", { class: "dim", style: { fontSize: ".82rem" }, text: "Oldest first. The current version is what agents should act on." }), chain);
   }
 }
-function closeDetail() { const p = $("detail"); p.classList.add("hidden"); clear(p); }
+function closeDetail() { ++inspectionRequest; const p = $("detail"); p.classList.add("hidden"); clear(p); if (inspectionTrigger?.isConnected) inspectionTrigger.focus(); inspectionTrigger = null; if (state.authed) startAutoRefresh(); }
 
 // ---------------------------------------------------------------- Agents
 async function renderAgents(view) {
+  clear(view);
+  await renderAgentCapabilities(view);
   let data;
   try { data = await api("/api/agents"); }
   catch (err) {
     if (err instanceof AuthRequired) throw err;
-    clear(view).append(h("div", { class: "empty", text: err.status === 503 ? "Room activity is unavailable: the observer is not configured (run `hearth dashboard configure`)." : err.message }));
+    view.append(h("div", { class: "empty", text: err.status === 503 ? "Observed activity is unavailable. Capability profiles remain available above." : err.message }));
     return;
   }
-  clear(view);
   const agents = data.agents.filter((a) => a.kind === "agent");
   const humans = data.agents.filter((a) => a.kind === "human");
-  view.append(section("Agents", "One card per account. Surfaces (machines) are listed inside each card.", agents.length,
+  view.append(section("Observed activity", "One card per observed account. Surfaces (machines) are listed inside each card.", agents.length,
     h("div", { class: "agents" }, ...agents.map(agentCard))));
   if (humans.length) view.append(section("People", null, humans.length,
     h("div", { class: "people" }, ...humans.map((p) => h("span", { class: "person" }, h("b", { text: p.name }), ` · ${plural(p.messages, "message")} · last ${ago(p.last_seen)}`)))));
@@ -676,10 +773,10 @@ $("refresh").addEventListener("click", () => { taxonomyCache = null; render(); }
 window.addEventListener("hashchange", render);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
-fetch("/api/auth/status")
+document.addEventListener('DOMContentLoaded', () => fetch("/api/auth/status")
   .then((res) => res.json())
   .then((auth) => {
     if (auth.authenticated || !auth.auth_enabled) showDashboard(auth.principal, auth.auth_enabled);
     else if (!auth.matrix_login_available) $("login-error").textContent = "Matrix sign-in is unavailable; use an access token.";
   })
-  .catch(() => showLogin("Hearth Memory is unavailable."));
+  .catch(() => showLogin("Hearth Memory is unavailable.")));

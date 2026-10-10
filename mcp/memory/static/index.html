@@ -10,7 +10,7 @@
 <body>
 <section class="login-shell" id="login-shell">
   <form class="login-card" id="login-form">
-    <h1>🔥 <span>Hearth</span></h1>
+    <h1><span>Hearth</span></h1>
     <p>Sign in with your Hearth account to open the dashboard.</p>
     <label for="username">Username</label>
     <input id="username" name="username" autocomplete="username" required>
@@ -29,13 +29,13 @@
 
 <main class="hidden" id="dashboard">
   <header class="topbar">
-    <a class="brand" href="#overview">🔥 <span>Hearth</span></a>
-    <nav class="tabs" id="tabs">
-      <a href="#overview" data-route="overview">Overview</a>
+    <a class="brand" href="#now"><span>Hearth</span></a>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboard views">
+      <a href="#now" data-route="now">Now</a>
+      <a href="#work" data-route="work">Work</a>
       <a href="#memory" data-route="memory">Memory</a>
-      <a href="#agents" data-route="agents">Agents</a>
-      <a href="#relays" data-route="relays">Relays</a>
     </nav>
+    <details class="workspace-tools"><summary>Workspace tools</summary><nav aria-label="Workspace tools"><a href="#projects">Projects</a><a href="#communication">Communication</a><a href="#agents">Agents</a><a href="#relays">Relays</a></nav></details>
     <span class="grow"></span>
     <span class="stamp" id="stamp"></span>
     <span class="identity" id="identity"></span>
@@ -43,9 +43,11 @@
     <button class="secondary small hidden" id="logout">Sign out</button>
   </header>
   <div id="banner" class="banner hidden" role="status"></div>
-  <div id="view" class="view"></div>
-  <aside id="detail" class="detail hidden" aria-label="Drawer detail"></aside>
+  <div id="view" class="view" role="tabpanel" aria-label="Dashboard content"></div>
+  <aside id="detail" class="detail hidden" aria-label="Details"></aside>
 </main>
 <script src="/static/app.js"></script>
+<script src="/static/work.js"></script>
+<script src="/static/slice.js"></script>
 </body>
 </html>

@@ -53,3 +53,15 @@ jobs:
           cache-dependency-path: mcp/memory/requirements.txt
       - run: pip install -r mcp/memory/requirements.txt
       - run: python -m unittest discover -s test -p "test_*.py"
+
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:dashboard

@@ -16,6 +16,9 @@
     "mcp/matrix/package.json",
     "mcp/matrix/package-lock.json",
     "mcp/memory/app.py",
+    "mcp/memory/work.py",
+    "mcp/memory/dashboard.py",
+    "mcp/memory/dashboard-watchers.json",
     "mcp/memory/Dockerfile",
     "mcp/memory/requirements.txt",
     "mcp/memory/static/",
@@ -25,7 +28,8 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs",
+    "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs && node --check mcp/memory/static/app.js && node --check mcp/memory/static/work.js && node --check mcp/memory/static/slice.js",
+    "test:dashboard": "node --test test/dashboard-slice.test.mjs",
     "test": "node --test test/cli.test.mjs test/matrix-mcp.test.mjs test/notify.test.mjs",
     "prepublishOnly": "npm run check && npm test",
     "test:py": "python -m unittest discover -s test -p \"test_*.py\""
@@ -52,5 +56,9 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "playwright": "^1.62.1"
   }
 }
