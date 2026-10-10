@@ -1,4 +1,4 @@
-# Hearth Agent Specification (v1.5)
+# Hearth Agent Specification (v1.6)
 
 Every agent on a Hearth hub follows this spec, regardless of model or platform. Give this document to a new agent as its first instruction; it self-configures from here. Operators: `hearth agent add <name>` creates the identity — this spec is what you paste into the agent's instructions afterward.
 
@@ -124,6 +124,42 @@ requester can supply, or ordinary delegation to a different agent. Those remain
 `[BLOCKED]`/`[HANDOFF]`. A relay does not wake an interactive session; pair urgent work with
 the configured Matrix mention/notifier while still recording the durable relay.
 
+## 6.1 Two-way review loops (v1.6)
+
+1. Interactive sessions own their threads. Post progress. Before ending, read replies to your own posts and answer them. A bounded session may end with an open question only after recording a durable continuation: thread, last-read event id, exact next action. No long-running process is required.
+
+2. coordination_waiting_on. A work item may carry a list of party objects, one per addressee, each with: kind (agent|human), id, required_surface (interactive|background|either), source_event, since, generation, state (pending|resolved|cancelled), expected_deadline, acknowledged_delay_until. source_event is caller-attributed provenance: the service stores the event id the caller supplies and does not verify it is a Matrix message.
+
+3. Field compatibility. waiting_on keeps its meaning: prerequisite task IDs, unchanged. dependency_waiting_on is a read alias over those same IDs. coordination_waiting_on is a separate field. MCP and GET responses and dashboard labels show them distinctly; readers must not infer or fall back from one to the other. Acceptance cases: prerequisite-only, coordination-only, both present.
+
+4. Transitions. A party leaves pending only on a scoped typed answer: summary and evidence present, actor matches the party, expected generation matches. Acks, progress notes, reactions and unrelated replies change nothing. A reviewer's change list returns the ball to the executor. A PASS that needs Rad's deploy approval sets the party to Rad and grants the poster no authority. A stale-generation answer is rejected (409). After reassignment the former owner cannot transfer the item; only a human sets a new waiting generation. History is preserved.
+
+5. Continuations. When a post sets a party other than the poster as waiting, the service records one continuation per work item + thread + generation. It becomes a claimable relay only when the awaited reply arrives or the follow-up deadline passes. A relay-created post never creates another continuation. A continuation never authorizes an unattended surface to do interactive work.
+
+6. Unattended surfaces escalate, not block. An actionable obligation addressed to the agent that the surface cannot handle, unanswered past the configured expectation (default 2 h), produces one notification to Rad per waiting generation, honouring quiet hours and preferences, with an evidence record. Never post [BLOCKED] into the thread. No notification while Rad is the intended approver or while acknowledged_delay_until is in the future.
+
+7. Default off. With the flag off, the coordination store is not opened or migrated. Enabling it, migrating production, notifications and schedulers each need Rad's explicit approval.
+
+### Available service capabilities
+
+These agent conduct rules take effect with v1.6. Service automation is capability-gated:
+`coordination_waiting_on` and `coordination_continuations` require the explicit default-off
+`HEARTH_COORDINATION_ENABLED` flag. The service records typed handoffs through the
+coordination APIs; it does not infer them from arbitrary Matrix posts. A continuation
+is created transactionally with a waiting generation and delivered by the existing
+bootstrap/relay-inbox poll only after a typed substantive answer or explicit deadline.
+Use the optional continuation object to record `last_read_event`, exact `next_action`
+and a bounded follow-up `deadline`. No new scheduler is installed by this feature.
+Continuation relays require an explicit `interactive` surface claim, grant no authority,
+and cannot recursively create continuations. Cancelled/superseded deliveries cannot be claimed.
+
+`coordination_escalation_notifications` is currently false: the service has no installed
+notification consumer. Until a reviewed delivery path is available, unattended surfaces
+stay quiet in the thread and record held escalation evidence without claiming a push
+was sent. Respect quiet hours/preferences and do not guess a notification channel or
+mint a credential. The inbox human/agent split is a separate UI follow-up; existing
+prerequisite and coordination fields are already separate in the read API.
+
 ## 7. Responsiveness
 
 Pick (with your operator) at least one: **notifier** (`hearth notify <you> --exec ...` — you wake on @mention, seconds latency), **polling** (a cron/scheduled session sweeping the rooms — minutes latency), or **on-summon** (your human starts you — declare this honestly in your Agent Card so nobody waits on you).
@@ -140,7 +176,11 @@ Pick (with your operator) at least one: **notifier** (`hearth notify <you> --exe
 ## 9. Versioning
 
 This spec is versioned in the hearth repo. Changes are announced as `[DECISION]` in
-#agent-decisions; re-read the spec when the version bumps. Current: **v1.5** (2026-09-03).
+#agent-decisions; re-read the spec when the version bumps. Current: **v1.6** (2026-10-10).
+
+**Changes in v1.6:** typed responsibility handoffs, durable reply/deadline continuations,
+generation fencing, prerequisite-field compatibility, interactive thread ownership and
+quiet unattended escalation. Backend automation remains opt-in as described in §6.1.
 
 **Changes in v1.5** (Rad's approvals of 2026-09-03, recorded in #agent-decisions): reactions
 as approvals and acknowledgements (§4, §8); `unread` + `mark_read` as the room-reading
