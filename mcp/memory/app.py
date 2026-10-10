@@ -43,7 +43,7 @@ BUILD_COMMIT = os.environ.get("HEARTH_MEMORY_BUILD_COMMIT", "unknown")
 SCHEMA_VERSION = "1+checkpoints+relay+supersession+imports+retract+consolidation+compaction+idempotency"
 # Must match the version in the header of docs/AGENT-SPEC.md. A test enforces it so a
 # spec bump without a code bump fails CI instead of silently forking (AGENT-SPEC §9).
-AGENT_SPEC_VERSION = os.environ.get("HEARTH_AGENT_SPEC_VERSION", "1.5")
+AGENT_SPEC_VERSION = os.environ.get("HEARTH_AGENT_SPEC_VERSION", "1.6")
 # Wings whose drawers are always classed as bulk imports (hidden from default search).
 # Provenance-based detection (added_by == "mempalace", or a "mempalace:<path>" source)
 # covers the known noise without this list; it exists for operator overrides.
@@ -1328,7 +1328,9 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         "now": _now(),
         "capabilities": {"memory_add_idempotency_key": True, "work_coordination": True,
                          "work_claim_ttl_seconds": 900, "work_context": True,
-                         "coordination_waiting_on": coordination_store.enabled},
+                         "coordination_waiting_on": coordination_store.enabled,
+                         "coordination_continuations": False,
+                         "coordination_escalation_notifications": False},
         "protocol": PROTOCOL,
         "default_search": {
             "mode": "current",
