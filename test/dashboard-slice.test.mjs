@@ -107,6 +107,15 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
         }
       }
     }
+    const originalTitle=inbox.items[1].title;
+    inbox.items[1].title='Interactive Codex: inspect task '+ '$'+'a'.repeat(64);
+    for(const width of [375,400]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(`http://127.0.0.1:${server.address().port}/#now`);
+      await page.getByText(inbox.items[1].title,{exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Long handoff evidence id overflow at ${width}`);
+    }
+    inbox.items[1].title=originalTitle;
     await page.getByRole('tab',{name:'Now',exact:true}).focus();
     await page.keyboard.press('ArrowRight');
     assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Work');
