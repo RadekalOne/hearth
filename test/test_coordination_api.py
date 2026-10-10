@@ -1,5 +1,7 @@
 """Flag, identity, principal and compatibility boundaries using real ASGI/SQLite."""
 import tempfile
+import sqlite3
+from contextlib import closing
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -180,3 +182,53 @@ class CoordinationAPITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(state['coordination_waiting_on'][0]['id'],'claude')
         finally:
             self.memory.CURRENT_PRINCIPAL.reset(context)
+
+    async def test_claim_validation_remains_locked_until_coordination_commit(self):
+        project=await self.project()
+        task=(await self.post(f"/api/work/projects/{project['id']}/tasks",{'title':'Atomic claim fence',
+            'acceptance':'Evidence','assignee':'codex'})).json()
+        await self.post(f"/api/work/tasks/{task['id']}/action",{'action':'ready','revision':task['revision']})
+        claim=(await self.post(f"/api/work/tasks/{task['id']}/action",{'action':'claim'},'codex-test-token')).json()
+        original=self.memory.coordination_store.set_wait
+        competing_write_blocked=[]
+        def probe(*args,**kwargs):
+            # A real second SQLite writer represents release/reclaim or reassignment.
+            with closing(sqlite3.connect(self.memory.work_store.path,timeout=0.05,isolation_level=None)) as db:
+                try:
+                    db.execute('BEGIN IMMEDIATE')
+                except sqlite3.OperationalError as err:
+                    competing_write_blocked.append('locked' in str(err))
+                else:
+                    competing_write_blocked.append(False)
+                    db.execute('ROLLBACK')
+            return original(*args,**kwargs)
+        with patch.object(self.memory.coordination_store,'set_wait',side_effect=probe):
+            result=await self.post('/api/coordination/wait',{**self.wait_payload,'work_kind':'task',
+                'work_id':task['id'],'claim_id':claim['claim_id']},'codex-test-token')
+        self.assertEqual(result.status_code,200,result.text)
+        self.assertEqual(competing_write_blocked,[True])
+
+    async def test_reassignment_requires_explicit_human_transfer_and_fences_former_owner(self):
+        project=await self.project()
+        task=(await self.post(f"/api/work/projects/{project['id']}/tasks",{'title':'Reassign safely',
+            'acceptance':'Evidence','assignee':'codex'})).json()
+        payload={**self.wait_payload,'work_kind':'task','work_id':task['id']}
+        await self.post('/api/coordination/wait',payload,'codex-test-token')
+        reassigned=await self.post(f"/api/work/tasks/{task['id']}/action",{'action':'assign',
+            'assignee':'claude','revision':task['revision']})
+        self.assertEqual(reassigned.status_code,200,reassigned.text)
+        self.identity={**self.identity,'work_kind':'task','work_id':task['id']}
+        stale_answer=await self.answer('change_list')
+        self.assertEqual(stale_answer.status_code,409,stale_answer.text)
+        transfer={**payload,'expected_generation':1,'source_event':'$transfer'}
+        self.assertEqual((await self.post('/api/coordination/wait',transfer,'claude-test-token')).status_code,409)
+        human=await self.post('/api/coordination/wait',transfer)
+        self.assertEqual(human.status_code,200,human.text)
+        self.assertEqual(human.json()['generation'],2)
+        self.assertEqual((await self.post('/api/coordination/wait',{**transfer,'expected_generation':2},'codex-test-token')).status_code,403)
+        changes=await self.answer('change_list',expected_generation=2,source_event='$new_review')
+        self.assertEqual(changes.status_code,200,changes.text)
+        self.assertEqual(changes.json()['coordination_waiting_on'][0]['id'],'claude')
+        history=await self.client.get('/api/coordination',params={**self.identity,'history':'true'},
+            headers={'Authorization':'Bearer codex-test-token'})
+        self.assertTrue(any(p['generation']==1 and p['state']=='cancelled' for p in history.json()['history']))

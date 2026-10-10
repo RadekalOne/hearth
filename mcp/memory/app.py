@@ -2085,14 +2085,13 @@ def _coordination_party_check(values):
             raise HTTPException(400, 'waiting human must be explicitly configured in HEARTH_HUMAN_IDS')
 
 
-def _coordination_owner(payload, actor, human):
+def _coordination_owner(payload, actor, human, work_db=None):
     kind = payload.get('work_kind'); work_id = payload.get('work_id')
     if kind == 'thread_plan':
         # An existing thread-plan owner is checked transactionally by the store.
         return actor, 'human' if human else 'agent'
     if kind == 'task':
-        with work_store.transaction() as db:
-            task = _work_call(work_store.get, db, 'tasks', work_id)
+        task = _work_call(work_store.get, work_db, 'tasks', work_id)
         if task.get('room_id') and (task['room_id'] != payload.get('room_id') or task['thread_root'] != payload.get('thread_id')):
             raise HTTPException(409, 'coordination thread must match the task conversation')
         owner = task['assignee']
@@ -2123,17 +2122,29 @@ def _coordination_mutate(payload, answer=False):
     actor, human = _coordination_actor()
     # Validate identities before SQLite/Chroma lookups, including their types.
     _coordination_call(coordination_store.identity, *(payload.get(k) for k in ('work_kind','work_id','room_id','thread_id')))
-    owner, owner_kind = _coordination_owner(payload, actor, human)
+    if payload.get('work_kind') == 'task':
+        # All task writers acquire this SQLite write lock. Keep it through the
+        # coordination commit so a release/reclaim or reassignment cannot race
+        # the authorization check. Lock order is always work -> coordination.
+        with work_store.transaction() as work_db:
+            return _coordination_mutate_checked(payload, actor, human, answer, work_db)
+    return _coordination_mutate_checked(payload, actor, human, answer)
+
+
+def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
+    owner, owner_kind = _coordination_owner(payload, actor, human, work_db)
     arguments = {key:value for key,value in payload.items() if key != 'claim_id'}
     if not answer:
         _coordination_call(_coordination_party_check, payload.get('parties'))
-        return _coordination_call(coordination_store.set_wait, actor, human, owner=owner, owner_kind=owner_kind, **arguments)
+        return _coordination_call(coordination_store.set_wait, actor, human, owner=owner, owner_kind=owner_kind,
+            allow_owner_transfer=human and payload['work_kind'] == 'task', **arguments)
     if payload.get('next_parties') is not None:
         _coordination_call(_coordination_party_check, payload['next_parties'])
     if payload.get('answer_kind') == 'pass_needing_human':
         _coordination_call(_coordination_party_check, [{'kind':'human','id':payload.get('approval_party'),'required_surface':'interactive'}])
     try:
-        return _coordination_call(coordination_store.answer, actor, human, **arguments)
+        return _coordination_call(coordination_store.answer, actor, human,
+            expected_owner=owner if payload['work_kind'] in {'task','relay'} else None, **arguments)
     except TypeError as err:
         raise HTTPException(400, 'missing or invalid coordination answer fields') from err
 

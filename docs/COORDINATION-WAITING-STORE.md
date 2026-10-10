@@ -28,9 +28,15 @@ The identity is `(work_kind, work_id, room_id, thread_id)`. `work_kind` is
 `task`, `relay`, or `thread_plan`; room/thread IDs are mandatory. Task and relay
 IDs must exist. Task owners are assigned agents; running task owners supply
 their current live `claim_id`. Relay owners are their target agents. A thread
-plan is owned by its authenticated creator. Owners cannot be replaced by a
-later waiting-state write. Human management principals can manage task/relay
-waiting state. A coordination record does not change work state or claims.
+plan is owned by its authenticated creator. Human management principals can
+manage task/relay waiting state. After a task reassignment, old answers are
+refused until a human explicitly sets a new waiting generation, transferring
+coordination to the task's verified current assignee. Former owners cannot
+transfer it themselves. Previous owner/generation history is retained.
+Task claim/owner validation holds the work SQLite write lock until the
+coordination commit (lock order: work then coordination), preventing a
+concurrent release/reclaim or reassignment. A coordination record does not
+change work state or claims.
 
 Every mutation supplies `expected_generation`, `source_event`, and `since`
 (a timezone-aware ISO timestamp). Source event IDs and timestamps are

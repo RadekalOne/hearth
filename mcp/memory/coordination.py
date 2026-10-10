@@ -159,7 +159,8 @@ class CoordinationStore:
                    (identity,generation,value['kind'],value['id'],'pending',json.dumps(data)))
 
     def set_wait(self, actor, human, *, work_kind, work_id, room_id, thread_id,
-                 owner='', owner_kind='agent', expected_generation=0, parties=None, source_event='', since=''):
+                 owner='', owner_kind='agent', expected_generation=0, parties=None, source_event='', since='',
+                 allow_owner_transfer=False):
         if not self.enabled:
             raise CoordinationError('coordination feature is disabled', 409)
         identity = self.identity(work_kind,work_id,room_id,thread_id)
@@ -175,24 +176,25 @@ class CoordinationStore:
             raise CoordinationError('source event ID required')
         with self.transaction(write=True) as db:
             head = db.execute('SELECT * FROM coordination_heads WHERE identity=?', (identity,)).fetchone()
-            if head and (head['owner'] != owner or head['owner_kind'] != owner_kind):
+            if head and (head['owner'] != owner or head['owner_kind'] != owner_kind) and not (human and allow_owner_transfer):
                 raise CoordinationError('waiting owner cannot be replaced', 409)
             current = head['generation'] if head else 0
             if current != expected_generation:
                 raise CoordinationError('stale waiting generation', 409)
             generation = current + 1
             db.execute('UPDATE coordination_parties SET state=? WHERE identity=? AND state=?', ('cancelled',identity,'pending'))
-            db.execute('INSERT INTO coordination_heads VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET generation=excluded.generation',
+            db.execute('INSERT INTO coordination_heads VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET generation=excluded.generation,owner=excluded.owner,owner_kind=excluded.owner_kind',
                        (identity,work_kind,work_id,room_id,thread_id,generation,owner,owner_kind))
             for value in values:
                 self.put_party(db,identity,generation,value,source_event,since)
             db.execute('INSERT INTO coordination_events VALUES(?,?,?,?,?,?)',
-                       (identity,generation,source_event,actor,'',json.dumps({'kind':'wait_set','since':since})))
+                       (identity,generation,source_event,actor,'',json.dumps({'kind':'wait_set','since':since,
+                           'owner':owner,'owner_kind':owner_kind,'previous_owner':head['owner'] if head else None})))
             return {**self.snapshot(db,identity), 'changed':True}
 
     def answer(self, actor, human, *, work_kind, work_id, room_id, thread_id,
                expected_generation, party_id, answer_kind, source_event, since, summary='', evidence=None,
-               approval_party='', next_parties=None):
+               approval_party='', next_parties=None, expected_owner=None):
         if not self.enabled:
             raise CoordinationError('coordination feature is disabled', 409)
         identity = self.identity(work_kind,work_id,room_id,thread_id)
@@ -208,6 +210,8 @@ class CoordinationStore:
             head = db.execute('SELECT * FROM coordination_heads WHERE identity=?', (identity,)).fetchone()
             if not head:
                 raise CoordinationError('stale waiting generation', 409)
+            if expected_owner is not None and head['owner'] != expected_owner:
+                raise CoordinationError('work was reassigned; a human must transfer coordination waiting state', 409)
             owner_cancel = answer_kind == 'cancel' and not party_id and (human or actor == head['owner'])
             row = db.execute('SELECT * FROM coordination_parties WHERE identity=? AND generation=? AND party_id=?',
                              (identity,expected_generation,party_id)).fetchone()
