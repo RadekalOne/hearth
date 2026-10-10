@@ -1503,7 +1503,7 @@ def memory_status() -> dict:
     }
 
 
-@mcp.tool(annotations=READ_ONLY_TOOL)
+@mcp.tool(annotations=UPDATE_TOOL if coordination_store.enabled else READ_ONLY_TOOL)
 def memory_bootstrap(agent: str = "", surface: str = "", project: str = "",
                      compact: bool = False) -> dict:
     """CALL ONCE AT SESSION START. Returns the memory contract, authenticated identity,
@@ -1782,7 +1782,7 @@ def relay_request(target_agent: str, request: str, requested_by: str = "agent",
     )
 
 
-@mcp.tool(annotations=READ_ONLY_TOOL)
+@mcp.tool(annotations=UPDATE_TOOL if coordination_store.enabled else READ_ONLY_TOOL)
 def relay_inbox(agent: str, state: str = "open", limit: int = 20) -> dict:
     """List relay requests for this authenticated agent. Open includes queued and claimed
     requests. memory_bootstrap also returns the open inbox automatically."""

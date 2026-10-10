@@ -109,3 +109,9 @@ work cannot recursively create further continuations.
 Spec/onboarding version is1.6. Notifications and the dashboard party split remain
 separate follow-ups, advertised as unavailable. No scheduler is created by B.
 
+With coordination enabled, bootstrap/relay-inbox polling may reconcile a persisted
+delivery, so those tools advertise update hints rather than read-only hints. With
+the flag off, the original read-only behavior remains. A surface label is caller
+provenance, not server attestation of an interactive process; unchanged runner
+authority restrictions still prohibit unattended execution.
+
