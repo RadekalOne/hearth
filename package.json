@@ -18,6 +18,7 @@
     "mcp/memory/app.py",
     "mcp/memory/work.py",
     "mcp/memory/dashboard.py",
+    "mcp/memory/coordination.py",
     "mcp/memory/dashboard-watchers.json",
     "mcp/memory/Dockerfile",
     "mcp/memory/requirements.txt",

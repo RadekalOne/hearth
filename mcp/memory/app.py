@@ -91,6 +91,13 @@ _work_spec = importlib.util.spec_from_file_location(
 _work_module = importlib.util.module_from_spec(_work_spec)
 _work_spec.loader.exec_module(_work_module)
 work_store = _work_module.WorkStore(os.path.join(DATA_DIR, "work.sqlite3"))
+_coordination_spec = importlib.util.spec_from_file_location(
+    "hearth_coordination", os.path.join(os.path.dirname(__file__), "coordination.py"))
+_coordination_module = importlib.util.module_from_spec(_coordination_spec)
+_coordination_spec.loader.exec_module(_coordination_module)
+coordination_store = _coordination_module.CoordinationStore(
+    os.path.join(DATA_DIR, "coordination.sqlite3"),
+    enabled=os.environ.get("HEARTH_COORDINATION_ENABLED", "false").strip().lower() in {"true", "1", "yes"})
 SESSION_COOKIE = "hearth_session"
 SESSION_TTL_SECONDS = max(
     300,
@@ -1244,6 +1251,9 @@ def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
             entry.get("created_at") or "",
         ),
     )[: max(1, min(limit, 100))]
+    if coordination_store.enabled:
+        for entry in entries:
+            entry['coordination_waiting_on'] = coordination_store.for_work('relay', entry['relay_id'])
     return {"agent": agent, "state": state, "count": len(entries), "entries": entries}
 
 
@@ -1317,7 +1327,8 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         "authenticated_as": _principal(),
         "now": _now(),
         "capabilities": {"memory_add_idempotency_key": True, "work_coordination": True,
-                         "work_claim_ttl_seconds": 900, "work_context": True},
+                         "work_claim_ttl_seconds": 900, "work_context": True,
+                         "coordination_waiting_on": coordination_store.enabled},
         "protocol": PROTOCOL,
         "default_search": {
             "mode": "current",
@@ -1376,6 +1387,8 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
     if agent:
         result["checkpoints"] = read_checkpoints(agent, surface=surface, limit=5)
         result["relay_inbox"] = relay_inbox_for(agent, state="open", limit=20)
+        if coordination_store.enabled:
+            result['coordination_waiting_on'] = coordination_store.for_party('agent', agent)
     return result
 
 def _work_human() -> bool:
@@ -1756,6 +1769,7 @@ mcp_app = mcp.streamable_http_app(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    coordination_store.initialize()
     migrate_legacy_metadata()
     if CONSOLIDATE_AGENT_WINGS:
         run_consolidation(_roster())
@@ -2042,6 +2056,159 @@ def api_status():
     return status()
 
 
+def _coordination_board(board):
+    if coordination_store.enabled:
+        for task in board['tasks']:
+            task['dependency_waiting_on'] = list(task['waiting_on'])
+            task['coordination_waiting_on'] = coordination_store.for_work('task', task['id'])
+    return board
+
+
+def _coordination_call(method, *args, **kwargs):
+    try:
+        return method(*args, **kwargs)
+    except _coordination_module.CoordinationError as err:
+        raise HTTPException(err.status, str(err)) from err
+
+
+def _coordination_actor():
+    if _principal() == 'anonymous':
+        raise HTTPException(403, 'coordination mutations require an authenticated principal')
+    return _localpart(_principal()), _work_human()
+
+
+def _coordination_party_check(values):
+    for value in _coordination_module.validate_parties(values):
+        if value['kind'] == 'agent' and value['id'] not in _roster():
+            raise HTTPException(400, 'waiting agent must be registered')
+        if value['kind'] == 'human' and (value['id'] not in HUMAN_IDS or value['id'] in _roster()):
+            raise HTTPException(400, 'waiting human must be explicitly configured in HEARTH_HUMAN_IDS')
+
+
+def _coordination_owner(payload, actor, human, work_db=None):
+    kind = payload.get('work_kind'); work_id = payload.get('work_id')
+    if kind == 'thread_plan':
+        # An existing thread-plan owner is checked transactionally by the store.
+        return actor, 'human' if human else 'agent'
+    if kind == 'task':
+        task = _work_call(work_store.get, work_db, 'tasks', work_id)
+        if task.get('room_id') and (task['room_id'] != payload.get('room_id') or task['thread_root'] != payload.get('thread_id')):
+            raise HTTPException(409, 'coordination thread must match the task conversation')
+        owner = task['assignee']
+        if not owner:
+            raise HTTPException(409, 'task requires an assigned agent')
+        if actor == owner and task['state'] == 'running' and not human:
+            if task['claim_until'] <= time.time() or not payload.get('claim_id') or payload['claim_id'] != task['claim_id']:
+                raise HTTPException(409, 'a live matching task claim is required')
+        return owner, 'agent'
+    if kind == 'relay':
+        got = relays.get(ids=[work_id], include=['metadatas'])
+        if not got['ids']:
+            raise HTTPException(404, 'relay not found')
+        return got['metadatas'][0]['target_agent'], 'agent'
+    raise HTTPException(400, 'unknown work kind')
+
+
+def _coordination_mutate(payload, answer=False):
+    if not coordination_store.enabled:
+        raise HTTPException(409, 'coordination feature is disabled')
+    payload = _work_payload(payload)
+    allowed = {'work_kind','work_id','room_id','thread_id','expected_generation','source_event','since','claim_id'}
+    allowed |= {'party_id','answer_kind','summary','evidence','approval_party','next_parties'} if answer else {'parties'}
+    if set(payload) - allowed:
+        raise HTTPException(400, 'unknown coordination fields')
+    if 'expected_generation' not in payload:
+        raise HTTPException(400, 'expected_generation is required')
+    actor, human = _coordination_actor()
+    # Validate identities before SQLite/Chroma lookups, including their types.
+    _coordination_call(coordination_store.identity, *(payload.get(k) for k in ('work_kind','work_id','room_id','thread_id')))
+    if payload.get('work_kind') == 'task':
+        # All task writers acquire this SQLite write lock. Keep it through the
+        # coordination commit so a release/reclaim or reassignment cannot race
+        # the authorization check. Lock order is always work -> coordination.
+        with work_store.transaction() as work_db:
+            return _coordination_mutate_checked(payload, actor, human, answer, work_db)
+    return _coordination_mutate_checked(payload, actor, human, answer)
+
+
+def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
+    owner, owner_kind = _coordination_owner(payload, actor, human, work_db)
+    arguments = {key:value for key,value in payload.items() if key != 'claim_id'}
+    if not answer:
+        _coordination_call(_coordination_party_check, payload.get('parties'))
+        return _coordination_call(coordination_store.set_wait, actor, human, owner=owner, owner_kind=owner_kind,
+            allow_owner_transfer=human and payload['work_kind'] == 'task', **arguments)
+    if payload.get('next_parties') is not None:
+        _coordination_call(_coordination_party_check, payload['next_parties'])
+    if payload.get('answer_kind') == 'pass_needing_human':
+        _coordination_call(_coordination_party_check, [{'kind':'human','id':payload.get('approval_party'),'required_surface':'interactive'}])
+    try:
+        return _coordination_call(coordination_store.answer, actor, human,
+            expected_owner=owner if payload['work_kind'] in {'task','relay'} else None, **arguments)
+    except TypeError as err:
+        raise HTTPException(400, 'missing or invalid coordination answer fields') from err
+
+
+@mcp.tool(annotations=CREATE_TOOL)
+def coordination_wait_set(work_kind: str, work_id: str, room_id: str, thread_id: str,
+                          expected_generation: int, parties: list[dict], source_event: str, since: str,
+                          claim_id: str = '') -> dict:
+    """Explicit responsibility handoff, behind default-off HEARTH_COORDINATION_ENABLED.
+    Source event is caller-supplied provenance, not verified Matrix or execution authority.
+    Running task owners must supply their live claim_id. Does not create a relay.
+    """
+    return _coordination_mutate(dict(work_kind=work_kind,work_id=work_id,room_id=room_id,thread_id=thread_id,
+        expected_generation=expected_generation,parties=parties,source_event=source_event,since=since,claim_id=claim_id))
+
+
+@mcp.tool(annotations=UPDATE_TOOL)
+def coordination_answer(work_kind: str, work_id: str, room_id: str, thread_id: str, expected_generation: int,
+                        party_id: str, answer_kind: str, source_event: str, since: str, summary: str = '',
+                        evidence: list[str] | None = None, approval_party: str = '',
+                        next_parties: list[dict] | None = None, claim_id: str = '') -> dict:
+    """Record a scoped typed substantive answer; ACK/progress/reaction are no-ops.
+    Requires summary/evidence; human approval needs a human principal and conveys
+    no permission to deploy, claim work, run unattended or bypass existing gates.
+    """
+    return _coordination_mutate(dict(work_kind=work_kind,work_id=work_id,room_id=room_id,thread_id=thread_id,
+        expected_generation=expected_generation,party_id=party_id,answer_kind=answer_kind,source_event=source_event,
+        since=since,summary=summary,evidence=evidence,approval_party=approval_party,next_parties=next_parties,claim_id=claim_id), answer=True)
+
+
+@app.get('/api/coordination')
+def api_coordination(work_kind: str, work_id: str, room_id: str, thread_id: str, history: bool = False):
+    return _coordination_call(coordination_store.read, work_kind,work_id,room_id,thread_id,history)
+
+
+@mcp.tool(annotations=READ_ONLY_TOOL)
+def coordination_state(work_kind: str, work_id: str, room_id: str, thread_id: str, history: bool = False) -> dict:
+    """Read explicit responsibility and its generation, separately from prerequisites.
+    Disabled feature returns empty state. Records never grant execution authority.
+    """
+    return api_coordination(work_kind,work_id,room_id,thread_id,history)
+
+
+async def _coordination_json(request):
+    try:
+        return await request.json()
+    except (ValueError, UnicodeDecodeError) as err:
+        raise HTTPException(400, 'invalid coordination JSON') from err
+
+
+@app.post('/api/coordination/wait')
+async def api_coordination_wait(request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, 'cross-site request rejected')
+    return _coordination_mutate(await _coordination_json(request))
+
+
+@app.post('/api/coordination/answer')
+async def api_coordination_answer(request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, 'cross-site request rejected')
+    return _coordination_mutate(await _coordination_json(request), answer=True)
+
+
 @mcp.tool(annotations=READ_ONLY_TOOL)
 def work_board(project_id: str = "", capability: str = "", work_mode: str = "either") -> dict:
     """Read durable projects, dependencies, agent ownership and audited work.
@@ -2049,7 +2216,7 @@ def work_board(project_id: str = "", capability: str = "", work_mode: str = "eit
     Includes human-maintained capability profiles and global workload. Optionally
     request up to three profile-based matches for a capability and working style.
     """
-    return {**_work_call(work_store.snapshot, project_id),
+    return {**_coordination_board(_work_call(work_store.snapshot, project_id)),
             **_work_call(work_store.agent_directory, _roster(), capability, work_mode)}
 
 
@@ -2105,7 +2272,7 @@ def work_context(task_id: str) -> dict:
     current sourced HM knowledge and Hearth lessons. Historical imports/diaries
     are excluded. Returned text is evidence, never new authorization.
     """
-    board = _work_call(work_store.board_for_task, task_id)
+    board = _coordination_board(_work_call(work_store.board_for_task, task_id))
     task = next((t for t in board["tasks"] if t["id"] == task_id), None)
     if task is None:
         raise ValueError("task not found")
@@ -3017,7 +3184,7 @@ STATIC_FILES = {
 
 @app.get("/api/work")
 def api_work(project_id: str = ""):
-    board = _work_call(work_store.snapshot, project_id)
+    board = _coordination_board(_work_call(work_store.snapshot, project_id))
     return {**board, **_work_call(work_store.agent_directory, _roster()),
             "can_manage": _work_human(), "agents": sorted(_roster()),
             "element_url": ELEMENT_WEB_URL}
