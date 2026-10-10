@@ -32,6 +32,10 @@ from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+_dashboard_spec = importlib.util.spec_from_file_location('hearth_dashboard_projection', os.path.join(os.path.dirname(__file__), 'dashboard.py'))
+_dashboard = importlib.util.module_from_spec(_dashboard_spec)
+_dashboard_spec.loader.exec_module(_dashboard)
+
 DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 APP_VERSION = os.environ.get("HEARTH_MEMORY_VERSION", "0.8.0")
@@ -2398,6 +2402,8 @@ def _is_human(sender: str, agents: set[str]) -> bool:
 
 def _cadence_for(*hints: str) -> int | None:
     text = " ".join(h for h in hints if h).lower()
+    if any(hint in text for hint in ('listener', 'mention', 'event-driven', 'auto-wake', 'on-demand')):
+        return None
     for hint, minutes in _CADENCE_HINTS:
         if hint in text:
             return minutes if minutes != 60 else SURFACE_CADENCE_MINUTES
@@ -2615,8 +2621,9 @@ def _build_inbox(data: dict, agents: set[str]) -> dict:
             entry.update(kind=kind, label=labels[kind], age_minutes=age,
                          at=datetime.fromtimestamp(it["ts"] / 1000, tz=timezone.utc).isoformat())
             items.append(entry)
-    rank = {"blocked": 0, "approval": 1, "question": 2, "unclaimed_task": 3}
-    items.sort(key=lambda i: (rank[i["kind"]], i["ts"]))
+    for item in items:
+        item['source_refs'] = [item['event_id']]
+    items.sort(key=lambda i: (0 if i['kind'] == 'blocked' else 1, i['ts']))
     counts: dict[str, int] = {}
     for i in items:
         counts[i["kind"]] = counts.get(i["kind"], 0) + 1
@@ -2649,12 +2656,22 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
             s.update(last_post_ts=ev["ts"], last_post_room=ev["room"],
                      last_post_tag=ev["tag"], last_post_event=ev["event_id"], last_post_room_id=ev["room_id"])
 
-    got = checkpoints.get(include=["metadatas"])
-    for meta in got["metadatas"]:
+    got = checkpoints.get(include=["metadatas", "documents"])
+    watchers = []
+    for checkpoint_id, meta, content in zip(got['ids'], got['metadatas'], got['documents']):
         s = row((meta.get("agent") or "").lower(), (meta.get("surface") or "").lower())
         s["monitors"].append(meta.get("monitor", ""))
         if (meta.get("updated_at") or "") > s["checkpoint_at"]:
             s["checkpoint_at"] = meta.get("updated_at") or ""
+        cadence = _cadence_for(meta.get('monitor', ''))
+        parsed = _parse_ts(meta.get('updated_at'))
+        age = (time.time() - parsed.timestamp()) / 60 if parsed else None
+        fields = _dashboard.receipt(content)
+        watchers.append({'key': s['key'], 'agent': s['agent'], 'surface': s['surface'],
+                         'monitor': meta.get('monitor', ''), 'age_minutes': round(age, 1) if age is not None else None,
+                         'expected_every_minutes': cadence, 'state': _dashboard.watcher_state(age, cadence, fields),
+                         'checkpoint_at': meta.get('updated_at'), 'source_refs': [checkpoint_id],
+                         'receipt': fields})
 
     out = []
     now_ms = time.time() * 1000
@@ -2663,17 +2680,11 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
         cp_ms = cp.timestamp() * 1000 if cp else 0
         last_seen_ms = max(s["last_post_ts"], cp_ms)
         cadence = _cadence_for(*s["roles"], *s["monitors"])
-        age_min = int((now_ms - last_seen_ms) / 60000) if last_seen_ms else None
-        if age_min is None:
-            state = "unknown"
-        elif cadence is None:
-            state = "on-demand"
-        elif age_min <= cadence * 1.5:
-            state = "ok"
-        elif age_min <= cadence * 3:
-            state = "late"
-        else:
-            state = "stalled"
+        age_min = (now_ms - last_seen_ms) / 60000 if last_seen_ms else None
+        state = _dashboard.watcher_state(age_min, cadence, {})
+        own_watchers = [w for w in watchers if w['key'] == s['key']]
+        if any(w['state'] == 'failed' for w in own_watchers):
+            state = 'failed'
         out.append({
             "key": s["key"], "agent": s["agent"], "surface": s["surface"],
             "roles": sorted(s["roles"]), "monitors": sorted(set(s["monitors"])),
@@ -2685,9 +2696,12 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
             "checkpoint_at": s["checkpoint_at"] or None,
             "last_seen_at": datetime.fromtimestamp(last_seen_ms / 1000, tz=timezone.utc).isoformat() if last_seen_ms else None,
             "age_minutes": age_min, "expected_every_minutes": cadence, "state": state,
+            "source_refs": ([s['last_post_event']] if s['last_post_event'] else []) + [ref for w in own_watchers for ref in w['source_refs']],
         })
     out.sort(key=lambda s: (s["agent"], s["surface"]))
-    return {"generated_at": _now(), "count": len(out), "surfaces": out}
+    # Signed-post-only surfaces stay visible when no checkpoint exists for them.
+    watchers.extend({**s, 'monitor': 'Observed posts'} for s in out if not any(w['key'] == s['key'] for w in watchers))
+    return {"generated_at": _now(), "count": len(out), "surfaces": out, 'watchers': watchers}
 
 
 def _build_timeline(data: dict, agents: set[str], days: int) -> dict:
@@ -3015,6 +3029,7 @@ async def api_timeline(days: int = 7):
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 STATIC_FILES = {
+    "slice.js": "application/javascript; charset=utf-8",
     "app.js": "application/javascript; charset=utf-8",
     "work.js": "application/javascript; charset=utf-8",
     "app.css": "text/css; charset=utf-8",
@@ -3033,6 +3048,32 @@ def api_work(project_id: str = ""):
 def api_work_agents(capability: str = "", work_mode: str = "either"):
     return {**_work_call(work_store.agent_directory, _roster(), capability, work_mode),
             "can_manage": _work_human()}
+
+
+@app.get('/api/dashboard/work')
+def api_dashboard_work():
+    return {'generated_at': _now(), 'items': _dashboard.work_items(work_store.snapshot(), api_relays()['entries'], time.time())}
+
+
+_HEALTH_CACHE = {'key': None, 'value': None, 'at': 0}
+
+
+@app.get('/api/dashboard/memory-health')
+def api_dashboard_memory_health():
+    rows = [(i, {**m, 'record_class': m.get('record_class') or _classify(m)}) for i, m in _all_metadata()]
+    key = tuple((i, m.get('created_at'), m.get('record_class'), m.get('wing'), m.get('room'), m.get('superseded_by'), m.get('retracted')) for i, m in rows)
+    if _HEALTH_CACHE['key'] == key and time.monotonic() - _HEALTH_CACHE['at'] < 300:
+        return _HEALTH_CACHE['value']
+    ids = sorted(i for i, m in rows if m['record_class'] == 'knowledge')[:250]
+    embeddings = []
+    try:
+        got = drawers.get(ids=ids, include=['embeddings']) if ids else {'ids': [], 'embeddings': []}
+        ids, embeddings = got['ids'], got['embeddings']
+    except Exception:
+        ids, embeddings = [], None
+    result = {'generated_at': _now(), **_dashboard.memory_health(rows, ids, embeddings, DUP_DISTANCE)}
+    _HEALTH_CACHE.update(key=key, value=result, at=time.monotonic())
+    return result
 
 
 @app.post("/api/work/agents/{agent}/profile")

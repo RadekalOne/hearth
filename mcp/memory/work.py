@@ -329,6 +329,15 @@ class WorkStore:
                 tasks = [t for t in tasks if t["project_id"] == project_id]
             history = db.execute("SELECT * FROM activity WHERE (?='' OR project_id=?) ORDER BY seq DESC LIMIT 200",
                                  (project_id, project_id)).fetchall()
+            transitions = {'draft': ('task_proposed', 'revise', 'release'), 'ready': ('ready',),
+                           'running': ('claim',), 'review': ('review',), 'blocked': ('block',), 'done': ('accept',)}
+            for task in tasks:
+                kinds = transitions.get(task['state'], ())
+                if kinds:
+                    placeholders = ','.join('?' for _ in kinds)
+                    last = db.execute(f'SELECT at FROM activity WHERE task_id=? AND kind IN ({placeholders}) ORDER BY seq DESC LIMIT 1',
+                                      (task['id'], *kinds)).fetchone()
+                    task['state_since'] = last[0] if last else None
         by_id = {t["id"]: t for t in tasks}
         for task in tasks:
             task["waiting_on"] = [d for d in task["dependencies"] if by_id[d]["state"] != "done"]

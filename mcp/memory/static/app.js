@@ -143,8 +143,8 @@ async function signIn(body) {
 // ---------------------------------------------------------------- router + refresh
 const VIEWS = { overview: renderOverview, memory: renderMemory, agents: renderAgents, relays: renderRelays };
 function currentRoute() {
-  const r = (location.hash || "#overview").slice(1).split("/")[0];
-  return VIEWS[r] ? r : "overview";
+  const r = (location.hash || "#now").slice(1).split("/")[0];
+  return r === 'overview' ? 'now' : VIEWS[r] ? r : "now";
 }
 async function render() {
   if (!state.authed) return;

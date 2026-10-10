@@ -1,0 +1,109 @@
+/* Dashboard first slice. Read-only projections; existing human actions remain intact. */
+'use strict';
+const stateName = s => ({'on-demand':'Event-driven',ok:'On schedule',queued:'Queued',claimed:'Claimed',running:'Running',review:'Review',blocked:'Blocked',done:'Done',proposed:'Proposed',failed:'Failed',stalled:'Stalled',late:'Late',unknown:'Unconfirmed'})[s] || s;
+const stateTone = s => ['failed','stalled','blocked'].includes(s) ? 'bad' : s==='late' ? 'warn' : '';
+const sliceResult = promise => promise.then(value=>({ok:true,value}), error=>{if(error instanceof AuthRequired)throw error;return {ok:false};});
+function sliceHeading(view,title,note) {
+  clear(view).append(h('div',{class:'slice-heading'},h('p',{class:'eyebrow',text:'Hearth / workspace'}),h('h1',{text:title}),h('p',{class:'takeaway',text:note})),h('p',{class:'load-status',role:'status',text:''}));
+}
+function loadFailure(view,results) {view.querySelector('.load-status').textContent=results.some(r=>!r.ok)?'Failed to load':'';}
+function sourceLinks(refs,context={}) {
+  return h('div',{class:'source-refs'},...(refs||[]).map(ref=> {
+    const click=()=>inspectSliceSource(ref,context);
+    return h('button',{class:'link mono',text:ref,onClick:click});
+  }));
+}
+async function inspectSliceSource(ref,context) {
+  if(ref.startsWith('drawer_'))return openDrawer(ref);
+  if(ref.startsWith('checkpoint_'))return openSurface(context);
+  if(ref.startsWith('$'))return openActivity(context.room_id,ref);
+  try {
+    if(ref.startsWith('task_')) {const board=await api('/api/work');const task=board.tasks.find(t=>t.id===ref);if(task)return openWorkTask(task,board);}
+    if(ref.startsWith('relay_')) {const relays=await api('/api/relays');const relay=relays.entries.find(r=>r.relay_id===ref);if(relay){const {panel}=inspectionPanel('Relay evidence');panel.lastChild.remove();panel.append(detailFields(['Relay',ref],['State',relay.state],['Created',relay.created_at],['Updated',relay.updated_at],['Source',relay.source||'Unconfirmed']));return;}}
+    throw Error('Source unavailable');
+  } catch(error) {if(error instanceof AuthRequired)return;const {panel}=inspectionPanel('Source evidence');panel.lastChild.textContent='Failed to load';}
+}
+function watcherRow(w) {
+  return h('div',{class:'watcher-row'},h('div',null,h('strong',{text:w.agent}),h('span',{class:'dim',text:` / ${w.surface}`}),h('p',{text:w.monitor||'Observed activity'})),
+    h('span',{class:`pill ${stateTone(w.state)}`,text:stateName(w.state)}),
+    h('span',{class:'watcher-age',text:w.state==='on-demand'?'Event-driven':`${minutes(w.age_minutes)} since receipt`}),sourceLinks(w.source_refs,w));
+}
+async function renderNow(view) {
+  sliceHeading(view,'Now','Checking what needs your attention.');
+  const waiting=section('Waiting on you','Failures first, then oldest. Every item links to its evidence.',null,h('div',{class:'reserved-body'}));
+  const awake=section('Who is awake','Receipt failures take precedence. Late after 1.5× cadence; stalled after 3×.',null,h('div',{class:'reserved-body'}));
+  view.append(waiting,awake);
+  const [inbox,surfaces]=await Promise.all([sliceResult(api('/api/inbox')),sliceResult(api('/api/surfaces'))]);
+  loadFailure(view,[inbox,surfaces]);
+  const watchers=surfaces.ok?(surfaces.value.watchers||surfaces.value.surfaces||[]):[];
+  const attention=watchers.filter(w=>['failed','stalled','late'].includes(w.state)).sort((a,b)=>({failed:0,stalled:1,late:2}[a.state])-({failed:0,stalled:1,late:2}[b.state])||(b.age_minutes||0)-(a.age_minutes||0));
+  const totals=Object.fromEntries(['failed','stalled','late'].map(s=>[s,attention.filter(w=>w.state===s).length]));
+  view.querySelector('.takeaway').textContent=inbox.ok&&surfaces.ok?`${plural(inbox.value.total,'item')} waiting · ${totals.failed} failed · ${totals.stalled} stalled · ${totals.late} late watchers.`:'Some attention data is unavailable.';
+  const inboxBody=clear(waiting.querySelector('.reserved-body'));
+  if(inbox.ok) {
+    if(inbox.value.element_url)elementBase=inbox.value.element_url;
+    if(!inbox.value.items.length)inboxBody.append(h('p',{class:'empty',text:'Nothing is waiting on you right now.'}));
+    for(const item of inbox.value.items)inboxBody.append(h('div',{class:'inbox-with-source'},inboxRow(item),sourceLinks(item.source_refs||[item.event_id],item)));
+  }
+  const watcherBody=clear(awake.querySelector('.reserved-body'));
+  if(surfaces.ok) {
+    watcherBody.append(...attention.map(watcherRow));
+    if(!attention.length)watcherBody.append(h('p',{class:'empty',text:'No watchers need attention.'}));
+    const ordinary=watchers.filter(w=>w.state==='ok');
+    const other=watchers.filter(w=>['on-demand','unknown'].includes(w.state));
+    if(ordinary.length)watcherBody.append(h('details',null,h('summary',{text:`${ordinary.length} on schedule`}),...ordinary.map(watcherRow)));
+    if(other.length)watcherBody.append(h('details',null,h('summary',{text:'Event-driven and unconfirmed'}),...other.map(watcherRow)));
+  }
+}
+async function renderWorkSlice(view) {
+  sliceHeading(view,'Work','Checking the work lifecycle.');
+  const card=section('Work lifecycle','Queued work has not started. The current work store records claims; execution is unverified.',null,h('div',{class:'reserved-body'}));
+  view.append(card,h('a',{class:'utility-link',href:'#projects',text:'Open project workspace'}));
+  const result=await sliceResult(api('/api/dashboard/work'));loadFailure(view,[result]);
+  if(!result.ok)return;
+  const items=result.value.items;
+  view.querySelector('.takeaway').textContent=`${plural(items.length,'item')} across queued, claimed, running, review, blocked and done.`;
+  const body=clear(card.querySelector('.reserved-body'));
+  if(!items.length)body.append(h('p',{class:'empty',text:'No work is recorded.'}));
+  else body.append(table([
+    {label:'Item',cell:i=>h('div',null,h('strong',{text:i.title}),sourceLinks(i.source_refs,i))},
+    {label:'State',cell:i=>h('span',{class:`pill ${stateTone(i.state)}`,text:stateName(i.state)})},
+    {label:'Age',cell:i=>h('span',{title:i.age_basis,text:minutes(i.age_minutes)})},
+    {label:'Owner',cell:i=>i.owner||'Unassigned'},
+    {label:'Since',cell:i=>when(i.state_since)||'Unconfirmed'},
+  ],items));
+}
+async function renderMemorySlice(view) {
+  sliceHeading(view,'Memory','Knowledge only by default.');
+  const card=section('Memory health','Knowledge only. Noise is diary, import and archive records as a share of all drawers.',null,h('div',{class:'reserved-body health-grid'}));
+  view.append(card);
+  const health=await sliceResult(api('/api/dashboard/memory-health'));loadFailure(view,[health]);
+  if(health.ok) {
+    const data=health.value;
+    view.querySelector('.takeaway').textContent=`${data.knowledge_count.toLocaleString()} knowledge drawers · ${(100*data.noise_ratio).toFixed(1)}% noise · ${data.superseded_count} superseded records.`;
+    const metrics=[['Knowledge only',data.knowledge_count],['Noise ratio',`${(100*data.noise_ratio).toFixed(1)}%`],['Superseded',data.superseded_count],['Near-duplicate pairs',data.near_duplicate_pair_count??'Unavailable']];
+    const grid=clear(card.querySelector('.reserved-body'));
+    for(const [label,value] of metrics)grid.append(h('div',{class:'health-metric'},h('p',{class:'dim',text:label}),h('strong',{text:typeof value==='number'?value.toLocaleString():value}),h('button',{class:'link',text:'View source drawers',onClick:()=>{const {panel}=inspectionPanel(label+' sources');panel.lastChild.remove();panel.append(h('p',{text:'Counts derived from these source records.'}),sourceLinks(data.source_refs));}})));
+    card.append(h('p',{class:'coverage',text:data.duplicate_coverage.complete?'Duplicate scan covers all knowledge drawers.':`Duplicate scan covers ${data.duplicate_coverage.scanned} of ${data.duplicate_coverage.total} knowledge drawers; the pair count is a lower bound.`}));
+  }
+  const browser=h('div',{class:'memory-browser'});view.append(browser);
+  try {await renderMemory(browser);}catch(error){if(error instanceof AuthRequired)throw error;view.querySelector('.load-status').textContent='Failed to load';}
+  for(const el of browser.querySelectorAll('.wing,.room,.drawer')) {
+    el.setAttribute('tabindex','0');el.setAttribute('role','button');
+    el.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();el.click();}});
+  }
+}
+VIEWS.now=renderNow;VIEWS.overview=renderNow;VIEWS.work=renderWorkSlice;VIEWS.memory=renderMemorySlice;
+const sliceTabs=[...document.querySelectorAll('#tabs a')];
+for(const tab of sliceTabs) {
+  tab.setAttribute('role','tab');tab.setAttribute('aria-controls','view');
+  tab.addEventListener('keydown',event=>{
+    const idx=sliceTabs.indexOf(tab);let next;
+    if(event.key==='ArrowRight')next=(idx+1)%sliceTabs.length;
+    if(event.key==='ArrowLeft')next=(idx+sliceTabs.length-1)%sliceTabs.length;
+    if(event.key==='Home')next=0;if(event.key==='End')next=sliceTabs.length-1;
+    if(next!==undefined){event.preventDefault();sliceTabs[next].focus();}
+  });
+}
+function updateSliceTabs() {for(const tab of sliceTabs){const selected=tab.dataset.route===currentRoute()||(tab.dataset.route==='now'&&currentRoute()==='overview');tab.setAttribute('aria-selected',String(selected));tab.setAttribute('tabindex',selected?'0':'-1');tab.classList.toggle('active',selected);}}
+window.addEventListener('hashchange',updateSliceTabs);updateSliceTabs();

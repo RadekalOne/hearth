@@ -22,6 +22,17 @@ class WorkTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_snapshot_state_age_survives_bounded_history_and_memory_updates(self):
+        task=self.store.create_task('rad',self.project['id'],{'title':'Age fixture','acceptance':'Verified','assignee':'codex'},{'codex'})
+        self.store.action('rad',True,task['id'],{'action':'ready','revision':task['revision']},{'codex'})
+        ready_at=next(e['at'] for e in self.store.snapshot()['activity'] if e['kind']=='ready')
+        for n in range(205):
+            self.store.comment('codex',task['id'],f'Note {n}')
+        self.store.link_memory('codex',task['id'],'drawer_fixture')
+        snapshot=self.store.snapshot()
+        self.assertEqual(len(snapshot['activity']),200)
+        self.assertEqual(snapshot['tasks'][0].get('state_since'),ready_at)
+
     def task(self, **extra):
         return self.store.create_task("codex", self.project["id"],
             {"title": "Implement", "acceptance": "Tests pass", "assignee": "codex", **extra}, {"codex", "claude"})
