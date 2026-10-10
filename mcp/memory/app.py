@@ -36,7 +36,12 @@ _dashboard_spec = importlib.util.spec_from_file_location('hearth_dashboard_proje
 _dashboard = importlib.util.module_from_spec(_dashboard_spec)
 _dashboard_spec.loader.exec_module(_dashboard)
 
+_ack_spec = importlib.util.spec_from_file_location('hearth_inbox_ack', os.path.join(os.path.dirname(__file__), 'inbox_ack.py'))
+_ack_module = importlib.util.module_from_spec(_ack_spec)
+_ack_spec.loader.exec_module(_ack_module)
+
 DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
+inbox_acknowledgements = _ack_module.Acknowledgements(os.path.join(DATA_DIR,'inbox-acknowledgements.sqlite3'))
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 APP_VERSION = os.environ.get("HEARTH_MEMORY_VERSION", "0.8.0")
 BUILD_COMMIT = os.environ.get("HEARTH_MEMORY_BUILD_COMMIT", "unknown")
@@ -1286,6 +1291,7 @@ def claim_relay(relay_id: str, agent: str, surface: str = "") -> dict:
     updated = {
         **metadata,
         "state": "claimed",
+        "transition_generation": int(metadata.get('transition_generation',0)) + (metadata.get('state') != 'claimed'),
         "claimed_by": _principal(),
         "claimed_surface": surface,
         "updated_at": updated_at,
@@ -1305,6 +1311,7 @@ def resolve_relay(relay_id: str, agent: str, outcome: str) -> dict:
     updated = {
         **metadata,
         "state": "resolved",
+        "transition_generation": int(metadata.get('transition_generation',0)) + 1,
         "claimed_by": metadata.get("claimed_by") or _principal(),
         "outcome": outcome,
         "updated_at": updated_at,
@@ -2574,7 +2581,10 @@ async def _fetch_room_events(force: bool = False) -> dict:
     reactions: list[dict] = []
     room_names: dict[str, str] = {}
     async with httpx.AsyncClient(timeout=15) as client:
-        joined = (await client.get(f"{base}/_matrix/client/v3/joined_rooms", headers=headers)).json()
+        joined_response = await client.get(f"{base}/_matrix/client/v3/joined_rooms", headers=headers)
+        if force and joined_response.status_code != 200:
+            raise HTTPException(503,'Cannot verify current inbox source')
+        joined = joined_response.json()
         for rid in joined.get("joined_rooms", []):
             try:
                 name = (await client.get(
@@ -2584,11 +2594,15 @@ async def _fetch_room_events(force: bool = False) -> dict:
                 name = rid
             room_names[rid] = name
             try:
-                msgs = (await client.get(
+                message_response = await client.get(
                     f"{base}/_matrix/client/v3/rooms/{rid}/messages", headers=headers,
                     params={"dir": "b", "limit": ROOM_FETCH_LIMIT},
-                )).json()
+                )
+                if force and message_response.status_code != 200:
+                    raise HTTPException(503,'Cannot verify current inbox source')
+                msgs = message_response.json()
             except Exception:
+                if force:raise HTTPException(503,'Cannot verify current inbox source')
                 continue
             for e in msgs.get("chunk", []):
                 content = e.get("content") or {}
@@ -3116,13 +3130,65 @@ async def matrix_act(request: Request):
 
 
 @app.get("/api/inbox")
-async def api_inbox():
+async def api_inbox(request: Request):
+    return await _inbox_snapshot(request)
+
+
+def _qualifying_inbox_event(event,item):
+    if event.get('tag_base')=='ACK' or _task_ack_id(event.get('tag',''),event.get('body','')):
+        return False
+    if _localpart(event.get('sender',''))==item.get('sender'):
+        body=re.sub(r'^\s*\[[^\]]+\]\s*','',event.get('body',''))
+        body=re.split(r'\n\s*(?:—|--)',body)[0].strip()
+        if re.fullmatch(r'(?:ack(?:nowledged)?|received|thanks|noted|agreed|understood|looks good)[.! ]*',body,re.I):
+            return False
+    return True
+
+
+async def _inbox_snapshot(request,force=False):
     """What is waiting on a human: plans to approve, blocked agents, questions, and
     tasks nobody has picked up."""
-    data = await _fetch_room_events()
+    data = await _fetch_room_events(force=force) if force else await _fetch_room_events()
     roster = _roster()
     inbox = _build_inbox(data, roster)
-    return _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items())
+    result = _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items())
+    result['items']=[dict(item) for item in result['items']]
+    for item in result['items']:
+        root=item.get('thread_root') or item.get('event_id')
+        related=[e for e in data['events'] if e.get('room_id')==item.get('room_id')
+                 and (e.get('thread_root')==root or e.get('reply_to')==item.get('event_id'))
+                 and _qualifying_inbox_event(e,item)]
+        if related:item['latest_qualifying_event']=max(related,key=lambda e:e['ts'])['event_id']
+    result['items']=inbox_acknowledgements.project(result['items'])
+    result['acknowledged_total']=sum(i['acknowledged'] for i in result['items'])
+    result['open_total']=result['total']-result['acknowledged_total']
+    result['can_acknowledge']=_human_inbox_session(request)
+    return result
+
+
+def _human_inbox_session(request):
+    session=SESSIONS.get(request.cookies.get(SESSION_COOKIE,''))
+    principal=session_principal(request)
+    return bool(session and principal and session.get('auth_kind') in {'matrix','token'}
+                and principal==_principal() and _work_human())
+
+
+@app.post('/api/inbox/acknowledgement')
+async def api_inbox_acknowledgement(request: Request):
+    if not _human_inbox_session(request):
+        raise HTTPException(403,'A human dashboard session is required')
+    if not _same_origin(request):raise HTTPException(403,'cross-site action rejected')
+    try:
+        body=await request.json()
+        if not isinstance(body,dict) or set(body)!={'kind','item_id','state_key','acknowledged'} or type(body['acknowledged']) is not bool:
+            raise ValueError()
+    except (ValueError,TypeError):raise HTTPException(400,'Invalid acknowledgement payload')
+    current=await _inbox_snapshot(request,force=True)
+    item=next((i for i in current['items'] if _ack_module.identity(i)==(body['kind'],body['item_id'])),None)
+    if not item:raise HTTPException(409,'Item is no longer waiting; refresh')
+    try:inbox_acknowledgements.set(item,body['state_key'],session_principal(request),body['acknowledged'])
+    except _ack_module.StaleAcknowledgement as error:raise HTTPException(409,str(error))
+    return {'ok':True}
 
 
 @app.get("/api/surfaces")
