@@ -108,6 +108,10 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         tool_names = {tool.name for tool in tools.tools}
                         tools_by_name = {tool.name: tool for tool in tools.tools}
                         self.assertIn("memory_bootstrap", tool_names)
+                        self.assertTrue({"work_board", "work_context", "work_propose", "work_claim",
+                                         "work_update", "work_comment", "work_remember"} <= tool_names)
+                        self.assertTrue(tools_by_name["work_context"].annotations.read_only_hint)
+                        self.assertFalse(tools_by_name["work_claim"].annotations.read_only_hint)
                         self.assertTrue(
                             {"relay_request", "relay_inbox", "relay_claim", "relay_resolve"}
                             <= tool_names

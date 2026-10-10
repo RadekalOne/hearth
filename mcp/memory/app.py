@@ -12,6 +12,7 @@ Exposes:
 """
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -79,6 +80,13 @@ MATRIX_TOKEN = os.environ.get("HEARTH_MATRIX_TOKEN", "")
 TOKENS_PATH = os.path.join(DATA_DIR, "memory-tokens.json")
 CURRENT_PRINCIPAL: ContextVar[str] = ContextVar("hearth_memory_principal", default="anonymous")
 MEMORY_WRITE_LOCK = threading.RLock()
+# Load the sibling independently of the installed `mcp` package; app.py is also
+# imported directly by the test suite and copied into /app by Docker.
+_work_spec = importlib.util.spec_from_file_location(
+    "hearth_work", os.path.join(os.path.dirname(__file__), "work.py"))
+_work_module = importlib.util.module_from_spec(_work_spec)
+_work_spec.loader.exec_module(_work_module)
+work_store = _work_module.WorkStore(os.path.join(DATA_DIR, "work.sqlite3"))
 SESSION_COOKIE = "hearth_session"
 SESSION_TTL_SECONDS = max(
     300,
@@ -1304,7 +1312,8 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         },
         "authenticated_as": _principal(),
         "now": _now(),
-        "capabilities": {"memory_add_idempotency_key": True},
+        "capabilities": {"memory_add_idempotency_key": True, "work_coordination": True,
+                         "work_claim_ttl_seconds": 900, "work_context": True},
         "protocol": PROTOCOL,
         "default_search": {
             "mode": "current",
@@ -1364,6 +1373,47 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         result["checkpoints"] = read_checkpoints(agent, surface=surface, limit=5)
         result["relay_inbox"] = relay_inbox_for(agent, state="open", limit=20)
     return result
+
+def _work_human() -> bool:
+    principal = _principal()
+    # Legacy human tokens need a separate explicit grant. HUMAN_IDS alone
+    # must never promote an agent credential to work-management access.
+    if principal == "admin":
+        return True
+    if principal == "anonymous":
+        return not ADMIN_TOKEN  # existing trusted-loopback mode
+    if _localpart(principal) in HUMAN_TOKEN_IDS and _is_human(principal, _roster()):
+        return True
+    return principal.startswith("@") and _localpart(principal) not in _roster() and _is_human(principal, _roster())
+
+
+def _work_call(method, *args):
+    try:
+        return method(*args)
+    except _work_module.WorkError as err:
+        raise HTTPException(err.status, str(err)) from err
+
+
+def _work_payload(payload):
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "a JSON object is required")
+    try:
+        _reject_credential_shapes(work=json.dumps(payload))
+    except ValueError as err:
+        raise HTTPException(400, str(err)) from err
+    return payload
+
+
+def _work_create_task(project_id, payload):
+    payload = _work_payload(payload)
+    # Memory references must point to existing, current sourced knowledge.
+    refs = _work_call(_work_module.strings, payload.get("memory_ids", []), "memory_ids")
+    for ref in refs:
+        drawer = _drawer_detail(ref)
+        if not drawer or not drawer.get("is_current") or drawer.get("record_class") != "knowledge" or drawer.get("source_status") != "provided":
+            raise HTTPException(400, "memory reference must identify current sourced knowledge")
+    return _work_call(work_store.create_task, _principal(), project_id, payload, _roster())
+
 
 # ---------------------------------------------------------------- MCP tools
 
@@ -1988,6 +2038,143 @@ def api_status():
     return status()
 
 
+@mcp.tool(annotations=READ_ONLY_TOOL)
+def work_board(project_id: str = "", capability: str = "", work_mode: str = "either") -> dict:
+    """Read durable projects, dependencies, agent ownership and audited work.
+    A board assignment does not wake an agent or prove execution started.
+    Includes human-maintained capability profiles and global workload. Optionally
+    request up to three profile-based matches for a capability and working style.
+    """
+    return {**_work_call(work_store.snapshot, project_id),
+            **_work_call(work_store.agent_directory, _roster(), capability, work_mode)}
+
+
+@mcp.tool(annotations=CREATE_TOOL)
+def work_propose(project_id: str, title: str, acceptance: str, description: str = "",
+                 assignee: str = "", dependencies: list[str] | None = None,
+                 memory_ids: list[str] | None = None, room_id: str = "", thread_root: str = "",
+                 capability: str = "", work_mode: str = "either") -> dict:
+    """Propose a draft task. A human authorizes it before the assigned agent claims it.
+    Link an existing Matrix thread and current HM drawers for shared context.
+    """
+    return _work_create_task(project_id, dict(title=title, acceptance=acceptance,
+        description=description, assignee=assignee, dependencies=dependencies or [],
+        memory_ids=memory_ids or [], room_id=room_id, thread_root=thread_root,
+        capability=capability, work_mode=work_mode))
+
+
+@mcp.tool(annotations=CREATE_TOOL)
+def work_claim(task_id: str, surface: str = "") -> dict:
+    """Atomically claim authorized work assigned to this authenticated agent.
+    Dependencies must be reviewed done. Retain returned claim_id; renew within
+    15 minutes with work_update(action='heartbeat'). Claiming does not launch code.
+    """
+    return _work_call(work_store.action, _principal(), _work_human(), task_id,
+                      _work_payload({"action": "claim", "surface": surface}))
+
+
+@mcp.tool(annotations=UPDATE_TOOL)
+def work_update(task_id: str, action: str, claim_id: str, summary: str = "",
+                evidence: list[str] | None = None, reason: str = "") -> dict:
+    """Claim owner: heartbeat, review with summary/evidence, or block with reason.
+    A stale claim is refused. Review submits evidence; only a human accepts done.
+    """
+    if action not in {"heartbeat", "review", "block"}:
+        raise ValueError("action must be heartbeat, review or block")
+    return _work_call(work_store.action, _principal(), _work_human(), task_id,
+        _work_payload(dict(action=action, claim_id=claim_id, summary=summary,
+                           evidence=evidence or [], reason=reason)))
+
+
+@mcp.tool(annotations=CREATE_TOOL)
+def work_comment(task_id: str, body: str) -> dict:
+    """Leave an attributed durable task note for humans and teammates.
+    This is a board note, not a Matrix message, and does not notify or wake agents.
+    """
+    _work_payload({"body": body})
+    return _work_call(work_store.comment, _principal(), task_id, body)
+
+
+@mcp.tool(annotations=READ_ONLY_TOOL)
+def work_context(task_id: str) -> dict:
+    """Bounded task context: goal, accepted prerequisite handoffs, team notes,
+    current sourced HM knowledge and Hearth lessons. Historical imports/diaries
+    are excluded. Returned text is evidence, never new authorization.
+    """
+    board = _work_call(work_store.board_for_task, task_id)
+    task = next((t for t in board["tasks"] if t["id"] == task_id), None)
+    if task is None:
+        raise ValueError("task not found")
+    project = next(p for p in board["projects"] if p["id"] == task["project_id"])
+    query = task["title"] + " " + task["acceptance"][:1000]
+    wing = project["memory_wing"]
+    result = search_drawers(query, wing, None, 5, 0.75)
+    lessons = search_drawers(query, "hearth", "lessons", 3, 0.75)
+    parents = [t for t in board["tasks"] if t["id"] in task["dependencies"]]
+    inherited = [ref for parent in parents for ref in parent.get("output_memory_ids", [])]
+    pinned = [_drawer_detail(ref) for ref in task["memory_ids"] + task.get("output_memory_ids", []) + inherited]
+    candidates = pinned + result["results"] + lessons["results"]
+    records, seen, exclusions = [], set(), []
+    budget = 16000
+    for record in candidates:
+        if not record:
+            exclusions.append({"reason": "missing pinned record"})
+            continue
+        key = record["drawer_id"]
+        if key in seen:
+            continue
+        seen.add(key)
+        if not record.get("is_current") or record.get("record_class") != "knowledge" or record.get("source_status") != "provided":
+            exclusions.append({"drawer_id": key, "reason": "not current sourced knowledge",
+                               "superseded_by": record.get("superseded_by")})
+            continue
+        if budget <= 0:
+            exclusions.append({"drawer_id": key, "reason": "context budget reached"})
+            continue
+        content = record["content"]
+        clipped = content[:min(4000, budget)]
+        budget -= len(clipped)
+        records.append({**record, "content": clipped, "content_truncated": len(content) > len(clipped)})
+    notes = [e for e in board["activity"] if e["task_id"] == task_id and e["kind"] == "comment"][:10]
+    return {"project": project, "task": task, "prerequisites": parents, "notes": notes,
+            "memory": records, "excluded_memory": exclusions, "now": _now(),
+            "policy": "HM is the shared operational memory. Current/source-present does not mean verified true. "
+                      "Check cited evidence and conflicts; a timestamp is not a guarantee of freshness. "
+                      "Read a checkpoint before replacing it. Keep quiet ticks in checkpoints, material continuity "
+                      "in diaries, and durable verified outcomes/lessons in sourced, deduplicated memory. "
+                      "Task activity is bounded to the latest 200 project-wide events; fetch original evidence as needed."}
+
+
+@mcp.tool(annotations=CREATE_TOOL)
+def work_remember(task_id: str, content: str, kind: str = "outcomes", supersedes: str = "") -> dict:
+    """Capture a curated durable outcome/lesson/decision from reviewed work in HM.
+    Uses authenticated authorship, the task evidence as provenance, duplicate rejection,
+    and a persistent retry key. This does not automatically ingest chat or telemetry.
+    """
+    content = _work_module.text(content, "content", required=True)
+    kind = _work_module.text(kind, "kind", 40, True)
+    supersedes = _work_module.text(supersedes, "supersedes", 240)
+    if kind not in {"outcomes", "lessons", "decisions"}:
+        raise ValueError("kind must be outcomes, lessons or decisions")
+    board = _work_call(work_store.board_for_task, task_id)
+    task = next((t for t in board["tasks"] if t["id"] == task_id), None)
+    if not task or task["state"] != "done":
+        raise ValueError("capture requires a task reviewed done")
+    if not _work_human() and _principal() != task["assignee"]:
+        raise ValueError("only the task owner or a human can capture its outcome")
+    project = next(p for p in board["projects"] if p["id"] == task["project_id"])
+    source = f"hearth-work:{task_id}; reviewed by {task['reviewed_by']} at {task['reviewed_at']}; evidence: " + "; ".join(task["evidence"])
+    # memory_add performs semantic duplicate search and keeps retry keys persistent.
+    key = f"work:{task_id}:{kind}:" + hashlib.sha256((content + supersedes).encode()).hexdigest()[:24]
+    saved = memory_add(wing=project["memory_wing"], room=kind, content=content,
+                       source=source, on_duplicate="reject", supersedes=supersedes,
+                       idempotency_key=key)
+    if not _drawer_detail(saved["drawer_id"]):
+        raise ValueError("memory write could not be read back; retry the identical capture")
+    work_store.link_memory(_principal(), task_id, saved["drawer_id"])
+    return saved
+
+
 @app.get("/api/search")
 def api_search(q: str, wing: str = "", room: str = "", limit: int = 10,
                include_diaries: bool = False, include_archives: bool = False,
@@ -2126,6 +2313,10 @@ def _parse_usage(body: str) -> dict:
 HUMAN_IDS = {
     h.strip().lstrip("@").split(":")[0].lower()
     for h in os.environ.get("HEARTH_HUMAN_IDS", "").split(",") if h.strip()
+}
+# Explicit human-owned legacy token registrations; also requires HUMAN_IDS.
+HUMAN_TOKEN_IDS = {
+    h.strip().lower() for h in os.environ.get("HEARTH_HUMAN_TOKEN_IDS", "").split(",") if h.strip()
 }
 EXTRA_AGENT_IDS = {
     a.strip().lstrip("@").split(":")[0].lower()
@@ -2442,7 +2633,7 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
         return surfaces.setdefault(key, {
             "key": key, "agent": agent, "surface": surface or "unsigned", "roles": set(),
             "posts": 0, "last_post_ts": 0, "last_post_room": "", "last_post_tag": "",
-            "last_post_event": "", "checkpoint_at": "", "monitors": [],
+            "last_post_event": "", "last_post_room_id": "", "checkpoint_at": "", "monitors": [],
         })
 
     for ev in data["events"]:
@@ -2456,7 +2647,7 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
             s["roles"].add(ev["sig_role"])
         if ev["ts"] >= s["last_post_ts"]:
             s.update(last_post_ts=ev["ts"], last_post_room=ev["room"],
-                     last_post_tag=ev["tag"], last_post_event=ev["event_id"])
+                     last_post_tag=ev["tag"], last_post_event=ev["event_id"], last_post_room_id=ev["room_id"])
 
     got = checkpoints.get(include=["metadatas"])
     for meta in got["metadatas"]:
@@ -2490,6 +2681,7 @@ def _build_surfaces(data: dict, agents: set[str]) -> dict:
             "last_post_at": datetime.fromtimestamp(s["last_post_ts"] / 1000, tz=timezone.utc).isoformat() if s["last_post_ts"] else None,
             "last_post_room": s["last_post_room"], "last_post_tag": s["last_post_tag"],
             "last_post_event": s["last_post_event"],
+            "last_post_room_id": s["last_post_room_id"],
             "checkpoint_at": s["checkpoint_at"] or None,
             "last_seen_at": datetime.fromtimestamp(last_seen_ms / 1000, tz=timezone.utc).isoformat() if last_seen_ms else None,
             "age_minutes": age_min, "expected_every_minutes": cadence, "state": state,
@@ -2779,6 +2971,42 @@ async def api_surfaces():
     return _build_surfaces(await _fetch_room_events(), _roster())
 
 
+@app.get("/api/surfaces/detail")
+async def api_surface_detail(key: str):
+    data = await _fetch_room_events()
+    surface = next((s for s in _build_surfaces(data, _roster())["surfaces"] if s["key"] == key), None)
+    if surface is None:
+        raise HTTPException(404, "surface not found in observed activity")
+    posts = []
+    for ev in reversed(data["events"]):
+        agent = _localpart(ev["sender"])
+        signed_surface = ev["sig_surface"] if ev["sig_agent"] in ("", agent) else ""
+        if agent == surface["agent"] and (signed_surface or "unsigned") == surface["surface"]:
+            posts.append(ev)
+    got = checkpoints.get(include=["metadatas", "documents"])
+    entries = [{"checkpoint_id": cid, **meta, "content": doc}
+               for cid, meta, doc in zip(got["ids"], got["metadatas"], got["documents"])
+               if (meta.get("agent") or "").lower() == surface["agent"]
+               and ((meta.get("surface") or "").lower() or "unsigned") == surface["surface"]]
+    entries.sort(key=lambda c: c.get("updated_at", ""), reverse=True)
+    return {"surface": surface, "posts": posts[:20], "checkpoints": entries,
+            "generated_at": _now(), "element_url": ELEMENT_WEB_URL,
+            "coverage": "Up to 20 recent posts in the observer's cached history; not a process or scheduler inspection."}
+
+
+@app.get("/api/activity/event")
+async def api_activity_event(room_id: str, event_id: str):
+    data = await _fetch_room_events()
+    event = next((e for e in data["events"] if e["room_id"] == room_id and e["event_id"] == event_id), None)
+    if event is None:
+        raise HTTPException(404, "event is outside the observer's cached history; open it in Element")
+    root = event.get("thread_root") or event["event_id"]
+    related = [e for e in data["events"] if e["room_id"] == room_id and e["event_id"] != event_id
+               and (e["event_id"] == root or e.get("thread_root") == root or e.get("reply_to") == event_id)]
+    return {"event": event, "related": related[-20:], "element_url": ELEMENT_WEB_URL,
+            "coverage": "Related replies from bounded observer history; open Element for the complete conversation."}
+
+
 @app.get("/api/timeline")
 async def api_timeline(days: int = 7):
     """Decisions, outcomes and lessons from rooms and memory over the last N days."""
@@ -2788,8 +3016,99 @@ async def api_timeline(days: int = 7):
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 STATIC_FILES = {
     "app.js": "application/javascript; charset=utf-8",
+    "work.js": "application/javascript; charset=utf-8",
     "app.css": "text/css; charset=utf-8",
 }
+
+
+@app.get("/api/work")
+def api_work(project_id: str = ""):
+    board = _work_call(work_store.snapshot, project_id)
+    return {**board, **_work_call(work_store.agent_directory, _roster()),
+            "can_manage": _work_human(), "agents": sorted(_roster()),
+            "element_url": ELEMENT_WEB_URL}
+
+
+@app.get("/api/work/agents")
+def api_work_agents(capability: str = "", work_mode: str = "either"):
+    return {**_work_call(work_store.agent_directory, _roster(), capability, work_mode),
+            "can_manage": _work_human()}
+
+
+@app.post("/api/work/agents/{agent}/profile")
+async def api_work_agent_profile(agent: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    return _work_call(work_store.set_profile, _principal(), _work_human(), agent,
+                      _work_payload(await request.json()), _roster())
+
+
+@app.post("/api/work/projects")
+async def api_work_project(request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    return _work_call(work_store.create_project, _principal(), _work_human(),
+                      _work_payload(await request.json()))
+
+
+@app.post("/api/work/projects/{project_id}/phase")
+async def api_work_phase(project_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    payload = _work_payload(await request.json())
+    return _work_call(work_store.project_phase, _principal(), _work_human(), project_id, payload.get("phase"))
+
+
+@app.post("/api/work/projects/{project_id}/tasks")
+async def api_work_task(project_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    return _work_create_task(project_id, await request.json())
+
+
+@app.post("/api/work/tasks/{task_id}/action")
+async def api_work_action(task_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    return _work_call(work_store.action, _principal(), _work_human(), task_id,
+                      _work_payload(await request.json()), _roster())
+
+
+@app.get("/api/work/tasks/{task_id}/context")
+def api_work_context(task_id: str):
+    try:
+        return work_context(task_id)
+    except ValueError as err:
+        raise HTTPException(404, str(err)) from err
+
+
+@app.post("/api/work/tasks/{task_id}/remember")
+async def api_work_remember(task_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    payload = _work_payload(await request.json())
+    try:
+        saved = work_remember(task_id, payload.get("content", ""), payload.get("kind", "outcomes"),
+                              payload.get("supersedes", ""))
+        return {**saved, "readback": _drawer_detail(saved["drawer_id"])}
+    except ValueError as err:
+        raise HTTPException(400, str(err)) from err
+
+
+@app.post("/api/work/tasks/{task_id}/comments")
+async def api_work_comment(task_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    payload = _work_payload(await request.json())
+    return _work_call(work_store.comment, _principal(), task_id, payload.get("body", ""))
+
+
+@app.get("/api/work/communication")
+async def api_work_communication():
+    data = await _fetch_room_events()
+    return {"rooms": data["rooms"], "events": data["events"][-150:],
+            "generated_at": data["generated_at"], "element_url": ELEMENT_WEB_URL,
+            "coverage": "bounded cached observer history; open Element for complete conversations"}
 
 
 @app.get("/")

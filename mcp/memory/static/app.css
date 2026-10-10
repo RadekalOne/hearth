@@ -39,6 +39,39 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 
+/* Project workspace */
+textarea { background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: .55rem .8rem; font: inherit; width: 100%; resize: vertical; }
+.work-toolbar, .work-phases { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.project-brief p { margin-top: .5rem; }
+.work-phases button { text-transform: capitalize; }
+.work-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+.work-board { display: grid; grid-template-columns: repeat(6, minmax(175px, 1fr)); overflow-x: auto; gap: .65rem; margin: 1rem 0; padding-bottom: .7rem; }
+.work-column { background: var(--card-2); padding: .65rem; border-radius: 12px; }
+.work-column h3 { font-size: .85rem; margin-bottom: .6rem; }
+button.work-task { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; width: 100%; margin: .5rem 0; color: var(--text); font-weight: normal; text-align: left; overflow-wrap: anywhere; }
+.work-task strong { font-size: .9rem; }
+.work-task .dim { font-size: .8rem; }
+.work-map { overflow: auto; margin: 1rem 0; border: 1px solid var(--line); border-radius: 12px; }
+.work-map p { margin: .5rem 1rem; }
+.work-node rect { fill: var(--card); stroke: var(--line); }
+.work-node rect.work-node-done { stroke: var(--ok); }
+.work-node rect.work-node-review { stroke: var(--warn); }
+.work-node rect.work-node-blocked { stroke: var(--bad); }
+.work-node text { fill: var(--text); font-size: 13px; }
+.work-node text.work-node-meta { fill: var(--dim); font-size: 11px; }
+.work-node { cursor: pointer; }
+.work-node:focus rect, .work-node:hover rect { stroke: var(--accent); stroke-width: 2; }
+.work-edge { fill: none; stroke: var(--dim); stroke-width: 1.5; }
+.work-history { display: grid; gap: .6rem; margin-top: 1rem; }
+.work-field { margin: .65rem 0; }
+.work-field label { display: block; margin-bottom: .3rem; color: var(--dim); }
+.work-field input, .work-field select { width: 100%; }
+.work-form { margin: 1rem 0; }
+.work-note { border-top: 1px solid var(--line); padding: .7rem 0; }
+.detail h3 { margin-top: 1rem; }
+.detail > button, .detail > .link { margin: .4rem .4rem .4rem 0; }
+@media (max-width: 720px) { .tabs { flex-wrap: wrap; } .work-board { grid-template-columns: repeat(6, 190px); } }
+
 /* login */
 .login-shell { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
 .login-card { width: min(420px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 1.6rem; box-shadow: var(--shadow); }
@@ -163,6 +196,15 @@ tr:last-child td { border-bottom: 0; }
 .detail .content { white-space: pre-wrap; font-size: .95rem; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .9rem; }
 .detail dl { display: grid; grid-template-columns: 9rem 1fr; gap: .35rem .8rem; font-size: .88rem; margin: .9rem 0; }
 .detail dt { color: var(--dim); } .detail dd { overflow-wrap: anywhere; }
+.status-detail { padding: 0; border: 0; background: none; cursor: pointer; border-radius: 20px; }
+.inspect-link { text-align: left; white-space: normal; color: inherit; }
+.status-detail:hover .pill, .inspect-link:hover { text-decoration: underline; }
+.status-detail:focus-visible, .inspect-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.evidence-card { margin: .8rem 0 1.2rem; }
+.evidence-card .content { overflow-wrap: anywhere; }
+.detail h2 { padding-right: 2rem; }
+.activity-sort { display: flex; align-items: center; gap: .6rem; margin: .6rem 0 1rem; color: var(--dim); }
+.activity-sort select { width: auto; max-width: 100%; }
 .chain { display: flex; flex-direction: column; gap: .3rem; margin-top: .4rem; }
 .chain .node { display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
 .chain .node.current { font-weight: 700; color: var(--ok); }
@@ -194,3 +236,11 @@ tr:last-child td { border-bottom: 0; }
 .inbox-item .action-panel textarea { flex: 1; min-width: 240px; }
 .inbox-item .action-status.bad { color: var(--bad); }
 button.small.primary { background: var(--accent); color: #fff; }
+.capability-directory { margin-bottom: 2rem; }
+.capability-directory > select { margin-bottom: 1rem; }
+.capability-tags { display: flex; flex-wrap: wrap; gap: .4rem; }
+.capability-card small { display: block; margin-bottom: .8rem; }
+.work-suggestions { padding: .8rem; border: 1px solid var(--line); border-radius: .6rem; }
+.profile-skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .4rem 1rem; }
+.work-match { display: flex; align-items: flex-start; flex-wrap: wrap; gap: .5rem; margin: .7rem 0; }
+.work-match small { flex-basis: 100%; }

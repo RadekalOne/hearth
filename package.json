@@ -16,6 +16,7 @@
     "mcp/matrix/package.json",
     "mcp/matrix/package-lock.json",
     "mcp/memory/app.py",
+    "mcp/memory/work.py",
     "mcp/memory/Dockerfile",
     "mcp/memory/requirements.txt",
     "mcp/memory/static/",
