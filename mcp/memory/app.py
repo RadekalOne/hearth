@@ -1234,6 +1234,34 @@ def create_relay(target_agent: str, request: str, requested_by: str = "agent",
     }
 
 
+def _drain_continuations(agent):
+    def deliver(job):
+        key=job['delivery_id']
+        existing=relays.get(ids=[key],include=['metadatas'])
+        if existing['ids']:
+            metadata=existing['metadatas'][0]
+            if metadata.get('origin')!='continuation' or metadata.get('target_agent')!=agent or any(metadata.get(k)!=job[k] for k in ['work_id','work_kind','room_id','thread_id','generation']):
+                raise ValueError('continuation delivery identity conflict')
+            update={**metadata,'source':job['trigger_event'],'current_generation':job['current_generation'],
+                    'last_read_event':job['last_read_event'],'next_action':job['next_action']}
+            if metadata.get('state')=='resolved' and metadata.get('source')!=job['trigger_event']:
+                update.update(state='queued',previous_outcome=metadata.get('outcome',''),outcome='',claimed_by='',claimed_surface='',updated_at=_now())
+            relays.update(ids=[key],documents=[json.dumps(job)],metadatas=[update])
+            return
+        at=_now()
+        relays.upsert(ids=[key],documents=[json.dumps(job)],metadatas=[{
+            'target_agent':agent,'requested_by':agent,'source_surface':'coordination-outbox',
+            'source':job['trigger_event'],'origin':'continuation','priority':'normal','state':'queued',
+            'created_at':at,'updated_at':at,'claimed_by':'','claimed_surface':'','outcome':'',
+            'work_id':job['work_id'],'work_kind':job['work_kind'],'room_id':job['room_id'],
+            'thread_id':job['thread_id'],'generation':job['generation'],
+            'current_generation':job['current_generation'],
+            'last_read_event':job['last_read_event'],'next_action':job['next_action'],
+            'required_surface':'interactive','grants_authority':False}])
+    with MEMORY_WRITE_LOCK:
+        coordination_store.drain(agent,deliver,_now())
+
+
 def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
     agent = (agent or "").strip()
     state = (state or "open").strip().lower()
@@ -1243,6 +1271,8 @@ def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
         raise ValueError("state must be open, queued, claimed, resolved, or all")
     if CURRENT_AUTH.get() is None:
         _require_own_agent(agent)
+        if coordination_store.enabled:
+            _drain_continuations(agent)
     clauses = [{"target_agent": agent}]
     if state == "open":
         clauses.append({"state": {"$in": ["queued", "claimed"]}})
@@ -1257,6 +1287,7 @@ def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
             for relay_id, document, metadata in zip(
                 got["ids"], got["documents"], got["metadatas"]
             )
+            if state in {'all','resolved'} or metadata.get('origin')!='continuation' or coordination_store.delivery_valid(relay_id)
         ),
         key=lambda entry: (
             rank.get(entry.get("priority", "normal"), 2),
@@ -1282,10 +1313,20 @@ def _relay_for_agent(relay_id: str, agent: str) -> tuple[str, dict]:
 
 
 def claim_relay(relay_id: str, agent: str, surface: str = "") -> dict:
+    _,metadata=_relay_for_agent(relay_id,(agent or '').strip())
+    if metadata.get('origin')=='continuation':
+        _drain_continuations(metadata['target_agent'])
+        return coordination_store.guard_delivery(relay_id,lambda:_claim_relay_checked(relay_id,agent,surface))
+    return _claim_relay_checked(relay_id,agent,surface)
+
+
+def _claim_relay_checked(relay_id: str, agent: str, surface: str = "") -> dict:
     _, metadata = _relay_for_agent(relay_id, (agent or "").strip())
     if metadata.get("state") == "resolved":
         raise ValueError("resolved relay cannot be claimed")
     surface = (surface or "").strip()
+    if metadata.get('origin')=='continuation' and surface!='interactive':
+        raise ValueError('continuation requires the interactive surface; it grants no execution authority')
     if (
         metadata.get("state") == "claimed"
         and metadata.get("claimed_surface")
@@ -1343,7 +1384,7 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         "capabilities": {"memory_add_idempotency_key": True, "work_coordination": True,
                          "work_claim_ttl_seconds": 900, "work_context": True,
                          "coordination_waiting_on": coordination_store.enabled,
-                         "coordination_continuations": False,
+                         "coordination_continuations": coordination_store.enabled,
                          "coordination_escalation_notifications": False},
         "protocol": PROTOCOL,
         "default_search": {
@@ -1476,7 +1517,7 @@ def memory_status() -> dict:
     }
 
 
-@mcp.tool(annotations=READ_ONLY_TOOL)
+@mcp.tool(annotations=UPDATE_TOOL if coordination_store.enabled else READ_ONLY_TOOL)
 def memory_bootstrap(agent: str = "", surface: str = "", project: str = "",
                      compact: bool = False) -> dict:
     """CALL ONCE AT SESSION START. Returns the memory contract, authenticated identity,
@@ -1755,7 +1796,7 @@ def relay_request(target_agent: str, request: str, requested_by: str = "agent",
     )
 
 
-@mcp.tool(annotations=READ_ONLY_TOOL)
+@mcp.tool(annotations=UPDATE_TOOL if coordination_store.enabled else READ_ONLY_TOOL)
 def relay_inbox(agent: str, state: str = "open", limit: int = 20) -> dict:
     """List relay requests for this authenticated agent. Open includes queued and claimed
     requests. memory_bootstrap also returns the open inbox automatically."""
@@ -2215,7 +2256,7 @@ def _coordination_mutate(payload, answer=False):
         raise HTTPException(409, 'coordination feature is disabled')
     payload = _work_payload(payload)
     allowed = {'work_kind','work_id','room_id','thread_id','expected_generation','source_event','since','claim_id'}
-    allowed |= {'party_id','answer_kind','summary','evidence','approval_party','next_parties'} if answer else {'parties'}
+    allowed |= {'party_id','answer_kind','summary','evidence','approval_party','next_parties'} if answer else {'parties','continuation'}
     if set(payload) - allowed:
         raise HTTPException(400, 'unknown coordination fields')
     if 'expected_generation' not in payload:
@@ -2238,7 +2279,8 @@ def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
     if not answer:
         _coordination_call(_coordination_party_check, payload.get('parties'))
         return _coordination_call(coordination_store.set_wait, actor, human, owner=owner, owner_kind=owner_kind,
-            allow_owner_transfer=human and payload['work_kind'] == 'task', **arguments)
+            allow_owner_transfer=human and payload['work_kind'] == 'task',
+            continuation_origin=payload['work_kind']=='relay' and relays.get(ids=[payload['work_id']],include=['metadatas'])['metadatas'][0].get('origin')=='continuation', **arguments)
     if payload.get('next_parties') is not None:
         _coordination_call(_coordination_party_check, payload['next_parties'])
     if payload.get('answer_kind') == 'pass_needing_human':
@@ -2253,13 +2295,13 @@ def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
 @mcp.tool(annotations=CREATE_TOOL)
 def coordination_wait_set(work_kind: str, work_id: str, room_id: str, thread_id: str,
                           expected_generation: int, parties: list[dict], source_event: str, since: str,
-                          claim_id: str = '') -> dict:
+                          claim_id: str = '', continuation: dict | None = None) -> dict:
     """Explicit responsibility handoff, behind default-off HEARTH_COORDINATION_ENABLED.
     Source event is caller-supplied provenance, not verified Matrix or execution authority.
     Running task owners must supply their live claim_id. Does not create a relay.
     """
     return _coordination_mutate(dict(work_kind=work_kind,work_id=work_id,room_id=room_id,thread_id=thread_id,
-        expected_generation=expected_generation,parties=parties,source_event=source_event,since=since,claim_id=claim_id))
+        expected_generation=expected_generation,parties=parties,source_event=source_event,since=since,claim_id=claim_id,continuation=continuation))
 
 
 @mcp.tool(annotations=UPDATE_TOOL)

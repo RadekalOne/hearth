@@ -27,9 +27,7 @@ What does not change
 - Merges, production deploys that migrate the store, spec activation, scheduler and credential changes stay with Rad.
 
 Service availability: call bootstrap and inspect capabilities first. Typed coordination
-is default-off; continuation delivery is currently unavailable pending the B release.
-Until that capability is present, use a durable manual checkpoint continuation.
-Explicitly record the source thread,
+and continuation delivery are default-off. Explicitly record the source thread,
 last-read event, exact next action and deadline when handing off. Continuation delivery
 is driven by the existing bootstrap/relay inbox poll and grants no execution authority.
 The notification consumer and human/agent inbox split are not yet installed; when

@@ -94,3 +94,29 @@ fencing and competing writers. ASGI/MCP tests cover auth/CSRF, claim fencing,
 unknown/spoofed parties, malformed payloads, and prerequisite-only,
 coordination-only and both-present projections. Existing Python, Node and
 browser suites remain required before the draft is ready for human review.
+# Continuation follow-up (B / spec v1.6)
+
+The original A/C receipt below is historical. B adds continuations in the same
+default-off SQLite store, created transactionally with waiting generations.
+Typed substantive answers or explicit follow-up deadlines promote one deterministic
+relay per work/thread/generation/poster through a persisted outbox. Bootstrap and
+relay-inbox polls reconcile external delivery after crashes; cancellation and
+supersession fence unclaimed relays. A delivered deadline relay receives updated
+reply evidence when a later change list advances responsibility, without duplicating
+the relay. Interactive claim is required and grants no authority. Continuation-origin
+work cannot recursively create further continuations.
+
+Spec/onboarding version is1.6. Notifications and the dashboard party split remain
+separate follow-ups, advertised as unavailable. No scheduler is created by B.
+
+With coordination enabled, bootstrap/relay-inbox polling may reconcile a persisted
+delivery, so those tools advertise update hints rather than read-only hints. With
+the flag off, the original read-only behavior remains. A surface label is caller
+provenance, not server attestation of an interactive process; unchanged runner
+authority restrictions still prohibit unattended execution.
+
+Full-scope reviewer inbox and bootstrap reads project existing relays without
+draining the continuation outbox. Only the authenticated agent polling its own
+inbox can trigger delivery. The integration regression verifies that reviewer
+reads leave pending deliveries and relay storage unchanged with the flag enabled.
+

@@ -4,6 +4,7 @@ Transport authenticates actors and validates referenced work. Source event IDs a
 caller-supplied provenance; this store does not verify Matrix messages or approval.
 """
 import json
+import hashlib
 import sqlite3
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
@@ -84,6 +85,15 @@ class CoordinationStore:
                     identity TEXT NOT NULL, generation INTEGER NOT NULL, source_event TEXT NOT NULL,
                     actor TEXT NOT NULL, party_id TEXT NOT NULL, data TEXT NOT NULL,
                     PRIMARY KEY(identity,generation,source_event,actor,party_id));
+                CREATE TABLE IF NOT EXISTS coordination_continuations (
+                    delivery_id TEXT PRIMARY KEY,identity TEXT NOT NULL,generation INTEGER NOT NULL,
+                    poster TEXT NOT NULL,state TEXT NOT NULL,data TEXT NOT NULL,
+                    UNIQUE(identity,generation,poster));
+                CREATE TABLE IF NOT EXISTS coordination_outbox (
+                    delivery_id TEXT PRIMARY KEY,identity TEXT NOT NULL,valid_generation INTEGER NOT NULL,
+                    state TEXT NOT NULL,data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS coordination_origins (
+                    identity TEXT PRIMARY KEY,continuation_origin INTEGER NOT NULL);
                 COMMIT;
             ''')
             versions = [r[0] for r in db.execute('SELECT version FROM coordination_schema')]
@@ -160,7 +170,7 @@ class CoordinationStore:
 
     def set_wait(self, actor, human, *, work_kind, work_id, room_id, thread_id,
                  owner='', owner_kind='agent', expected_generation=0, parties=None, source_event='', since='',
-                 allow_owner_transfer=False):
+                 allow_owner_transfer=False, continuation_origin=False, continuation=None):
         if not self.enabled:
             raise CoordinationError('coordination feature is disabled', 409)
         identity = self.identity(work_kind,work_id,room_id,thread_id)
@@ -182,6 +192,8 @@ class CoordinationStore:
             if current != expected_generation:
                 raise CoordinationError('stale waiting generation', 409)
             generation = current + 1
+            self.cancel_deliveries(db,identity)
+            db.execute('INSERT OR REPLACE INTO coordination_origins VALUES(?,?)',(identity,int(bool(continuation_origin))))
             db.execute('UPDATE coordination_parties SET state=? WHERE identity=? AND state=?', ('cancelled',identity,'pending'))
             db.execute('INSERT INTO coordination_heads VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET generation=excluded.generation,owner=excluded.owner,owner_kind=excluded.owner_kind',
                        (identity,work_kind,work_id,room_id,thread_id,generation,owner,owner_kind))
@@ -190,6 +202,8 @@ class CoordinationStore:
             db.execute('INSERT INTO coordination_events VALUES(?,?,?,?,?,?)',
                        (identity,generation,source_event,actor,'',json.dumps({'kind':'wait_set','since':since,
                            'owner':owner,'owner_kind':owner_kind,'previous_owner':head['owner'] if head else None})))
+            if not continuation_origin and owner_kind=='agent':
+                self.record_continuation(db,identity,generation,owner,source_event,values,continuation)
             return {**self.snapshot(db,identity), 'changed':True}
 
     def answer(self, actor, human, *, work_kind, work_id, room_id, thread_id,
@@ -275,7 +289,95 @@ class CoordinationStore:
                         self.put_party(db,identity,generation,value,source_event,since)
             db.execute('INSERT INTO coordination_events VALUES(?,?,?,?,?,?)',
                        (identity,expected_generation,source_event,actor,party_id,json.dumps(event)))
+            if answer_kind=='cancel':
+                if owner_cancel:self.cancel_deliveries(db,identity)
+                elif not self.snapshot(db,identity)['coordination_waiting_on']:self.cancel_deliveries(db,identity)
+            else:
+                current=self.snapshot(db,identity)
+                self.promote(db,identity,expected_generation,source_event,current['generation'])
+                origin=db.execute('SELECT continuation_origin FROM coordination_origins WHERE identity=?',(identity,)).fetchone()
+                if additions and head['owner_kind']=='agent' and not (origin and origin[0]):
+                    self.record_continuation(db,identity,current['generation'],head['owner'],source_event,
+                                             current['coordination_waiting_on'])
             return {**self.snapshot(db,identity), 'changed':True}
+
+    @staticmethod
+    def cancel_deliveries(db,identity):
+        db.execute("UPDATE coordination_continuations SET state='cancelled' WHERE identity=? AND state IN ('waiting','ready','delivered')",(identity,))
+        db.execute("UPDATE coordination_outbox SET state='cancelled' WHERE identity=? AND state IN ('ready','delivered')",(identity,))
+
+    @staticmethod
+    def record_continuation(db,identity,generation,poster,last_read,parties,continuation=None):
+        external=[p for p in parties if p['id']!=poster]
+        if not external:return
+        supplied=continuation or {}
+        if not isinstance(supplied,dict) or set(supplied)-{'last_read_event','next_action','deadline'}:
+            raise CoordinationError('invalid continuation fields')
+        last_read=text(supplied.get('last_read_event',last_read),'last read event')
+        if not last_read.startswith('$'):raise CoordinationError('last-read Matrix event required')
+        next_action=text(supplied.get('next_action',f'Read replies after {last_read}; inspect the substantive answer and respond in the source thread.'),'next action',4000)
+        deadlines=[p['expected_deadline'] for p in external if p.get('expected_deadline')]
+        deadline=timestamp(supplied['deadline'],'deadline') if supplied.get('deadline') else min(deadlines) if deadlines else None
+        delivery='relay_continuation_'+hashlib.sha256(f'{identity}|{generation}|{poster}'.encode()).hexdigest()[:32]
+        work_kind,work_id,room_id,thread_id=json.loads(identity)
+        data={'delivery_id':delivery,'work_kind':work_kind,'work_id':work_id,'room_id':room_id,'thread_id':thread_id,
+              'generation':generation,'target_agent':poster,'last_read_event':last_read,'next_action':next_action,
+              'deadline':deadline,'required_surface':'interactive','origin':'continuation','grants_authority':False}
+        db.execute('INSERT OR IGNORE INTO coordination_continuations VALUES(?,?,?,?,?,?)',
+                   (delivery,identity,generation,poster,'waiting',json.dumps(data)))
+
+    @staticmethod
+    def promote(db,identity,generation,trigger,valid_generation):
+        rows=db.execute("SELECT * FROM coordination_continuations WHERE identity=? AND generation=? AND state IN ('waiting','ready','delivered')",(identity,generation)).fetchall()
+        for row in rows:
+            data={**json.loads(row['data']),'trigger_event':trigger,'current_generation':valid_generation}
+            db.execute("UPDATE coordination_continuations SET state='ready' WHERE delivery_id=?",(row['delivery_id'],))
+            db.execute("INSERT INTO coordination_outbox VALUES(?,?,?,?,?) ON CONFLICT(delivery_id) DO UPDATE SET valid_generation=excluded.valid_generation,data=excluded.data,state='ready'",
+                       (row['delivery_id'],identity,valid_generation,'ready',json.dumps(data)))
+
+    def promote_due(self,now):
+        if not self.enabled:return
+        now=timestamp(now,'now')
+        with self.transaction(write=True) as db:
+            rows=db.execute("SELECT c.* FROM coordination_continuations c JOIN coordination_heads h ON c.identity=h.identity AND c.generation=h.generation WHERE c.state='waiting'").fetchall()
+            for row in rows:
+                deadline=json.loads(row['data']).get('deadline')
+                if deadline and deadline<=now:self.promote(db,row['identity'],row['generation'],'deadline',row['generation'])
+
+    def deliveries(self,agent):
+        if not self.enabled:return []
+        with self.transaction() as db:
+            rows=db.execute("SELECT o.data FROM coordination_outbox o JOIN coordination_heads h ON o.identity=h.identity AND o.valid_generation=h.generation WHERE o.state='ready' ORDER BY o.delivery_id").fetchall()
+            return [d for r in rows if (d:=json.loads(r['data']))['target_agent']==agent]
+
+    def mark_delivered(self,delivery_id):
+        with self.transaction(write=True) as db:
+            db.execute("UPDATE coordination_outbox SET state='delivered' WHERE delivery_id=? AND state='ready'",(delivery_id,))
+            db.execute("UPDATE coordination_continuations SET state='delivered' WHERE delivery_id=? AND state='ready'",(delivery_id,))
+
+    def delivery_valid(self,delivery_id):
+        if not self.enabled:return False
+        with self.transaction() as db:
+            return bool(db.execute("SELECT 1 FROM coordination_outbox o JOIN coordination_heads h ON o.identity=h.identity AND o.valid_generation=h.generation WHERE o.delivery_id=? AND o.state IN ('ready','delivered')",(delivery_id,)).fetchone())
+
+    def guard_delivery(self,delivery_id,action):
+        with self.transaction(write=True) as db:
+            if not db.execute("SELECT 1 FROM coordination_outbox o JOIN coordination_heads h ON o.identity=h.identity AND o.valid_generation=h.generation WHERE o.delivery_id=? AND o.state IN ('ready','delivered')",(delivery_id,)).fetchone():
+                raise CoordinationError('continuation was cancelled or superseded',409)
+            return action()
+
+    def drain(self,agent,deliver,now):
+        """SQLite lock fences cancellation; deterministic external delivery survives a crash."""
+        if not self.enabled:return
+        self.promote_due(now)
+        with self.transaction(write=True) as db:
+            rows=db.execute("SELECT o.* FROM coordination_outbox o JOIN coordination_heads h ON o.identity=h.identity AND o.valid_generation=h.generation WHERE o.state='ready' ORDER BY o.delivery_id").fetchall()
+            for row in rows:
+                data=json.loads(row['data'])
+                if data['target_agent']!=agent:continue
+                deliver(data)
+                db.execute("UPDATE coordination_outbox SET state='delivered' WHERE delivery_id=?",(row['delivery_id'],))
+                db.execute("UPDATE coordination_continuations SET state='delivered' WHERE delivery_id=?",(row['delivery_id'],))
 
     def for_work(self, work_kind, work_id):
         """Current pending obligations across threads; no generation flattening."""

@@ -143,10 +143,6 @@ the configured Matrix mention/notifier while still recording the durable relay.
 ### Available service capabilities
 
 These agent conduct rules take effect with v1.6. Service automation is capability-gated:
-`coordination_continuations` is currently false pending the separately reviewed B
-branch. Until that code is merged and deployed, record durable manual continuations
-in a checkpoint (thread, last-read event, exact next action); no automatic relay is
-promised. The following describes the opt-in contract once the capability is present.
 `coordination_waiting_on` and `coordination_continuations` require the explicit default-off
 `HEARTH_COORDINATION_ENABLED` flag. The service records typed handoffs through the
 coordination APIs; it does not infer them from arbitrary Matrix posts. A continuation
