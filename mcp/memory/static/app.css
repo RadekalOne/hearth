@@ -300,3 +300,5 @@ details summary { cursor: pointer; padding: .7rem 0; color: var(--dim); }
 }
 
 .inbox-item .acknowledgement-meta { grid-column: 1 / -1; margin: 0; font-size: .85rem; }
+
+button.small.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }

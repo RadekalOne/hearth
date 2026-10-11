@@ -74,7 +74,7 @@ async function renderNow(view) {
       const evidence=sourceLinks(item.source_refs||[item.event_id],item);evidence.prepend(h('span',{class:'dim',text:'Evidence ids:'}));
       const result=h('div',{class:'inbox-with-source'},card,evidence);
       if(inbox.value.can_acknowledge) {
-        const button=h('button',{class:'small',text:item.acknowledged?'Reopen':'Acknowledge',onClick:async()=>{
+        const button=h('button',{class:'small secondary',text:item.acknowledged?'Reopen':'Acknowledge',onClick:async()=>{
           button.disabled=true;
           try {
             await api('/api/inbox/acknowledgement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:item.kind,item_id:item.id||item.event_id,state_key:item.state_key,acknowledged:!item.acknowledged})});
@@ -83,6 +83,8 @@ async function renderNow(view) {
         }});
         let actions=card.querySelector('.actions');
         if(!actions){actions=h('div',{class:'actions'});card.append(h('div',{class:'actions-row'},actions));}
+        const details=card.querySelector('.meta button');
+        if(details){details.className='small secondary';actions.prepend(details);}
         actions.append(button);
         if(item.acknowledged)card.append(h('p',{class:'acknowledgement-meta dim',text:`Acknowledged by ${item.acknowledged_by||'you'} · ${when(item.acknowledged_at)||'Time unavailable'}`}));
       }
