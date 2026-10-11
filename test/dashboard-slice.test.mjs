@@ -36,10 +36,8 @@ const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
   const api = {
-    '/api/auth/status': {authenticated:true,principal:'fixture-human',auth_enabled:false},
     '/api/inbox': mode === 'ack' ? {...inbox,items:ackItems,can_acknowledge:true,open_total:ackItems.filter(i=>!i.acknowledged).length,acknowledged_total:ackItems.filter(i=>i.acknowledged).length} : mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/auth/status': {authenticated:true,principal:mode==='reviewer'?'reviewer:fixture-review':'fixture-human',role:mode==='reviewer'?'reviewer':'existing',display_name:mode==='reviewer'?'fixture-review':'fixture-human',auth_enabled:false},
-    '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
