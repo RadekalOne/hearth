@@ -1241,7 +1241,7 @@ def _drain_continuations(agent):
         if existing['ids']:
             metadata=existing['metadatas'][0]
             if metadata.get('origin')!='continuation' or metadata.get('target_agent')!=agent or any(metadata.get(k)!=job[k] for k in ['work_id','work_kind','room_id','thread_id','generation']):
-                raise ValueError('continuation delivery identity conflict')
+                raise _coordination_module.DeliveryConflict('continuation delivery identity conflict')
             update={**metadata,'source':job['trigger_event'],'current_generation':job['current_generation'],
                     'last_read_event':job['last_read_event'],'next_action':job['next_action']}
             if metadata.get('state')=='resolved' and metadata.get('source')!=job['trigger_event']:
@@ -2278,9 +2278,14 @@ def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
     arguments = {key:value for key,value in payload.items() if key != 'claim_id'}
     if not answer:
         _coordination_call(_coordination_party_check, payload.get('parties'))
+        continuation_origin=False
+        if payload['work_kind']=='relay':
+            relay=relays.get(ids=[payload['work_id']],include=['metadatas'])
+            if not relay['ids']:raise HTTPException(404,'relay not found')
+            continuation_origin=relay['metadatas'][0].get('origin')=='continuation'
         return _coordination_call(coordination_store.set_wait, actor, human, owner=owner, owner_kind=owner_kind,
             allow_owner_transfer=human and payload['work_kind'] == 'task',
-            continuation_origin=payload['work_kind']=='relay' and relays.get(ids=[payload['work_id']],include=['metadatas'])['metadatas'][0].get('origin')=='continuation', **arguments)
+            continuation_origin=continuation_origin, **arguments)
     if payload.get('next_parties') is not None:
         _coordination_call(_coordination_party_check, payload['next_parties'])
     if payload.get('answer_kind') == 'pass_needing_human':
@@ -2574,7 +2579,8 @@ def api_relays(state: str = "all", limit: int = 100):
     for _, meta in zip(got["ids"], got["metadatas"]):
         counts[meta.get("state", "?")] = counts.get(meta.get("state", "?"), 0) + 1
     return {"generated_at": _now(), "counts": counts,
-            "entries": entries[: max(1, min(limit, 500))]}
+            "entries": entries[: max(1, min(limit, 500))],
+            "continuation_failures": coordination_store.failed_deliveries(limit)}
 
 
 @app.get("/api/checkpoints")

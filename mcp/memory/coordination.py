@@ -17,6 +17,10 @@ class CoordinationError(ValueError):
         self.status = status
 
 
+class DeliveryConflict(CoordinationError):
+    """Permanent external identity conflict; transient delivery errors still retry."""
+
+
 def text(value, name, limit=240):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise CoordinationError(f'{name} must be nonempty text of at most {limit} characters')
@@ -350,6 +354,13 @@ class CoordinationStore:
             rows=db.execute("SELECT o.data FROM coordination_outbox o JOIN coordination_heads h ON o.identity=h.identity AND o.valid_generation=h.generation WHERE o.state='ready' ORDER BY o.delivery_id").fetchall()
             return [d for r in rows if (d:=json.loads(r['data']))['target_agent']==agent]
 
+    def failed_deliveries(self,limit=100):
+        if not self.enabled:return []
+        with self.transaction() as db:
+            rows=db.execute("SELECT data FROM coordination_outbox WHERE state='failed' ORDER BY delivery_id LIMIT ?",
+                            (max(1,min(limit,500)),)).fetchall()
+            return [json.loads(r['data']) for r in rows]
+
     def mark_delivered(self,delivery_id):
         with self.transaction(write=True) as db:
             db.execute("UPDATE coordination_outbox SET state='delivered' WHERE delivery_id=? AND state='ready'",(delivery_id,))
@@ -375,7 +386,17 @@ class CoordinationStore:
             for row in rows:
                 data=json.loads(row['data'])
                 if data['target_agent']!=agent:continue
-                deliver(data)
+                try:
+                    deliver(data)
+                except DeliveryConflict:
+                    # Only permanent identity conflicts are quarantined. A crash
+                    # after an external write must still roll back and retry.
+                    data['failure_reason']='continuation delivery identity conflict'
+                    db.execute("UPDATE coordination_outbox SET state='failed',data=? WHERE delivery_id=?",
+                               (json.dumps(data),row['delivery_id']))
+                    db.execute("UPDATE coordination_continuations SET state='failed' WHERE delivery_id=?",
+                               (row['delivery_id'],))
+                    continue
                 db.execute("UPDATE coordination_outbox SET state='delivered' WHERE delivery_id=?",(row['delivery_id'],))
                 db.execute("UPDATE coordination_continuations SET state='delivered' WHERE delivery_id=?",(row['delivery_id'],))
 

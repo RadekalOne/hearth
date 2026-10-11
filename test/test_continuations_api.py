@@ -12,6 +12,47 @@ class ContinuationAPI(unittest.IsolatedAsyncioTestCase):
     project=coord_api.CoordinationAPITests.project
     answer=coord_api.CoordinationAPITests.answer
 
+    async def test_poison_delivery_does_not_block_bootstrap_or_other_jobs(self):
+        for work_id in ('poison_fixture','healthy_fixture'):
+            await self.post('/api/coordination/wait',{**self.wait_payload,'work_id':work_id},'codex-test-token')
+            await self.answer(work_id=work_id)
+        jobs=self.memory.coordination_store.deliveries('codex')
+        self.assertEqual(len(jobs),2)
+        poison,healthy=jobs
+        keys=[j['delivery_id'] for j in jobs]
+        self.memory.relays.upsert(ids=[poison['delivery_id']],documents=['unrelated existing relay'],metadatas=[{
+            'target_agent':'codex','origin':'manual','state':'queued','priority':'normal',
+            'created_at':self.memory._now(),'requested_by':'codex'}])
+        principal=self.memory.CURRENT_PRINCIPAL.set('codex')
+        try:
+            for _ in range(2):
+                result=self.memory.bootstrap('codex',compact=True)
+                self.assertTrue(any(r['relay_id']==healthy['delivery_id'] for r in result['relay_inbox']['entries']))
+            response=await self.client.get('/api/relays',headers={'Authorization':'Bearer codex-test-token'})
+            self.assertEqual(response.status_code,200)
+            failures=response.json()['continuation_failures']
+            self.assertEqual(len(failures),1)
+            self.assertEqual(failures[0]['delivery_id'],poison['delivery_id'])
+            self.assertEqual(failures[0]['failure_reason'],'continuation delivery identity conflict')
+            self.assertEqual(self.memory.coordination_store.deliveries('codex'),[])
+            restart=self.memory._coordination_module.CoordinationStore(self.memory.coordination_store.path,enabled=True)
+            restart.initialize()
+            self.assertEqual(restart.failed_deliveries(),failures)
+        finally:
+            self.memory.CURRENT_PRINCIPAL.reset(principal)
+            self.memory.relays.delete(ids=keys)
+
+    async def test_missing_and_deleted_relay_return_404(self):
+        payload={**self.wait_payload,'work_kind':'relay','work_id':'relay_absent'}
+        response=await self.post('/api/coordination/wait',payload,'codex-test-token')
+        self.assertEqual(response.status_code,404)
+        # Simulate deletion between owner validation and origin lookup.
+        with patch.object(self.memory.relays,'get',side_effect=[
+                {'ids':['relay_absent'],'metadatas':[{'target_agent':'codex'}]},
+                {'ids':[],'metadatas':[]}]):
+            response=await self.post('/api/coordination/wait',payload,'codex-test-token')
+        self.assertEqual(response.status_code,404)
+
     async def test_reviewer_inbox_and_bootstrap_do_not_deliver_pending_continuations(self):
         await self.post('/api/coordination/wait',self.wait_payload,'codex-test-token')
         await self.answer()
