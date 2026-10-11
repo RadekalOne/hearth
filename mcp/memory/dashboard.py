@@ -112,7 +112,7 @@ def work_items(board, relays, now):
                   and e.get('kind') in transitions.get(state, set()) and timestamp(e.get('at')) is not None]
         since = task.get('state_since') or (max(events, key=lambda e: timestamp(e['at']))['at'] if events else task.get('updated_at'))
         ts = timestamp(since)
-        items.append({'id': task['id'], 'title': task.get('title', task['id']),
+        items.append({'id': task['id'], 'revision':task.get('revision',0), 'title': task.get('title', task['id']),
                       'state': {'ready': 'queued', 'draft': 'proposed', 'running': 'claimed'}.get(state, state),
                       'source_state': state, 'execution_verified': False,
                       'owner': task.get('assignee', ''), 'state_since': since,
@@ -123,7 +123,7 @@ def work_items(board, relays, now):
         ts = timestamp(relay.get('updated_at'))
         summary = ' '.join(str(relay.get('request') or '').split())[:120]
         title = summary or f"Handoff to {relay.get('target_agent') or 'unassigned'} · {relay['relay_id']}"
-        items.append({'id': relay['relay_id'], 'title': title,
+        items.append({'id': relay['relay_id'], 'revision':relay.get('transition_generation',0), 'title': title,
                       'state': 'done' if relay.get('state') == 'resolved' else relay.get('state', 'unknown'),
                       'owner': relay.get('target_agent', ''), 'state_since': relay.get('updated_at'),
                       'age_minutes': round((now - ts) / 60, 1) if ts is not None and ts <= now else None,

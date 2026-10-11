@@ -31,12 +31,13 @@ const drawer={drawer_id:'drawer_fixture',wing:'Hearth',room:'design',record_clas
 let eventRoom;
 let mode = 'normal';
 let taxonomyWings = [];
+let ackItems;let staleAck=false;
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
   const api = {
+    '/api/inbox': mode === 'ack' ? {...inbox,items:ackItems,can_acknowledge:true,open_total:ackItems.filter(i=>!i.acknowledged).length,acknowledged_total:ackItems.filter(i=>i.acknowledged).length} : mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/auth/status': {authenticated:true,principal:mode==='reviewer'?'reviewer:fixture-review':'fixture-human',role:mode==='reviewer'?'reviewer':'existing',display_name:mode==='reviewer'?'fixture-review':'fixture-human',auth_enabled:false},
-    '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
@@ -46,6 +47,13 @@ const server = createServer(async (req,res) => {
     '/api/activity/event':{event:{room_id:'!fixture:test',event_id:'$fixture',body:'Blocked item evidence',sender:'fixture'},related:[]},
   };
   if (path.startsWith('/api/')) {
+    if(path==='/api/inbox/acknowledgement'&&req.method==='POST'){
+      let body='';for await(const chunk of req)body+=chunk;
+      const update=JSON.parse(body);const item=ackItems.find(i=>(i.id||i.event_id)===update.item_id);
+      if(staleAck){res.writeHead(409,{'Content-Type':'application/json'});res.end('{"error":"Item changed"}');return;}
+      assert.equal(update.state_key,item.state_key);item.acknowledged=update.acknowledged;item.acknowledged_by='fixture-human';item.acknowledged_at='2026-10-10T20:00:00Z';
+      res.writeHead(200,{'Content-Type':'application/json'});res.end('{"ok":true}');return;
+    }
     res.writeHead(mode==='error' && path!=='/api/auth/status' ? 503 : 200, {'Content-Type':'application/json'});
     res.end(JSON.stringify(api[path] || {})); return;
   }
@@ -161,6 +169,32 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     await page.getByRole('button',{name:'View source drawers',exact:true}).nth(3).click();
     await page.locator('#detail').getByRole('button',{name:'drawer_other',exact:true}).waitFor();
     assert.equal(await page.locator('#detail').getByText('drawer_unrelated',{exact:true}).count(),0);
+    mode='ack';ackItems=inbox.items.map((i,n)=>({...i,state_key:`fixture-${n}`,acknowledged:n===0,acknowledged_by:n===0?'fixture-human':null,acknowledged_at:n===0?'2026-10-10T20:00:00Z':null}));
+    for(const width of [400,1280]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(`http://127.0.0.1:${server.address().port}/#now`);await page.reload();
+      await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
+      assert.match(await page.locator('.takeaway').textContent(),/2 items waiting · 1 acknowledged/);
+      assert.equal(await page.locator('.inbox-item .actions button').filter({hasText:'Acknowledge'}).count(),2);
+      assert.equal(await page.locator('.inbox-with-source .source-refs').first().getByText('Evidence ids:',{exact:true}).count(),1);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`now-acknowledged-${width}.png`),fullPage:true});
+    }
+    await page.getByText('Acknowledged (1)',{exact:true}).click();
+    await page.getByText('Acknowledged by fixture-human',{exact:false}).waitFor();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-expanded-1280.png'),fullPage:true});
+    await page.getByRole('button',{name:'Reopen',exact:true}).click();
+    await page.getByRole('button',{name:'Acknowledge',exact:true}).nth(2).waitFor();
+    assert.equal(await page.getByText('Acknowledged (1)',{exact:true}).count(),0);
+    staleAck=true;await page.getByRole('button',{name:'Acknowledge',exact:true}).first().click();
+    await page.getByText('This item changed. Refresh before acknowledging or reopening it.',{exact:true}).waitFor();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-stale-1280.png'),fullPage:true});
+    staleAck=false;for(let n=0;n<30;n++){await page.keyboard.press('Tab');if(await page.evaluate(()=>document.activeElement.textContent==='Acknowledge'))break;}
+    assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Acknowledge');
+    assert.equal(await page.evaluate(()=>document.activeElement.matches('button:focus-visible')),true);
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-keyboard-focus-1280.png'),fullPage:true});
+    await page.keyboard.press('Enter');
+    await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
     mode='reviewer';
     for(const width of [400,1280]) {
       await page.setViewportSize({width,height:900});
