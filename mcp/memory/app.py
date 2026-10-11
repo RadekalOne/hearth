@@ -2110,10 +2110,12 @@ async def bulk_import(request: Request):
 @app.get("/api/export")
 def export_drawers(request: Request, record_class: str = "", wing: str = "",
                    room: str = ""):
-    """Admin backup: stream every drawer as JSON Lines, one drawer per line, in the
+    """Authorized backup: stream every drawer as JSON Lines, one drawer per line, in the
     exact shape /api/import accepts (drawer_id, content, and all metadata). Optional
     filters narrow by record_class, wing, or room."""
-    require_admin(request)
+    reviewer = CURRENT_AUTH.get()
+    if reviewer is None or reviewer.role != 'reviewer' or reviewer.scope != 'full':
+        require_admin(request)
 
     def rows():
         offset = 0

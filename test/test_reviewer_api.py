@@ -1,10 +1,31 @@
 import tempfile
+import json
 from pathlib import Path
 from unittest.mock import patch
 from test import test_dashboard_auth as auth
 
 
 class ReviewerAPI(auth.DashboardAuthTests):
+    async def test_full_reviewer_export_bearer_and_session_preserve_write_denials(self):
+        fixture={'ids':['export-fixture'], 'documents':['fixture content'],
+                 'metadatas':[{'wing':'hearth','room':'lessons','record_class':'knowledge'}]}
+        with patch.object(self.memory.drawers,'get',return_value=fixture):
+            response=await self.client.get('/api/export',headers={'Authorization':'Bearer reviewer-fixture-secret'})
+            self.assertEqual(response.status_code,200,response.text)
+            self.assertEqual(json.loads(response.text)['content'],'fixture content')
+            self.assertIn('application/x-ndjson',response.headers['content-type'])
+            await self.client.post('/api/auth/login',json={'token':'reviewer-fixture-secret'})
+            response=await self.client.get('/api/export')
+            self.assertEqual(response.status_code,200,response.text)
+            self.assertEqual(json.loads(response.text)['drawer_id'],'export-fixture')
+            self.assertEqual((await self.client.get('/api/export',headers={'Authorization':'Bearer codex-test-token'})).status_code,403)
+            self.assertEqual((await self.client.get('/api/export',headers={'Authorization':'Bearer admin-test-token'})).status_code,200)
+            for path in ('/api/import','/api/tokens'):
+                self.assertEqual((await self.client.post(path,json={})).status_code,403)
+            self.memory.reviewer_store.revoke('fixture',actor='admin')
+            self.assertEqual((await self.client.get('/api/export')).status_code,401)
+            self.assertEqual((await self.client.get('/api/export',headers={'Authorization':'Bearer reviewer-fixture-secret'})).status_code,401)
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.temp=tempfile.TemporaryDirectory()
