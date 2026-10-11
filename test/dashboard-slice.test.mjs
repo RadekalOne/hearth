@@ -31,7 +31,7 @@ const drawer={drawer_id:'drawer_fixture',wing:'Hearth',room:'design',record_clas
 let eventRoom;
 let mode = 'normal';
 let taxonomyWings = [];
-let ackItems;
+let ackItems;let staleAck=false;
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
@@ -50,7 +50,8 @@ const server = createServer(async (req,res) => {
     if(path==='/api/inbox/acknowledgement'&&req.method==='POST'){
       let body='';for await(const chunk of req)body+=chunk;
       const update=JSON.parse(body);const item=ackItems.find(i=>(i.id||i.event_id)===update.item_id);
-      assert.equal(update.state_key,item.state_key);item.acknowledged=update.acknowledged;
+      if(staleAck){res.writeHead(409,{'Content-Type':'application/json'});res.end('{"error":"Item changed"}');return;}
+      assert.equal(update.state_key,item.state_key);item.acknowledged=update.acknowledged;item.acknowledged_by='fixture-human';item.acknowledged_at='2026-10-10T20:00:00Z';
       res.writeHead(200,{'Content-Type':'application/json'});res.end('{"ok":true}');return;
     }
     res.writeHead(mode==='error' && path!=='/api/auth/status' ? 503 : 200, {'Content-Type':'application/json'});
@@ -168,20 +169,29 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     await page.getByRole('button',{name:'View source drawers',exact:true}).nth(3).click();
     await page.locator('#detail').getByRole('button',{name:'drawer_other',exact:true}).waitFor();
     assert.equal(await page.locator('#detail').getByText('drawer_unrelated',{exact:true}).count(),0);
-    mode='ack';ackItems=inbox.items.map((i,n)=>({...i,state_key:`fixture-${n}`,acknowledged:n===0}));
+    mode='ack';ackItems=inbox.items.map((i,n)=>({...i,state_key:`fixture-${n}`,acknowledged:n===0,acknowledged_by:n===0?'fixture-human':null,acknowledged_at:n===0?'2026-10-10T20:00:00Z':null}));
     for(const width of [400,1280]) {
       await page.setViewportSize({width,height:900});
       await page.goto(`http://127.0.0.1:${server.address().port}/#now`);await page.reload();
       await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
       assert.match(await page.locator('.takeaway').textContent(),/2 items waiting · 1 acknowledged/);
+      assert.equal(await page.locator('.inbox-item .actions button').filter({hasText:'Acknowledge'}).count(),2);
+      assert.equal(await page.locator('.inbox-with-source .source-refs').first().getByText('Evidence ids:',{exact:true}).count(),1);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`now-acknowledged-${width}.png`),fullPage:true});
     }
     await page.getByText('Acknowledged (1)',{exact:true}).click();
+    await page.getByText('Acknowledged by fixture-human',{exact:false}).waitFor();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-expanded-1280.png'),fullPage:true});
     await page.getByRole('button',{name:'Reopen',exact:true}).click();
     await page.getByRole('button',{name:'Acknowledge',exact:true}).nth(2).waitFor();
     assert.equal(await page.getByText('Acknowledged (1)',{exact:true}).count(),0);
-    await page.getByRole('button',{name:'Acknowledge',exact:true}).first().click();
+    staleAck=true;await page.getByRole('button',{name:'Acknowledge',exact:true}).first().click();
+    await page.getByText('This item changed. Refresh before acknowledging or reopening it.',{exact:true}).waitFor();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-stale-1280.png'),fullPage:true});
+    staleAck=false;await page.getByRole('button',{name:'Acknowledge',exact:true}).first().focus();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-keyboard-focus-1280.png'),fullPage:true});
+    await page.keyboard.press('Enter');
     await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
     for (mode of ['empty','error']) {
       for(const route of ['now','work','memory']) {

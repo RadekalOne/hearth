@@ -298,3 +298,5 @@ details summary { cursor: pointer; padding: .7rem 0; color: var(--dim); }
   .view table th:nth-child(n+4),.view table td:nth-child(n+4) { display: none; }
   .section { padding: 1rem; }
 }
+
+.inbox-item .acknowledgement-meta { grid-column: 1 / -1; margin: 0; font-size: .85rem; }

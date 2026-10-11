@@ -70,16 +70,21 @@ async function renderNow(view) {
   if(inbox.ok) {
     if(inbox.value.element_url)elementBase=inbox.value.element_url;
     const row=item=>{
-      const result=h('div',{class:'inbox-with-source'},['failed_watcher','overdue_work'].includes(item.kind)?durableAttentionRow(item):inboxRow(item),sourceLinks(item.source_refs||[item.event_id],item));
+      const card=['failed_watcher','overdue_work'].includes(item.kind)?durableAttentionRow(item):inboxRow(item);
+      const evidence=sourceLinks(item.source_refs||[item.event_id],item);evidence.prepend(h('span',{class:'dim',text:'Evidence ids:'}));
+      const result=h('div',{class:'inbox-with-source'},card,evidence);
       if(inbox.value.can_acknowledge) {
-        const button=h('button',{class:'btn',text:item.acknowledged?'Reopen':'Acknowledge',onClick:async()=>{
+        const button=h('button',{class:'small',text:item.acknowledged?'Reopen':'Acknowledge',onClick:async()=>{
           button.disabled=true;
           try {
             await api('/api/inbox/acknowledgement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:item.kind,item_id:item.id||item.event_id,state_key:item.state_key,acknowledged:!item.acknowledged})});
             clear(view);await renderNow(view);
-          }catch(error){button.disabled=false;view.querySelector('.load-status').textContent='Could not update the item. Refresh and try again.';}
+          }catch(error){button.disabled=false;view.querySelector('.load-status').textContent=error.status===409?'This item changed. Refresh before acknowledging or reopening it.':'Could not update the item. Refresh and try again.';}
         }});
-        result.append(button);
+        let actions=card.querySelector('.actions');
+        if(!actions){actions=h('div',{class:'actions'});card.append(h('div',{class:'actions-row'},actions));}
+        actions.append(button);
+        if(item.acknowledged)card.append(h('p',{class:'acknowledgement-meta dim',text:`Acknowledged by ${item.acknowledged_by||'you'} · ${when(item.acknowledged_at)||'Time unavailable'}`}));
       }
       return result;
     };
