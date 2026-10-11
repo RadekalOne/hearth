@@ -36,7 +36,12 @@ _dashboard_spec = importlib.util.spec_from_file_location('hearth_dashboard_proje
 _dashboard = importlib.util.module_from_spec(_dashboard_spec)
 _dashboard_spec.loader.exec_module(_dashboard)
 
+_ack_spec = importlib.util.spec_from_file_location('hearth_inbox_ack', os.path.join(os.path.dirname(__file__), 'inbox_ack.py'))
+_ack_module = importlib.util.module_from_spec(_ack_spec)
+_ack_spec.loader.exec_module(_ack_module)
+
 DATA_DIR = os.environ.get("HEARTH_DATA_DIR", "./data")
+inbox_acknowledgements = _ack_module.Acknowledgements(os.path.join(DATA_DIR,'inbox-acknowledgements.sqlite3'))
 HOMESERVER_URL = os.environ.get("HEARTH_HOMESERVER_URL", "")
 APP_VERSION = os.environ.get("HEARTH_MEMORY_VERSION", "0.8.0")
 BUILD_COMMIT = os.environ.get("HEARTH_MEMORY_BUILD_COMMIT", "unknown")
@@ -82,6 +87,12 @@ ADMIN_TOKEN = os.environ.get("HEARTH_MEMORY_ADMIN_TOKEN", "")
 # lets the dashboard observe agent activity via /api/agents.
 MATRIX_TOKEN = os.environ.get("HEARTH_MATRIX_TOKEN", "")
 TOKENS_PATH = os.path.join(DATA_DIR, "memory-tokens.json")
+_reviewer_spec = importlib.util.spec_from_file_location('hearth_reviewers', os.path.join(os.path.dirname(__file__), 'reviewers.py'))
+_reviewers = importlib.util.module_from_spec(_reviewer_spec)
+_reviewer_spec.loader.exec_module(_reviewers)
+reviewer_store = _reviewers.ReviewerStore(os.path.join(DATA_DIR, 'reviewers.sqlite3'))
+CURRENT_AUTH: ContextVar = ContextVar('hearth_typed_auth', default=None)
+
 CURRENT_PRINCIPAL: ContextVar[str] = ContextVar("hearth_memory_principal", default="anonymous")
 MEMORY_WRITE_LOCK = threading.RLock()
 # Load the sibling independently of the installed `mcp` package; app.py is also
@@ -136,7 +147,7 @@ def bearer(request: Request) -> str:
 
 def token_principal(token: str) -> str:
     """Resolve an API credential without leaking which credentials exist."""
-    if not token:
+    if not token or reviewer_store.owns_credential(token):
         return ""
     if ADMIN_TOKEN and pysecrets.compare_digest(token, ADMIN_TOKEN):
         return "admin"
@@ -178,7 +189,7 @@ def session_principal(request: Request) -> str:
     if session["auth_kind"] == "token":
         principal = session["principal"]
         current = ADMIN_TOKEN if principal == "admin" else load_tokens().get(principal, "")
-        if not current or not pysecrets.compare_digest(
+        if not current or reviewer_store.owns_credential(current) or not pysecrets.compare_digest(
             session["credential_hash"], _credential_hash(current)
         ):
             SESSIONS.pop(session_id, None)
@@ -1258,9 +1269,10 @@ def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
         raise ValueError("agent is required")
     if state not in {"open", "queued", "claimed", "resolved", "all"}:
         raise ValueError("state must be open, queued, claimed, resolved, or all")
-    _require_own_agent(agent)
-    if coordination_store.enabled:
-        _drain_continuations(agent)
+    if CURRENT_AUTH.get() is None:
+        _require_own_agent(agent)
+        if coordination_store.enabled:
+            _drain_continuations(agent)
     clauses = [{"target_agent": agent}]
     if state == "open":
         clauses.append({"state": {"$in": ["queued", "claimed"]}})
@@ -1327,6 +1339,7 @@ def _claim_relay_checked(relay_id: str, agent: str, surface: str = "") -> dict:
     updated = {
         **metadata,
         "state": "claimed",
+        "transition_generation": int(metadata.get('transition_generation',0)) + (metadata.get('state') != 'claimed'),
         "claimed_by": _principal(),
         "claimed_surface": surface,
         "updated_at": updated_at,
@@ -1346,6 +1359,7 @@ def resolve_relay(relay_id: str, agent: str, outcome: str) -> dict:
     updated = {
         **metadata,
         "state": "resolved",
+        "transition_generation": int(metadata.get('transition_generation',0)) + 1,
         "claimed_by": metadata.get("claimed_by") or _principal(),
         "outcome": outcome,
         "updated_at": updated_at,
@@ -1804,6 +1818,23 @@ def relay_resolve(relay_id: str, agent: str, outcome: str) -> dict:
 
 # ---------------------------------------------------------------- REST + dashboard
 
+async def reviewer_mcp_policy(ctx, call_next):
+    reviewer = CURRENT_AUTH.get()
+    if reviewer is not None:
+        if not _reviewers.mcp_allowed(ctx.method,ctx.params):
+            raise PermissionError('Reviewer MCP action denied')
+    result = await call_next(ctx)
+    if reviewer is not None:
+        if ctx.method == 'tools/list':
+            if isinstance(result,dict): result['tools']=[t for t in result.get('tools',[]) if (t.get('name') if isinstance(t,dict) else t.name) in _reviewers.READ_TOOLS]
+            elif hasattr(result,'tools'): result.tools=[t for t in result.tools if t.name in _reviewers.READ_TOOLS]
+        if ctx.method == 'resources/list':
+            if isinstance(result,dict): result['resources']=[r for r in result.get('resources',[]) if str(r.get('uri') if isinstance(r,dict) else r.uri) in _reviewers.READ_RESOURCES]
+            elif hasattr(result,'resources'): result.resources=[r for r in result.resources if str(r.uri) in _reviewers.READ_RESOURCES]
+    return result
+
+mcp.middleware.append(reviewer_mcp_policy)
+
 mcp_app = mcp.streamable_http_app(
     stateless_http=True,
     json_response=True,
@@ -1830,27 +1861,48 @@ async def require_token(request: Request, call_next):
         request.url.path.startswith(("/api/", "/mcp"))
         and request.url.path not in auth_routes
     )
+    cookie = request.cookies.get(SESSION_COOKIE, '')
+    reviewer = reviewer_store.authenticate(bearer(request))
+    if not request.url.path.startswith('/mcp') and not bearer(request):
+        reviewer = reviewer_store.session_context(cookie)
+    if bearer(request) and reviewer is None and reviewer_store.owns_credential(bearer(request)):
+        return _secure_response(JSONResponse({'error':'authentication required'},status_code=401),request.url.path)
     browser_principal = session_principal(request)
     principal = browser_principal or "anonymous"
-    if ADMIN_TOKEN and protected:
+    if reviewer and (bearer(request) or not request.url.path.startswith('/mcp')):
+        principal = reviewer.principal
+        if request.url.path.startswith('/api/'):
+            from starlette.routing import Match
+            route_name = next((route.path for route in app.routes if getattr(route, 'path', '').startswith('/api/') and route.matches(request.scope)[0] == Match.FULL), '')
+            if not _reviewers.rest_allowed(request.method, route_name):
+                return _secure_response(JSONResponse({'error':'reviewer read-only access denied'},status_code=403),request.url.path)
+            if request.method == 'GET' and route_name != '/api/auth/status':
+                reviewer_store.audit(reviewer.principal, route_name)
+        elif request.url.path.startswith('/mcp'):
+            if request.method != 'POST':
+                return _secure_response(JSONResponse({'error':'reviewer MCP method denied'},status_code=403),request.url.path)
+            try:
+                message = await request.json()
+                allowed = isinstance(message,dict) and isinstance(message.get('params',{}),dict) and _reviewers.mcp_allowed(message.get('method'),message.get('params'))
+            except (ValueError,TypeError): allowed = False
+            if not allowed:
+                return _secure_response(JSONResponse({'error':'reviewer MCP action denied'},status_code=403),request.url.path)
+    elif ADMIN_TOKEN and protected:
         # MCP stays bearer-only. Browser sessions are accepted only by REST APIs.
         principal = token_principal(bearer(request)) or (
             browser_principal if request.url.path.startswith("/api/") else ""
         )
         if not principal:
-            return _secure_response(
-                JSONResponse(
-                    {"error": "authentication required"},
-                    status_code=401,
-                    headers={"WWW-Authenticate": "Bearer"},
-                ),
-                request.url.path,
-            )
+            return _secure_response(JSONResponse({"error": "authentication required"},status_code=401,
+                headers={"WWW-Authenticate": "Bearer"}),request.url.path)
+    auth_context = reviewer if principal == getattr(reviewer, 'principal', None) else None
+    auth_token = CURRENT_AUTH.set(auth_context)
     context_token = CURRENT_PRINCIPAL.set(principal)
     try:
         response = await call_next(request)
     finally:
         CURRENT_PRINCIPAL.reset(context_token)
+        CURRENT_AUTH.reset(auth_token)
     return _secure_response(response, request.url.path)
 
 
@@ -1869,6 +1921,8 @@ def auth_status():
         "authenticated": principal != "anonymous",
         "principal": principal if principal != "anonymous" else None,
         "matrix_login_available": bool(HOMESERVER_URL),
+        "role": "reviewer" if CURRENT_AUTH.get() is not None else "existing",
+        "display_name": principal.removeprefix("reviewer:") if CURRENT_AUTH.get() is not None else principal,
     }
 
 
@@ -1876,10 +1930,20 @@ def auth_status():
 async def dashboard_login(request: Request):
     if not _same_origin(request):
         raise HTTPException(403, "cross-site login rejected")
+    body = await request.json()
+    reviewer = reviewer_store.authenticate(str(body.get('token', '')).strip())
+    if reviewer:
+        try: session_id = reviewer_store.session(reviewer)
+        except ValueError: raise HTTPException(401, 'reviewer revoked')
+        reviewer_store.audit(reviewer.principal, '/api/auth/login')
+        response = JSONResponse({'authenticated':True,'principal':reviewer.principal,'role':'reviewer','display_name':reviewer.principal.removeprefix('reviewer:')})
+        response.set_cookie(SESSION_COOKIE,session_id,max_age=_reviewers.TTL,httponly=True,
+                            secure=_secure_cookie(request),samesite='strict',path='/')
+        return response
+    if reviewer_store.owns_credential(str(body.get('token','')).strip()):
+        raise HTTPException(401,'reviewer revoked')
     if not ADMIN_TOKEN:
         return {"authenticated": True, "principal": "anonymous", "auth_enabled": False}
-
-    body = await request.json()
     token = str(body.get("token", "")).strip()
     username = str(body.get("username", "")).strip()
     password = str(body.get("password", ""))
@@ -1945,10 +2009,45 @@ async def dashboard_login(request: Request):
 def dashboard_logout(request: Request):
     if not _same_origin(request):
         raise HTTPException(403, "cross-site logout rejected")
+    reviewer_store.logout(request.cookies.get(SESSION_COOKIE, ""))
     SESSIONS.pop(request.cookies.get(SESSION_COOKIE, ""), None)
     response = JSONResponse({"authenticated": False})
     response.delete_cookie(SESSION_COOKIE, path="/", samesite="strict")
     return response
+
+
+def provision_reviewer(name: str, credential: str, scope: str):
+    """Operator-only provisioning seam; external delivery requires separate approval."""
+    if token_principal(credential): raise ValueError("Credential already belongs to an existing principal")
+    reviewer_store.provision(name,credential,scope,reserved=_roster() | HUMAN_IDS | HUMAN_TOKEN_IDS)
+
+
+def require_human_reviewer_admin(request: Request):
+    session = SESSIONS.get(request.cookies.get(SESSION_COOKIE, ''), {})
+    configured_human = _principal() == 'admin' or _localpart(_principal()) in HUMAN_IDS
+    if CURRENT_AUTH.get() is not None or not configured_human or session.get('auth_kind') not in {'token','matrix'} or session_principal(request) != _principal() or not _work_human():
+        raise HTTPException(403, 'configured human dashboard session required')
+    if not _same_origin(request): raise HTTPException(403, 'cross-site request rejected')
+
+
+@app.get('/api/reviewers/accounts')
+def reviewer_accounts(request: Request):
+    require_human_reviewer_admin(request)
+    return {'accounts':reviewer_store.accounts()}
+
+
+@app.get('/api/reviewers/audit')
+def reviewer_audit(request: Request):
+    require_human_reviewer_admin(request)
+    return {'entries':reviewer_store.audit_rows()}
+
+
+@app.post('/api/reviewers/{name}/revoke')
+def reviewer_revoke(name: str, request: Request):
+    require_human_reviewer_admin(request)
+    try: reviewer_store.revoke(name,actor=_principal())
+    except ValueError as error: raise HTTPException(404,str(error))
+    return {'revoked':True}
 
 
 @app.post("/api/tokens")
@@ -1956,8 +2055,8 @@ async def mint_token(request: Request):
     require_admin(request)
     body = await request.json()
     agent = str(body.get("agent", "")).strip()
-    if not agent:
-        raise HTTPException(400, "agent name required")
+    if not agent or agent.startswith("reviewer:"):
+        raise HTTPException(400, "agent name required; reviewer namespace is reserved")
     tokens = load_tokens()
     tokens[agent] = pysecrets.token_urlsafe(32)
     save_tokens(tokens)
@@ -2618,7 +2717,10 @@ async def _fetch_room_events(force: bool = False) -> dict:
     reactions: list[dict] = []
     room_names: dict[str, str] = {}
     async with httpx.AsyncClient(timeout=15) as client:
-        joined = (await client.get(f"{base}/_matrix/client/v3/joined_rooms", headers=headers)).json()
+        joined_response = await client.get(f"{base}/_matrix/client/v3/joined_rooms", headers=headers)
+        if force and joined_response.status_code != 200:
+            raise HTTPException(503,'Cannot verify current inbox source')
+        joined = joined_response.json()
         for rid in joined.get("joined_rooms", []):
             try:
                 name = (await client.get(
@@ -2628,11 +2730,15 @@ async def _fetch_room_events(force: bool = False) -> dict:
                 name = rid
             room_names[rid] = name
             try:
-                msgs = (await client.get(
+                message_response = await client.get(
                     f"{base}/_matrix/client/v3/rooms/{rid}/messages", headers=headers,
                     params={"dir": "b", "limit": ROOM_FETCH_LIMIT},
-                )).json()
+                )
+                if force and message_response.status_code != 200:
+                    raise HTTPException(503,'Cannot verify current inbox source')
+                msgs = message_response.json()
             except Exception:
+                if force:raise HTTPException(503,'Cannot verify current inbox source')
                 continue
             for e in msgs.get("chunk", []):
                 content = e.get("content") or {}
@@ -3160,13 +3266,65 @@ async def matrix_act(request: Request):
 
 
 @app.get("/api/inbox")
-async def api_inbox():
+async def api_inbox(request: Request):
+    return await _inbox_snapshot(request)
+
+
+def _qualifying_inbox_event(event,item):
+    if event.get('tag_base')=='ACK' or _task_ack_id(event.get('tag',''),event.get('body','')):
+        return False
+    if _localpart(event.get('sender',''))==item.get('sender'):
+        body=re.sub(r'^\s*\[[^\]]+\]\s*','',event.get('body',''))
+        body=re.split(r'\n\s*(?:—|--)',body)[0].strip()
+        if re.fullmatch(r'(?:ack(?:nowledged)?|received|thanks|noted|agreed|understood|looks good)[.! ]*',body,re.I):
+            return False
+    return True
+
+
+async def _inbox_snapshot(request,force=False):
     """What is waiting on a human: plans to approve, blocked agents, questions, and
     tasks nobody has picked up."""
-    data = await _fetch_room_events()
+    data = await _fetch_room_events(force=force) if force else await _fetch_room_events()
     roster = _roster()
     inbox = _build_inbox(data, roster)
-    return _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items())
+    result = _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items())
+    result['items']=[dict(item) for item in result['items']]
+    for item in result['items']:
+        root=item.get('thread_root') or item.get('event_id')
+        related=[e for e in data['events'] if e.get('room_id')==item.get('room_id')
+                 and (e.get('thread_root')==root or e.get('reply_to')==item.get('event_id'))
+                 and _qualifying_inbox_event(e,item)]
+        if related:item['latest_qualifying_event']=max(related,key=lambda e:e['ts'])['event_id']
+    result['items']=inbox_acknowledgements.project(result['items'])
+    result['acknowledged_total']=sum(i['acknowledged'] for i in result['items'])
+    result['open_total']=result['total']-result['acknowledged_total']
+    result['can_acknowledge']=_human_inbox_session(request)
+    return result
+
+
+def _human_inbox_session(request):
+    session=SESSIONS.get(request.cookies.get(SESSION_COOKIE,''))
+    principal=session_principal(request)
+    return bool(session and principal and session.get('auth_kind') in {'matrix','token'}
+                and principal==_principal() and _work_human())
+
+
+@app.post('/api/inbox/acknowledgement')
+async def api_inbox_acknowledgement(request: Request):
+    if not _human_inbox_session(request):
+        raise HTTPException(403,'A human dashboard session is required')
+    if not _same_origin(request):raise HTTPException(403,'cross-site action rejected')
+    try:
+        body=await request.json()
+        if not isinstance(body,dict) or set(body)!={'kind','item_id','state_key','acknowledged'} or type(body['acknowledged']) is not bool:
+            raise ValueError()
+    except (ValueError,TypeError):raise HTTPException(400,'Invalid acknowledgement payload')
+    current=await _inbox_snapshot(request,force=True)
+    item=next((i for i in current['items'] if _ack_module.identity(i)==(body['kind'],body['item_id'])),None)
+    if not item:raise HTTPException(409,'Item is no longer waiting; refresh')
+    try:inbox_acknowledgements.set(item,body['state_key'],session_principal(request),body['acknowledged'])
+    except _ack_module.StaleAcknowledgement as error:raise HTTPException(409,str(error))
+    return {'ok':True}
 
 
 @app.get("/api/surfaces")

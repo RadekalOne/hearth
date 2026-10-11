@@ -1,0 +1,18 @@
+{
+  "route": "work",
+  "width": 1280,
+  "theme": "light",
+  "engine": {
+    "name": "axe-core",
+    "version": "4.14.0"
+  },
+  "violations": [],
+  "contrast": {
+    "--text": 15.41047936212594,
+    "--dim": 6.618705779238732,
+    "--accent": 6.031855294618697,
+    "--warn": 5.749767450678191,
+    "--bad": 6.643671810771859,
+    "--control-border": 3.979592356593271
+  }
+}

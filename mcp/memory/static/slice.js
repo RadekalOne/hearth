@@ -65,12 +65,35 @@ async function renderNow(view) {
   const watchers=surfaces.ok?(surfaces.value.watchers||surfaces.value.surfaces||[]):[];
   const attention=watchers.filter(w=>['failed','stalled','late'].includes(w.state)).sort((a,b)=>({failed:0,stalled:1,late:2}[a.state])-({failed:0,stalled:1,late:2}[b.state])||(b.age_minutes||0)-(a.age_minutes||0));
   const totals=Object.fromEntries(['failed','stalled','late'].map(s=>[s,attention.filter(w=>w.state===s).length]));
-  view.querySelector('.takeaway').textContent=inbox.ok&&surfaces.ok?`${plural(inbox.value.total,'item')} waiting · ${plural(totals.failed,'failed watcher')} · ${plural(totals.stalled,'stalled watcher')} · ${plural(totals.late,'late watcher')}.`:'Some attention data is unavailable.';
+  view.querySelector('.takeaway').textContent=inbox.ok&&surfaces.ok?`${plural(inbox.value.open_total??inbox.value.total,'item')} waiting${inbox.value.acknowledged_total?` · ${inbox.value.acknowledged_total} acknowledged`:''} · ${plural(totals.failed,'failed watcher')} · ${plural(totals.stalled,'stalled watcher')} · ${plural(totals.late,'late watcher')}.`:'Some attention data is unavailable.';
   const inboxBody=clear(waiting.querySelector('.reserved-body'));
   if(inbox.ok) {
     if(inbox.value.element_url)elementBase=inbox.value.element_url;
-    if(!inbox.value.items.length)inboxBody.append(h('p',{class:'empty',text:'Nothing is waiting on you right now.'}));
-    for(const item of inbox.value.items)inboxBody.append(h('div',{class:'inbox-with-source'},['failed_watcher','overdue_work'].includes(item.kind)?durableAttentionRow(item):inboxRow(item),sourceLinks(item.source_refs||[item.event_id],item)));
+    const row=item=>{
+      const card=['failed_watcher','overdue_work'].includes(item.kind)?durableAttentionRow(item):inboxRow(item);
+      const evidence=sourceLinks(item.source_refs||[item.event_id],item);evidence.prepend(h('span',{class:'dim',text:'Evidence ids:'}));
+      const result=h('div',{class:'inbox-with-source'},card,evidence);
+      if(inbox.value.can_acknowledge) {
+        const button=h('button',{class:'small secondary',text:item.acknowledged?'Reopen':'Acknowledge',onClick:async()=>{
+          button.disabled=true;
+          try {
+            await api('/api/inbox/acknowledgement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:item.kind,item_id:item.id||item.event_id,state_key:item.state_key,acknowledged:!item.acknowledged})});
+            clear(view);await renderNow(view);
+          }catch(error){button.disabled=false;view.querySelector('.load-status').textContent=error.status===409?'This item changed. Refresh before acknowledging or reopening it.':'Could not update the item. Refresh and try again.';}
+        }});
+        let actions=card.querySelector('.actions');
+        if(!actions){actions=h('div',{class:'actions'});card.append(h('div',{class:'actions-row'},actions));}
+        const details=card.querySelector('.meta button');
+        if(details){details.className='small secondary';actions.prepend(details);}
+        actions.append(button);
+        if(item.acknowledged)card.append(h('p',{class:'acknowledgement-meta dim',text:`Acknowledged by ${item.acknowledged_by||'you'} · ${when(item.acknowledged_at)||'Time unavailable'}`}));
+      }
+      return result;
+    };
+    const open=inbox.value.items.filter(i=>!i.acknowledged),acknowledged=inbox.value.items.filter(i=>i.acknowledged);
+    if(!open.length)inboxBody.append(h('p',{class:'empty',text:'Nothing is waiting on you right now.'}));
+    inboxBody.append(...open.map(row));
+    if(acknowledged.length)inboxBody.append(h('details',{class:'acknowledged-items'},h('summary',{text:`Acknowledged (${acknowledged.length})`}),...acknowledged.map(row)));
   }
   const watcherBody=clear(awake.querySelector('.reserved-body'));
   if(surfaces.ok) {

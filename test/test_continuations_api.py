@@ -12,6 +12,27 @@ class ContinuationAPI(unittest.IsolatedAsyncioTestCase):
     project=coord_api.CoordinationAPITests.project
     answer=coord_api.CoordinationAPITests.answer
 
+    async def test_reviewer_inbox_and_bootstrap_do_not_deliver_pending_continuations(self):
+        await self.post('/api/coordination/wait',self.wait_payload,'codex-test-token')
+        await self.answer()
+        pending=self.memory.coordination_store.deliveries('codex')
+        self.assertEqual(len(pending),1)
+        key=pending[0]['delivery_id']
+        auth=self.memory.CURRENT_AUTH.set(self.memory._reviewers.AuthContext(
+            'reviewer:fixture','reviewer','bearer','full',1))
+        principal=self.memory.CURRENT_PRINCIPAL.set('reviewer:fixture')
+        try:
+            for read in (lambda:self.memory.relay_inbox_for('codex'),
+                         lambda:self.memory.bootstrap('codex',compact=True)):
+                read()
+                self.assertEqual(self.memory.relays.get(ids=[key])['ids'],[])
+                self.assertEqual(self.memory.coordination_store.deliveries('codex'),pending)
+        finally:
+            self.memory.CURRENT_AUTH.reset(auth)
+            self.memory.CURRENT_PRINCIPAL.reset(principal)
+            if self.memory.relays.get(ids=[key])['ids']:
+                self.memory.relays.delete(ids=[key])
+
     async def test_reply_bootstrap_claim_and_cancel_with_explicit_surface(self):
         await self.post('/api/coordination/wait',{**self.wait_payload,'continuation':{'last_read_event':'$request','next_action':'Read Claude review and fix validation'}},'codex-test-token')
         self.assertEqual((await self.answer()).status_code,200)
