@@ -298,3 +298,5 @@ details summary { cursor: pointer; padding: .7rem 0; color: var(--dim); }
   .view table th:nth-child(n+4),.view table td:nth-child(n+4) { display: none; }
   .section { padding: 1rem; }
 }
+
+@media (max-width:650px) { .topbar .identity[data-role="reviewer"] { display: block; flex-basis:100%; white-space:normal; overflow-wrap:anywhere; } }

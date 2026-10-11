@@ -35,7 +35,7 @@ const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
   const api = {
-    '/api/auth/status': {authenticated:true,principal:'fixture-human',auth_enabled:false},
+    '/api/auth/status': {authenticated:true,principal:mode==='reviewer'?'reviewer:fixture-review':'fixture-human',role:mode==='reviewer'?'reviewer':'existing',display_name:mode==='reviewer'?'fixture-review':'fixture-human',auth_enabled:false},
     '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
@@ -161,6 +161,16 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     await page.getByRole('button',{name:'View source drawers',exact:true}).nth(3).click();
     await page.locator('#detail').getByRole('button',{name:'drawer_other',exact:true}).waitFor();
     assert.equal(await page.locator('#detail').getByText('drawer_unrelated',{exact:true}).count(),0);
+    mode='reviewer';
+    for(const width of [400,1280]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(`http://127.0.0.1:${server.address().port}/#now`);await page.reload();
+      await page.getByText('Signed in as fixture-review · reviewer',{exact:true}).waitFor();
+      await page.getByText('Read-only reviewer access',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'Reply',exact:true}).count(),0);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`reviewer-now-${width}.png`),fullPage:true});
+    }
     for (mode of ['empty','error']) {
       for(const route of ['now','work','memory']) {
         await page.goto(`http://127.0.0.1:${server.address().port}/#${route}`);
