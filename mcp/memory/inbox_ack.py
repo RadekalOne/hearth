@@ -19,6 +19,8 @@ def state_key(item):
     kind, key = identity(item)
     revision = (item.get('revision', 0), item.get('state'), item.get('receipt_source'),
                 item.get('checkpoint_at'), item.get('latest_qualifying_event'), item.get('event_id'))
+    additional={k:item[k] for k in ('generation','action_generation','auth_receipts') if item.get(k)}
+    if additional:revision=(*revision,additional)
     return hashlib.sha256(json.dumps([kind,key,revision],sort_keys=True).encode()).hexdigest()
 
 

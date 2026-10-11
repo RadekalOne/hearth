@@ -109,7 +109,7 @@ class CoordinationAPITests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pass_human_approval_and_relay_owner_do_not_grant_execution_authority(self):
         await self.post('/api/coordination/wait',self.wait_payload,'codex-test-token')
-        passed=await self.answer('pass_needing_human',approval_party='rad')
+        passed=await self.answer('pass_needing_human',approval_party='rad', human_action={'steps':['Open the task and reply Approve or Request changes.'],'after':'Codex continues after your choice.','ask':'Ask Codex in the task thread.'})
         self.assertEqual(passed.json()['coordination_waiting_on'][0]['kind'],'human')
         denied=await self.answer('approved',token='codex-test-token',party_id='rad',source_event='$approval',expected_generation=passed.json()['generation'])
         self.assertEqual(denied.status_code,403)

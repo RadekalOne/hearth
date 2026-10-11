@@ -93,7 +93,7 @@ class CoordinationTests(unittest.TestCase):
         changes = self.answer('change_list')
         self.assertEqual([(p['kind'],p['id']) for p in changes['coordination_waiting_on']], [('agent','codex')])
         passed = self.store.answer('codex', False, expected_generation=changes['generation'], party_id='codex',
-            answer_kind='pass_needing_human', approval_party='rad', source_event='$pass',
+            answer_kind='pass_needing_human', approval_party='rad', human_action={'steps':['Open the task and reply Approve or Request changes.'],'after':'Codex continues after your choice.','ask':'Ask Codex in the task thread.'}, source_event='$pass',
             since='2026-10-10T14:00:00Z', summary='Ready for deployment review', evidence=['commit_fixture'], **self.identity)
         self.assertEqual([(p['kind'],p['id']) for p in passed['coordination_waiting_on']], [('human','rad')])
         self.assertFalse(passed['grants_authority'])
@@ -174,7 +174,7 @@ class CoordinationTests(unittest.TestCase):
 
     def test_human_cannot_answer_for_a_different_human(self):
         self.store.set_wait('codex',False,owner='codex',owner_kind='agent',expected_generation=0,
-            parties=[{'kind':'human','id':'rad','required_surface':'interactive'}],
+            parties=[{'kind':'human','id':'rad','required_surface':'interactive','human_action':{'steps':['Open the task and reply Approve or Request changes.'],'after':'Codex continues after your choice.','ask':'Ask Codex in the task thread.'}}],
             source_event='$request',since='2026-10-10T12:00:00Z',**self.identity)
         with self.assertRaises(c.CoordinationError) as err:
             self.answer('approved',actor='other_human',human=True,party_id='rad')

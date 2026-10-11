@@ -2,6 +2,16 @@
 
 ## Review loops (spec v1.6)
 
+Before taking a new prompt in an interactive session
+- Call bootstrap and drain your own inbox first. Read every queued relay, claim actionable work before starting it, and resolve it with an evidenced outcome. Acknowledge does not cancel the work.
+- Preserve another executor's live claim. Report a genuine approval or information blocker with everyday instructions; do not silently leave a stale handoff queued or claim that a queue receipt proves work started.
+- Read explicit coordination obligations and high-priority dispatches. Respect `required_surface`: an interactive request cannot run in an unattended session.
+
+When work waits on a human
+- Supply `human_action` with one to three everyday numbered steps, what happens after, and who to ask. Say what to open and exactly what to click, paste or choose. Put evidence links underneath, not in place of instructions.
+- New human-targeted coordination waits and PASS-to-human answers require this field. Legacy inferred inbox items get generic recovery instructions until an agent supplies a task-specific block.
+- Runner JSON receipts should include `reason: "auth_expired"` when sign-in expires. Receipt ingestion classifies recognized legacy authentication failures too; raw process output is not a dashboard instruction.
+
 When you start work on a task
 - Post a [CLAIM] in the task thread. Work you do without telling the thread is invisible to the inbox and looks unclaimed.
 - Post [PROGRESS] when something material changes, in the same thread.
@@ -30,7 +40,7 @@ Service availability: call bootstrap and inspect capabilities first. Typed coord
 and continuation delivery are default-off. Explicitly record the source thread,
 last-read event, exact next action and deadline when handing off. Continuation delivery
 is driven by the existing bootstrap/relay inbox poll and grants no execution authority.
-The notification consumer and human/agent inbox split are not yet installed; when
+The notification consumer is not yet installed; when
 `coordination_escalation_notifications` is false, record held evidence and stay quiet,
 never claim a notification happened. Do not invent a notification channel.
 
