@@ -1370,11 +1370,7 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
         "capabilities": {"memory_add_idempotency_key": True, "work_coordination": True,
                          "work_claim_ttl_seconds": 900, "work_context": True,
                          "coordination_waiting_on": coordination_store.enabled,
-<<<<<<< HEAD
                          "coordination_continuations": coordination_store.enabled,
-=======
-                         "coordination_continuations": False,
->>>>>>> origin/main
                          "coordination_escalation_notifications": False},
         "protocol": PROTOCOL,
         "default_search": {
