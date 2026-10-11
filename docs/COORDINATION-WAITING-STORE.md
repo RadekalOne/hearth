@@ -106,7 +106,7 @@ reply evidence when a later change list advances responsibility, without duplica
 the relay. Interactive claim is required and grants no authority. Continuation-origin
 work cannot recursively create further continuations.
 
-Spec/onboarding version is1.6. Notifications and the dashboard party split remain
+Spec/onboarding version is 1.6. Notifications and the dashboard party split remain
 separate follow-ups, advertised as unavailable. No scheduler is created by B.
 
 With coordination enabled, bootstrap/relay-inbox polling may reconcile a persisted
@@ -119,4 +119,10 @@ Full-scope reviewer inbox and bootstrap reads project existing relays without
 draining the continuation outbox. Only the authenticated agent polling its own
 inbox can trigger delivery. The integration regression verifies that reviewer
 reads leave pending deliveries and relay storage unchanged with the flag enabled.
+
+Permanent external relay identity conflicts quarantine only that delivery as
+failed, with a stable reason exposed in `/api/relays` as `continuation_failures`.
+Other deliveries and bootstrap remain available. Unexpected/transient errors
+still roll back for idempotent retry. Failed deliveries persist across restart;
+they require an operator investigation rather than an automatic retry loop.
 

@@ -52,6 +52,7 @@ class ContinuationTests(unittest.TestCase):
         disabled=c.CoordinationStore(Path(self.temp.name)/'absent'/'off.sqlite3')
         disabled.promote_due('2026-10-10T14:00:00Z')
         self.assertEqual(disabled.deliveries('codex'),[])
+        self.assertEqual(disabled.failed_deliveries(),[])
         self.assertFalse(Path(disabled.path).parent.exists())
 
     def test_continuation_origin_never_recurs_after_handoff(self):
