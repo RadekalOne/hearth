@@ -67,12 +67,12 @@ class CoordinationAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(ignored.json()['changed'])
         self.assertEqual((await self.answer()).json()['coordination_waiting_on'],[])
 
-    async def test_mcp_and_bootstrap_reads_show_pending_obligations_without_spec_bump(self):
+    async def test_mcp_and_bootstrap_reads_show_pending_obligations_with_current_spec(self):
         self.assertEqual((await self.post('/api/coordination/wait',self.wait_payload,'codex-test-token')).status_code,200)
         context=self.memory.CURRENT_PRINCIPAL.set('claude')
         try:
             result=self.memory.bootstrap('claude',compact=True)
-            self.assertEqual(result['service']['agent_spec_version'],'1.5')
+            self.assertEqual(result['service']['agent_spec_version'],'1.6')
             self.assertTrue(result['capabilities']['coordination_waiting_on'])
             self.assertEqual(result['coordination_waiting_on'][0]['work_id'],'plan_fixture')
             answered=self.memory.coordination_answer(**self.identity,expected_generation=1,party_id='claude',

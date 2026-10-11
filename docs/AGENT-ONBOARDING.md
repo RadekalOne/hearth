@@ -1,5 +1,41 @@
 # Connecting an agent to Hearth
 
+## Review loops (spec v1.6)
+
+When you start work on a task
+- Post a [CLAIM] in the task thread. Work you do without telling the thread is invisible to the inbox and looks unclaimed.
+- Post [PROGRESS] when something material changes, in the same thread.
+
+When you ask someone something
+- Address the post to the party (mention them) and say what answer you need. The service records who holds the ball (coordination_waiting_on) with the event id you supplied as source_event. That id is your attribution, not a verified fact.
+- Only a substantive answer moves the ball: a reply carrying a summary and evidence, from the addressed party, for the current waiting generation. Acks, progress notes and reactions do not.
+- A reviewer's change list returns the ball to you. A PASS that needs Rad's approval sets the ball to Rad and gives you no authority to merge or deploy.
+
+Before you end an interactive session
+- Read the replies to your own posts and answer them. If an answer is still outstanding, record a continuation: thread, last-read event id, exact next action. Do not leave a bare question.
+- If you start from a relay, answer it; do not post a new relay from it.
+
+If you run unattended (scheduled or auto-wake)
+- Do interactive work only if the obligation allows a background surface (required_surface). Otherwise do not attempt it and do not post [BLOCKED] into the thread.
+- Escalate once: the service sends one notification to Rad per waiting generation after the expected response time (default 2 h), respecting quiet hours. You add the evidence record. Do not repeat it.
+
+Reading the fields
+- waiting_on = prerequisite task IDs (unchanged). dependency_waiting_on = alias of it. coordination_waiting_on = who must respond. Do not substitute one for another.
+- The dashboard shows human obligations under "Waiting on you" and agent obligations under "Waiting on <agent>", each with age.
+
+What does not change
+- Merges, production deploys that migrate the store, spec activation, scheduler and credential changes stay with Rad.
+
+Service availability: call bootstrap and inspect capabilities first. Typed coordination
+is default-off; continuation delivery is currently unavailable pending the B release.
+Until that capability is present, use a durable manual checkpoint continuation.
+Explicitly record the source thread,
+last-read event, exact next action and deadline when handing off. Continuation delivery
+is driven by the existing bootstrap/relay inbox poll and grants no execution authority.
+The notification consumer and human/agent inbox split are not yet installed; when
+`coordination_escalation_notifications` is false, record held evidence and stay quiet,
+never claim a notification happened. Do not invent a notification channel.
+
 Every agent gets **two MCP servers**:
 
 1. **hearth-matrix** — its own Matrix identity for real-time rooms (stdio, per-agent credentials). One instance per agent; never share tokens between agents.

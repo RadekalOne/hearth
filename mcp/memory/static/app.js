@@ -112,13 +112,15 @@ function showLogin(message = "") {
   $("password").value = "";
   stopAutoRefresh();
 }
-function showDashboard(principal, authEnabled = true) {
+function showDashboard(principal, authEnabled = true, role = "existing", displayName = principal) {
   state.authed = true;
   state.principal = principal || "";
+  state.role = role;
+  $("identity").dataset.role = role;
   state.authEnabled = authEnabled;
   $("login-shell").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
-  $("identity").textContent = principal ? `Signed in as ${principal}` : "Authentication disabled";
+  $("identity").textContent = principal ? `Signed in as ${role==="reviewer"?displayName+" · reviewer":principal}` : "Authentication disabled";
   $("logout").classList.toggle("hidden", !authEnabled);
   render();
   startAutoRefresh();
@@ -131,7 +133,7 @@ async function signIn(body) {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     $("access-token").value = "";
-    showDashboard(data.principal, data.auth_enabled !== false);
+    showDashboard(data.principal, data.auth_enabled !== false, data.role, data.display_name);
   } catch (err) {
     if (!(err instanceof AuthRequired)) $("login-error").textContent = err.message;
     else $("login-error").textContent = "Invalid username, password, or access token.";
@@ -323,6 +325,7 @@ async function matrixPost(path, body, token) {
   return api(path, { method: "POST", headers, body: JSON.stringify(body) });
 }
 function actionBar(i) {
+  if(state.role === "reviewer")return h("p", {class:"dim",text:"Read-only reviewer access"});
   const wrap = h("div", { class: "actions" });
   const status = h("span", { class: "dim action-status" });
   const panel = h("div", { class: "action-panel hidden" });
@@ -776,7 +779,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetai
 document.addEventListener('DOMContentLoaded', () => fetch("/api/auth/status")
   .then((res) => res.json())
   .then((auth) => {
-    if (auth.authenticated || !auth.auth_enabled) showDashboard(auth.principal, auth.auth_enabled);
+    if (auth.authenticated || !auth.auth_enabled) showDashboard(auth.principal, auth.auth_enabled, auth.role, auth.display_name);
     else if (!auth.matrix_login_available) $("login-error").textContent = "Matrix sign-in is unavailable; use an access token.";
   })
   .catch(() => showLogin("Hearth Memory is unavailable.")));

@@ -38,6 +38,8 @@ const server = createServer(async (req,res) => {
   const api = {
     '/api/auth/status': {authenticated:true,principal:'fixture-human',auth_enabled:false},
     '/api/inbox': mode === 'ack' ? {...inbox,items:ackItems,can_acknowledge:true,open_total:ackItems.filter(i=>!i.acknowledged).length,acknowledged_total:ackItems.filter(i=>i.acknowledged).length} : mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
+    '/api/auth/status': {authenticated:true,principal:mode==='reviewer'?'reviewer:fixture-review':'fixture-human',role:mode==='reviewer'?'reviewer':'existing',display_name:mode==='reviewer'?'fixture-review':'fixture-human',auth_enabled:false},
+    '/api/inbox': mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
@@ -195,6 +197,16 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-keyboard-focus-1280.png'),fullPage:true});
     await page.keyboard.press('Enter');
     await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
+    mode='reviewer';
+    for(const width of [400,1280]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(`http://127.0.0.1:${server.address().port}/#now`);await page.reload();
+      await page.getByText('Signed in as fixture-review · reviewer',{exact:true}).waitFor();
+      await page.getByText('Read-only reviewer access',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'Reply',exact:true}).count(),0);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`reviewer-now-${width}.png`),fullPage:true});
+    }
     for (mode of ['empty','error']) {
       for(const route of ['now','work','memory']) {
         await page.goto(`http://127.0.0.1:${server.address().port}/#${route}`);

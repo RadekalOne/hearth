@@ -20,6 +20,7 @@
     "mcp/memory/dashboard.py",
     "mcp/memory/coordination.py",
     "mcp/memory/inbox_ack.py",
+    "mcp/memory/reviewers.py",
     "mcp/memory/dashboard-watchers.json",
     "mcp/memory/Dockerfile",
     "mcp/memory/requirements.txt",
