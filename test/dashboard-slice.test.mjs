@@ -189,7 +189,9 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     staleAck=true;await page.getByRole('button',{name:'Acknowledge',exact:true}).first().click();
     await page.getByText('This item changed. Refresh before acknowledging or reopening it.',{exact:true}).waitFor();
     if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-stale-1280.png'),fullPage:true});
-    staleAck=false;await page.getByRole('button',{name:'Acknowledge',exact:true}).first().focus();
+    staleAck=false;for(let n=0;n<30;n++){await page.keyboard.press('Tab');if(await page.evaluate(()=>document.activeElement.textContent==='Acknowledge'))break;}
+    assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Acknowledge');
+    assert.equal(await page.evaluate(()=>document.activeElement.matches('button:focus-visible')),true);
     if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-keyboard-focus-1280.png'),fullPage:true});
     await page.keyboard.press('Enter');
     await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
