@@ -1,6 +1,7 @@
 """Human-readable obligations and real responsibility transition contracts."""
 import importlib.util
 import tempfile
+import json
 import unittest
 from pathlib import Path
 
@@ -43,6 +44,41 @@ class HumanActionTests(unittest.TestCase):
             self.assertEqual(result['coordination_waiting_on'][0]['human_action'],ACTION)
 
 class RecoveryProjectionTests(unittest.TestCase):
+    def test_successful_receipt_with_recovery_notes_stays_healthy(self):
+        for fields in [
+            {'process_exit':0,'notes':'Recovered from the OAuth session expired outage'},
+            {'process_exit':'0','error':'OAuth session expired','reason':'auth_expired'},
+            {'process_exit':0,'closeout_verified':True,'reason':'auth_expired'},
+        ]:
+            with self.subTest(fields=fields):
+                receipt=d.receipt(json.dumps(fields))
+                self.assertNotIn('reason',receipt)
+                self.assertEqual(d.watcher_state(1,60,receipt),'ok')
+                self.assertEqual(d.attention_inbox({'items':[]},[{'id':'healthy','state':'ok','receipt':receipt}],[])['items'],[])
+
+    def test_failed_receipt_uses_error_not_notes_for_auth_classification(self):
+        for content in [
+            json.dumps({'process_exit':1,'error':'Network unavailable','notes':'OAuth session expired last week'}),
+            'process_exit: 1\nnotes: OAuth session expired last week\nerror: Network unavailable',
+        ]:
+            with self.subTest(content=content):
+                receipt=d.receipt(content)
+                self.assertNotIn('reason',receipt)
+                self.assertEqual(d.watcher_state(1,60,receipt),'failed')
+
+    def test_auth_recovery_requires_failure_evidence_and_preserves_true_positives(self):
+        for fields in [
+            {'process_exit':1,'error':'OAuth session expired'},
+            {'process_exit':'1','reason':'auth_expired'},
+            {'process_exit':0,'closeout_verified':False,'error':'Authentication expired'},
+        ]:
+            with self.subTest(fields=fields):
+                receipt=d.receipt(json.dumps(fields))
+                self.assertEqual(receipt['reason'],'auth_expired')
+                self.assertEqual(d.watcher_state(1,60,receipt),'failed')
+        self.assertNotIn('reason',d.receipt('{"error":"OAuth session expired"}'))
+        self.assertEqual(d.watcher_state(1,60,{'reason':'auth_expired','process_exit':0}),'ok')
+
     def test_existing_acknowledgement_key_survives_unrelated_upgrade(self):
         import hashlib,json
         ack=module('inbox_ack')

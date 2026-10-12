@@ -6,6 +6,16 @@ from test import test_inbox_ack_api as ack
 from test.test_inbox_usability import ACTION
 
 class UsabilityAPI(unittest.IsolatedAsyncioTestCase):
+    async def test_successful_recovery_checkpoint_does_not_persist_auth_failure(self):
+        import json
+        context=self.memory.CURRENT_PRINCIPAL.set('codex')
+        try:
+            fields={'process_exit':0,'closeout_verified':True,'notes':'Recovered from OAuth session expired outage','run_id':'recovered-fixture'}
+            result=self.memory.write_checkpoint('codex','laptop','recovery-regression',json.dumps(fields))
+            saved=json.loads(self.memory.checkpoints.get(ids=[result['checkpoint_id']],include=['documents'])['documents'][0])
+            self.assertEqual(saved,fields)
+        finally:self.memory.CURRENT_PRINCIPAL.reset(context)
+
     setUpClass=classmethod(ack.InboxAcknowledgementAPI.setUpClass.__func__)
     tearDownClass=classmethod(ack.InboxAcknowledgementAPI.tearDownClass.__func__)
     async def asyncSetUp(self):
