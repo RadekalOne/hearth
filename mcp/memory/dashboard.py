@@ -25,23 +25,28 @@ def receipt(content):
             if found:
                 raw = found[1].lower()
                 fields[key] = raw == 'true' if raw in ('true', 'false') else int(raw)
+        error = re.search(r'(?:^|\n)\s*error\s*[:=]\s*([^\n]*)', str(content), re.I)
+        if error:
+            fields['error'] = error[1]
     safe = {}
-    # Return a classification only: never expose raw process output in the UI.
-    if fields.get('reason') == 'auth_expired' or re.search(
-            r'(?:oauth|authentication|auth|login|sign.in)\s+(?:session\s+)?(?:expired|expiration)|token (?:has )?expired',
-            str(content), re.I):
-        safe['reason'] = 'auth_expired'
     if type(fields.get('process_exit')) is int:
         safe['process_exit'] = fields['process_exit']
     elif isinstance(fields.get('process_exit'), str) and re.fullmatch(r'-?\d{1,8}', fields['process_exit']):
         safe['process_exit'] = int(fields['process_exit'])
     if type(fields.get('closeout_verified')) is bool:
         safe['closeout_verified'] = fields['closeout_verified']
+    # Classify current failures only; recovery notes are not error evidence.
+    failed = safe.get('closeout_verified') is False or safe.get('process_exit') not in (None, 0)
+    error = fields.get('error')
+    if failed and (fields.get('reason') == 'auth_expired' or (isinstance(error, str) and re.search(
+            r'(?:oauth|authentication|auth|login|sign.in)\s+(?:session\s+)?(?:expired|expiration)|token (?:has )?expired',
+            error, re.I))):
+        safe['reason'] = 'auth_expired'
     return safe
 
 
 def watcher_state(age, cadence, fields, event_driven=False):
-    if fields.get('reason')=='auth_expired' or fields.get('closeout_verified') is False or fields.get('process_exit') not in (None, 0, '0'):
+    if fields.get('closeout_verified') is False or fields.get('process_exit') not in (None, 0, '0'):
         return 'failed'
     if cadence is None:
         return 'on-demand' if event_driven else 'unknown'
