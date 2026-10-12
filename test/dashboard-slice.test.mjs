@@ -32,14 +32,16 @@ let eventRoom;
 let mode = 'normal';
 let taxonomyWings = [];
 let ackItems;let staleAck=false;
+const instructions={steps:['Open Codex on the laptop and paste: drain your inbox.'],after:'Codex will pick up the queued review.',ask:'Ask Codex in Agent Tasks.'};
+let usabilityItems;let waitingAgents;let staleAction=false;
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
   const api = {
-    '/api/inbox': mode === 'ack' ? {...inbox,items:ackItems,can_acknowledge:true,open_total:ackItems.filter(i=>!i.acknowledged).length,acknowledged_total:ackItems.filter(i=>i.acknowledged).length} : mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
+    '/api/inbox': mode === 'usability' ? {...inbox,items:usabilityItems,open_total:usabilityItems.length,can_manage_attention:true,agents:['codex','claude'],humans:['rad'],waiting_on_agents:waitingAgents} : mode === 'ack' ? {...inbox,items:ackItems,can_acknowledge:true,open_total:ackItems.filter(i=>!i.acknowledged).length,acknowledged_total:ackItems.filter(i=>i.acknowledged).length} : mode === 'empty' ? {...inbox,total:0,items:[]} : inbox,
     '/api/auth/status': {authenticated:true,principal:mode==='reviewer'?'reviewer:fixture-review':'fixture-human',role:mode==='reviewer'?'reviewer':'existing',display_name:mode==='reviewer'?'fixture-review':'fixture-human',auth_enabled:false},
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
-    '/api/dashboard/work': {items:mode==='empty'?[]:items,counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
+    '/api/dashboard/work': {can_manage_attention:mode==='usability',agents:['codex','claude'],humans:['rad'],items:mode==='empty'?[]:items.map(i=>({...i,kind:'work_item',state_key:'work-fixture'})),counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
     '/api/taxonomy': {total_drawers:741,wings:taxonomyWings},
     '/api/recent': {entries:mode==='empty'?[]:[drawer]}, '/api/health': {},
@@ -47,6 +49,15 @@ const server = createServer(async (req,res) => {
     '/api/activity/event':{event:{room_id:'!fixture:test',event_id:'$fixture',body:'Blocked item evidence',sender:'fixture'},related:[]},
   };
   if (path.startsWith('/api/')) {
+    if(path==='/api/inbox/action'&&req.method==='POST'){
+      let body='';for await(const chunk of req)body+=chunk;
+      const update=JSON.parse(body);assert.equal(update.reason,'Please pick up this review.');
+      if(staleAction){res.writeHead(409,{'Content-Type':'application/json'});res.end('{}');return;}
+      const original=usabilityItems[0];
+      if(update.action==='reassign'){waitingAgents[update.party.id]=[{...original,required_surface:update.party.required_surface}];usabilityItems=[];}
+      else usabilityItems.push({...original,kind:'dispatch_required',id:'dispatch_fixture',title:'Needs an interactive codex session',human_action:instructions});
+      res.writeHead(200,{'Content-Type':'application/json'});res.end('{"ok":true}');return;
+    }
     if(path==='/api/inbox/acknowledgement'&&req.method==='POST'){
       let body='';for await(const chunk of req)body+=chunk;
       const update=JSON.parse(body);const item=ackItems.find(i=>(i.id||i.event_id)===update.item_id);
@@ -195,6 +206,37 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'now-keyboard-focus-1280.png'),fullPage:true});
     await page.keyboard.press('Enter');
     await page.getByText('Acknowledged (1)',{exact:true}).waitFor();
+    mode='usability';
+    usabilityItems=[{...inbox.items[1],state_key:'usability-key',human_action:instructions},
+      {...watchers[0],id:'auth_claude_desktop',kind:'auth_expired',agent:'claude',surface:'desktop (auto)',title:'Sign claude back in on desktop',label:'Sign-in expired',state_key:'auth-fixture',
+       human_action:{steps:['On the desktop PC, open PowerShell and run: claude.','Type /login, sign in through the browser, then type /exit.','Open Task Scheduler, choose the existing Claude sweep task, and click Run once.'],after:'The next successful receipt clears this item.',ask:'Ask Claude in Agent Tasks.'}},
+      {id:'expired_fixture',kind:'claim_expired',title:'Review the queued handoff',owner:'codex',label:'Claim expired, last state running',state_key:'expired-fixture',source_refs:['task_fixture_2'],human_action:instructions}];
+    waitingAgents={claude:[{kind:'coordination_wait',id:'wait_fixture',title:'Review the revised inbox',body:'Read the diff',owner:'claude',state:'pending',required_surface:'interactive',age_minutes:120,source_refs:['$fixture'],room_id:'!fixture:test',event_id:'$fixture'}]};
+    for(const width of [400,1280]) {
+      await page.setViewportSize({width,height:900});
+      for(const route of ['now','work','memory']) {
+        await page.goto(`http://127.0.0.1:${server.address().port}/#${route}`);await page.reload();
+        await page.getByRole('heading',{name:route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
+        if(route!=='memory')await page.getByText('Waiting on claude (1)',{exact:true}).waitFor();
+        if(route==='now')await page.getByText(instructions.steps[0],{exact:true}).first().waitFor();
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+        await page.addScriptTag({content:axe.source});
+        assert.deepEqual(await page.evaluate(async()=> (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>v.id)),[]);
+        if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`usability-${route}-${width}.png`),fullPage:true});
+      }
+    }
+    await page.goto(`http://127.0.0.1:${server.address().port}/#now`);
+    await page.getByRole('button',{name:'Dispatch',exact:true}).first().focus();await page.keyboard.press('Enter');
+    await page.getByRole('textbox',{name:'Reason',exact:true}).fill('Please pick up this review.');
+    await page.getByRole('button',{name:'Confirm Dispatch',exact:true}).click();
+    await page.getByText('Needs an interactive codex session',{exact:true}).waitFor();
+    if(process.env.SCREENSHOT_DIR)await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,'usability-dispatched-1280.png'),fullPage:true});
+    await page.getByRole('button',{name:'Reassign',exact:true}).first().click();
+    await page.getByRole('textbox',{name:'Reason',exact:true}).fill('Please pick up this review.');
+    staleAction=true;await page.getByRole('button',{name:'Confirm Reassign',exact:true}).click();
+    await page.getByText('This item changed. Close this panel and refresh before acting.',{exact:true}).waitFor();
+    staleAction=false;await page.getByRole('button',{name:'Confirm Reassign',exact:true}).click();
+    await page.getByText('Waiting on codex (1)',{exact:true}).waitFor();
     mode='reviewer';
     for(const width of [400,1280]) {
       await page.setViewportSize({width,height:900});

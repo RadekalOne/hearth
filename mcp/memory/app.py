@@ -1141,6 +1141,13 @@ def write_checkpoint(agent: str, surface: str, monitor: str, content: str) -> di
         raise ValueError("checkpoint content is required")
     _require_own_agent(agent)
     _reject_credential_shapes(content=content)
+    if _dashboard.receipt(content).get('reason')=='auth_expired':
+        try:
+            fields=json.loads(content)
+            if isinstance(fields,dict) and 'process_exit' in fields:
+                fields['reason']='auth_expired';content=json.dumps(fields)
+        except (ValueError,TypeError):
+            pass  # Legacy prose is classified on reads; never rewrite it as a receipt.
     checkpoint_id = _checkpoint_id(agent, surface, monitor)
     replaced_previous = bool(checkpoints.get(ids=[checkpoint_id])["ids"])
     updated_at = _now()
@@ -1280,6 +1287,11 @@ def relay_inbox_for(agent: str, state: str = "open", limit: int = 20) -> dict:
         clauses.append({"state": state})
     where = clauses[0] if len(clauses) == 1 else {"$and": clauses}
     got = relays.get(where=where, include=["documents", "metadatas"])
+    for index,metadata in enumerate(got['metadatas']):
+        row=_dashboard.work_items({'tasks':[]},[{'relay_id':got['ids'][index],**metadata,'request':got['documents'][index]}],time.time())[0]
+        for kind in ('work_item','overdue_work'):
+            action=coordination_store.attention_state(kind,row['id'],_ack_module.state_key({**row,'kind':kind}))
+            if action.get('priority')=='high':metadata['priority']='high'
     rank = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
     entries = sorted(
         (
@@ -1434,6 +1446,7 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
             "counts_truncated": snapshot["counts_truncated"],
         },
         "requested_context": {"agent": agent, "surface": surface, "project": project},
+        "interactive_start": "Before taking a new prompt, drain your own relay inbox: claim and resolve actionable relays; retain other executors claims and report genuine approval blockers. A queue acknowledgement does not mean execution started.",
     }
     if compact:
         # Returning agents already carry the contract; keep the payload to identity,
@@ -1444,6 +1457,7 @@ def bootstrap(agent: str = "", surface: str = "", project: str = "",
     if agent:
         result["checkpoints"] = read_checkpoints(agent, surface=surface, limit=5)
         result["relay_inbox"] = relay_inbox_for(agent, state="open", limit=20)
+        result['attention_requests']=_attention_requests(agent)
         if coordination_store.enabled:
             result['coordination_waiting_on'] = coordination_store.for_party('agent', agent)
     return result
@@ -2258,7 +2272,7 @@ def _coordination_mutate(payload, answer=False):
         raise HTTPException(409, 'coordination feature is disabled')
     payload = _work_payload(payload)
     allowed = {'work_kind','work_id','room_id','thread_id','expected_generation','source_event','since','claim_id'}
-    allowed |= {'party_id','answer_kind','summary','evidence','approval_party','next_parties'} if answer else {'parties','continuation'}
+    allowed |= {'party_id','answer_kind','summary','evidence','approval_party','next_parties','human_action'} if answer else {'parties','continuation'}
     if set(payload) - allowed:
         raise HTTPException(400, 'unknown coordination fields')
     if 'expected_generation' not in payload:
@@ -2291,7 +2305,7 @@ def _coordination_mutate_checked(payload, actor, human, answer, work_db=None):
     if payload.get('next_parties') is not None:
         _coordination_call(_coordination_party_check, payload['next_parties'])
     if payload.get('answer_kind') == 'pass_needing_human':
-        _coordination_call(_coordination_party_check, [{'kind':'human','id':payload.get('approval_party'),'required_surface':'interactive'}])
+        _coordination_call(_coordination_party_check, [{'kind':'human','id':payload.get('approval_party'),'required_surface':'interactive','human_action':payload.get('human_action')}])
     try:
         return _coordination_call(coordination_store.answer, actor, human,
             expected_owner=owner if payload['work_kind'] in {'task','relay'} else None, **arguments)
@@ -2315,14 +2329,14 @@ def coordination_wait_set(work_kind: str, work_id: str, room_id: str, thread_id:
 def coordination_answer(work_kind: str, work_id: str, room_id: str, thread_id: str, expected_generation: int,
                         party_id: str, answer_kind: str, source_event: str, since: str, summary: str = '',
                         evidence: list[str] | None = None, approval_party: str = '',
-                        next_parties: list[dict] | None = None, claim_id: str = '') -> dict:
+                        next_parties: list[dict] | None = None, claim_id: str = '', human_action: dict | None = None) -> dict:
     """Record a scoped typed substantive answer; ACK/progress/reaction are no-ops.
     Requires summary/evidence; human approval needs a human principal and conveys
     no permission to deploy, claim work, run unattended or bypass existing gates.
     """
     return _coordination_mutate(dict(work_kind=work_kind,work_id=work_id,room_id=room_id,thread_id=thread_id,
         expected_generation=expected_generation,party_id=party_id,answer_kind=answer_kind,source_event=source_event,
-        since=since,summary=summary,evidence=evidence,approval_party=approval_party,next_parties=next_parties,claim_id=claim_id), answer=True)
+        since=since,summary=summary,evidence=evidence,approval_party=approval_party,next_parties=next_parties,claim_id=claim_id,human_action=human_action), answer=True)
 
 
 @app.get('/api/coordination')
@@ -3295,7 +3309,7 @@ async def _inbox_snapshot(request,force=False):
     data = await _fetch_room_events(force=force) if force else await _fetch_room_events()
     roster = _roster()
     inbox = _build_inbox(data, roster)
-    result = _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items())
+    result = _dashboard.attention_inbox(inbox, _build_surfaces(data, roster)['watchers'], _dashboard_work_items(),coordination_store.failed_deliveries())
     result['items']=[dict(item) for item in result['items']]
     for item in result['items']:
         root=item.get('thread_root') or item.get('event_id')
@@ -3303,7 +3317,57 @@ async def _inbox_snapshot(request,force=False):
                  and (e.get('thread_root')==root or e.get('reply_to')==item.get('event_id'))
                  and _qualifying_inbox_event(e,item)]
         if related:item['latest_qualifying_event']=max(related,key=lambda e:e['ts'])['event_id']
-    result['items']=inbox_acknowledgements.project(result['items'])
+    pending=_dashboard.coordination_items(coordination_store.pending(),time.time())
+    explicit_sources={p.get('event_id') for p in pending}
+    result['items']=[i for i in result['items'] if i.get('event_id') not in explicit_sources]+pending
+    for item in _work_attention_items():
+        action=coordination_store.attention_state('work_item',item['id'],item['source_state_key'])
+        if action.get('action'):
+            result['items'].append({**item,'party_kind':'agent','party_id':action['party']['id']})
+    human_items=[];agent_items={}
+    for item in result['items']:
+        source_key=item.get('source_state_key') or _ack_module.state_key(item)
+        item['source_state_key']=source_key
+        action=coordination_store.attention_state(item['kind'],item.get('id') or item['event_id'],source_key)
+        item['action_generation']=action.get('action_generation',0)
+        item['priority']=action.get('priority','normal')
+        waiting_kind=item.get('party_kind','human');waiting_id=item.get('party_id','')
+        if action.get('waiting_party'):
+            assigned=action['waiting_party']
+            waiting_kind=assigned['kind'];waiting_id=assigned['id']
+            item['required_surface']=assigned['required_surface']
+            if waiting_kind=='human':item['human_action']=assigned['human_action']
+        if action.get('action')=='dispatch':
+            target=action['party'];item['required_surface']=target['required_surface']
+            launch={**item,'kind':'dispatch_required','id':'dispatch_'+(item.get('id') or item['event_id']),
+                    'owner':target['id'],'title':f"Needs an interactive {target['id']} session",
+                    'label':'Dispatched · high priority','state':'queued','source_item_kind':item['kind'],
+                    'human_action':_dashboard.default_human_action({'kind':'dispatch_required','owner':target['id']})}
+            wake_state=action.get('wake_state')
+            if target['required_surface']=='interactive' or wake_state=='no_background_runtime_declared':human_items.append(launch)
+            else:
+                launch['title']=f"Queued for {target['id']}'s background runner"
+                launch['label']='Dispatch: '+action.get('wake_state','queued_for_existing_runner').replace('_',' ')
+                launch['human_action']={'steps':['Wait for the existing runner to check its Hearth inbox.'],
+                    'after':'The runner will claim eligible work. If it does not, open the task thread and ask the agent to investigate.','ask':f"Ask {target['id']} in the task thread."}
+                if wake_state in {'connect_matrix_to_wake','matrix_sign_in_required'}:
+                    launch['human_action']['steps']=['Open the dashboard and click Connect Matrix to sign back in.',
+                        'Return to the original item and click Dispatch again.']
+                    launch['human_action']['after']='Your signed-in Matrix session will ask the existing notifier to wake. The work stays queued until claimed.'
+                elif wake_state in {'wake_failed','wake_configuration_invalid'}:
+                    launch['human_action']['steps']=[f"Open the original task thread and ask {target['id']} to check its existing notifier."]
+                    launch['human_action']['after']='The work remains queued. You can open an interactive session while the notifier is repaired.'
+                human_items.append(launch)
+        if waiting_kind=='agent':agent_items.setdefault(waiting_id,[]).append(item)
+        else:human_items.append(item)
+    result['waiting_on_agents']={agent:inbox_acknowledgements.project(items) for agent,items in sorted(agent_items.items())}
+    result['items']=inbox_acknowledgements.project(human_items)
+    result['items'].sort(key=lambda i:(i.get('priority')!='high',0 if i['kind'] in {'failed_watcher','auth_expired','failed_continuation'} else 1 if i['kind'] in {'blocked','claim_expired'} else 2,-(i.get('age_minutes') or 0)))
+    result['total']=len(result['items'])
+    result['counts']={kind:sum(i['kind']==kind for i in result['items']) for kind in {i['kind'] for i in result['items']}}
+    result['can_manage_attention']=coordination_store.enabled and _human_inbox_session(request)
+    result['agents']=sorted(roster)
+    result['humans']=sorted(HUMAN_IDS-roster)
     result['acknowledged_total']=sum(i['acknowledged'] for i in result['items'])
     result['open_total']=result['total']-result['acknowledged_total']
     result['can_acknowledge']=_human_inbox_session(request)
@@ -3311,10 +3375,66 @@ async def _inbox_snapshot(request,force=False):
 
 
 def _human_inbox_session(request):
+    if request is None:return False
     session=SESSIONS.get(request.cookies.get(SESSION_COOKIE,''))
     principal=session_principal(request)
     return bool(session and principal and session.get('auth_kind') in {'matrix','token'}
                 and principal==_principal() and _work_human())
+
+
+
+async def _wake_attention_dispatch(request,item,saved):
+    party=saved['party']
+    if party['required_surface']=='interactive':return 'needs_interactive'
+    declaration=next((d for d in WATCHER_REGISTRY if d.get('active') is True and d.get('agent')==party['id']
+                      and d.get('dispatch_via_mentions') is True),None)
+    if not declaration:
+        scheduled=any(d.get('active') is True and d.get('agent')==party['id'] and d.get('kind')=='recurring' for d in WATCHER_REGISTRY)
+        return 'queued_for_existing_runner' if scheduled else 'no_background_runtime_declared'
+    room=declaration.get('dispatch_room_id','');target=declaration.get('matrix_user_id','')
+    token=_matrix_token_header(request)
+    if not token:return 'connect_matrix_to_wake'
+    if not HOMESERVER_URL or not room.startswith('!') or not target.startswith('@') or _localpart(target)!=party['id']:
+        return 'wake_configuration_invalid'
+    observed=await _fetch_room_events()
+    if room not in observed.get('rooms',{}) or (item.get('room_id') and item['room_id']!=room):return 'wake_configuration_invalid'
+    base=HOMESERVER_URL.rstrip('/')+'/_matrix/client/v3'
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            who=await client.get(base+'/account/whoami',headers={'Authorization':'Bearer '+token})
+            uid=who.json().get('user_id','') if who.status_code==200 else ''
+            if not uid or _localpart(uid)!=_localpart(_principal()) or not _is_human(uid,_roster()):return 'matrix_sign_in_required'
+            message=f"[DISPATCH] {party['id']}: drain your Hearth inbox; this item is high priority. {saved['reason']}\nSource: {item.get('id') or item.get('event_id')}\nThis does not grant new approval, transfer a claim, or prove execution started."
+            content={'msgtype':'m.text','body':message,'m.mentions':{'user_ids':[target]}}
+            if item.get('room_id')==room and (item.get('thread_id') or item.get('thread_root')):
+                root=item.get('thread_id') or item['thread_root']
+                content['m.relates_to']={'rel_type':'m.thread','event_id':root,'is_falling_back':True,'m.in_reply_to':{'event_id':item.get('event_id') or root}}
+            transaction=hashlib.sha256(f"{item['kind']}|{item.get('id') or item.get('event_id')}|{saved['action_generation']}".encode()).hexdigest()
+            response=await client.put(f'{base}/rooms/{room}/send/m.room.message/dispatch_{transaction}',headers={'Authorization':'Bearer '+token},json=content)
+            return 'mention_posted' if response.status_code==200 else 'wake_failed'
+    except (httpx.HTTPError,ValueError):return 'wake_failed'
+
+
+@app.post('/api/inbox/action')
+async def api_inbox_action(request: Request):
+    if not _human_inbox_session(request):raise HTTPException(403,'A human dashboard session is required')
+    if not _same_origin(request):raise HTTPException(403,'cross-site action rejected')
+    if not coordination_store.enabled:raise HTTPException(409,'coordination feature is disabled')
+    payload=_work_payload(await _coordination_json(request))
+    if set(payload)!={'kind','item_id','state_key','action','party','reason'}:raise HTTPException(400,'Invalid attention payload')
+    _coordination_call(_coordination_party_check,[payload['party']])
+    current=await _inbox_snapshot(request,force=True)
+    candidates=current['items']+[i for rows in current['waiting_on_agents'].values() for i in rows]+_work_attention_items()
+    item=next((i for i in candidates if i['kind']==payload['kind'] and (i.get('id') or i.get('event_id'))==payload['item_id']),None)
+    if item is None or payload['state_key']!=item['state_key']:raise HTTPException(409,'This item changed. Refresh before acting.')
+    if item['kind']=='dispatch_required':raise HTTPException(400,'Act on the original item instead of its session reminder')
+    saved=_coordination_call(coordination_store.attention_action,_principal(),True,item,item['source_state_key'],
+        payload['action'],payload['party'],payload['reason'],item.get('action_generation',0))
+    wake_state=await _wake_attention_dispatch(request,item,saved) if saved['action']=='dispatch' else 'not_requested'
+    if saved['action']=='dispatch':
+        coordination_store.attention_wake_result(item['kind'],item.get('id') or item['event_id'],saved['action_generation'],wake_state)
+    # No server-side shell invocation. A declared eligible notifier consumes a Matrix mention.
+    return {'ok':True,**saved,'wake_state':wake_state,'execution_started':False}
 
 
 @app.post('/api/inbox/acknowledgement')
@@ -3407,18 +3527,47 @@ def api_work_agents(capability: str = "", work_mode: str = "either"):
 
 
 @app.get('/api/dashboard/work')
-def api_dashboard_work():
-    items = _dashboard_work_items()
+def api_dashboard_work(request: Request = None):
+    items = _work_attention_items()
     counts = {stage: 0 for stage in ('queued', 'claimed', 'running', 'review', 'blocked', 'done')}
     for item in items:
         counts[item['state']] = counts.get(item['state'], 0) + 1
-    return {'generated_at': _now(), 'items': items, 'counts': counts}
+    return {'generated_at': _now(), 'items': items, 'counts': counts,'can_manage_attention':coordination_store.enabled and _human_inbox_session(request),'agents':sorted(_roster()),'humans':sorted(HUMAN_IDS-_roster())}
 
 
 def _dashboard_work_items():
     got = relays.get(include=['metadatas', 'documents'])
     entries = [{'relay_id': i, 'request': doc, **m} for i, doc, m in zip(got['ids'], got['documents'], got['metadatas'])]
     return _dashboard.work_items(work_store.snapshot(), entries, time.time())
+
+
+def _work_attention_items():
+    result=[]
+    for row in _dashboard_work_items():
+        item={**row,'kind':'work_item'}
+        key=_ack_module.state_key(item)
+        action=coordination_store.attention_state(item['kind'],item['id'],key)
+        item.update(source_state_key=key,action_generation=action.get('action_generation',0),priority=action.get('priority','normal'),required_surface=action.get('party',{}).get('required_surface',row.get('required_surface','interactive')))
+        item['state_key']=_ack_module.state_key(item)
+        result.append(item)
+    result.sort(key=lambda i:(i['state']=='done',i['priority']!='high',-(i.get('age_minutes') or 0)))
+    return result
+
+
+def _attention_requests(agent):
+    rows={i['id']:i for i in _dashboard_work_items()}
+    requests=[]
+    for saved in coordination_store.attention_requests(agent):
+        item=saved['item']
+        if saved['kind'] in {'work_item','overdue_work','claim_expired'}:
+            current=rows.get(saved['item_id'])
+            if not current or _ack_module.state_key({**current,'kind':saved['kind']})!=saved['source_key']:continue
+        elif saved['kind']=='coordination_wait':
+            current=coordination_store.read(*(item[k] for k in ('work_kind','work_id','room_id','thread_id')))
+            if current['generation']!=item['generation']:continue
+        requests.append({**saved,'source_status':'current work revision' if saved['kind'] in {'work_item','overdue_work','claim_expired','coordination_wait'} else 'refresh source thread before acting',
+                         'grants_authority':False,'execution_started':False})
+    return requests
 
 
 _HEALTH_CACHE = {'key': None, 'value': None, 'at': 0}

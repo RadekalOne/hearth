@@ -38,6 +38,17 @@ def timestamp(value, name):
         raise CoordinationError(f'{name} must be a timezone-aware ISO timestamp') from err
 
 
+def human_action(value):
+    if not isinstance(value, dict) or set(value) != {'steps', 'after', 'ask'}:
+        raise CoordinationError('human_action requires steps, after and ask')
+    steps = value['steps']
+    if not isinstance(steps, list) or not 1 <= len(steps) <= 3:
+        raise CoordinationError('human_action requires 1–3 everyday steps')
+    return {'steps':[text(s, 'human action step', 1200) for s in steps],
+            'after':text(value['after'], 'what happens after', 1200),
+            'ask':text(value['ask'], 'who to ask', 240)}
+
+
 def party(value):
     if not isinstance(value, dict):
         raise CoordinationError('party must be an object')
@@ -45,6 +56,8 @@ def party(value):
     if not isinstance(kind,str) or not isinstance(surface,str) or kind not in {'agent', 'human'} or surface not in {'interactive', 'background', 'either'}:
         raise CoordinationError('unknown party kind or required surface')
     result = {'kind':kind, 'id':text(value.get('id'), 'party id'), 'required_surface':surface}
+    if kind == 'human':
+        result['human_action'] = human_action(value.get('human_action'))
     for key in ['expected_deadline', 'acknowledged_delay_until']:
         result[key] = timestamp(value[key], key) if value.get(key) else None
     return result
@@ -98,6 +111,11 @@ class CoordinationStore:
                     state TEXT NOT NULL,data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS coordination_origins (
                     identity TEXT PRIMARY KEY,continuation_origin INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS attention_actions (
+                    kind TEXT NOT NULL,item_id TEXT NOT NULL,source_key TEXT NOT NULL,
+                    generation INTEGER NOT NULL,data TEXT NOT NULL,PRIMARY KEY(kind,item_id));
+                CREATE TABLE IF NOT EXISTS attention_audit (
+                    id INTEGER PRIMARY KEY,kind TEXT NOT NULL,item_id TEXT NOT NULL,data TEXT NOT NULL);
                 COMMIT;
             ''')
             versions = [r[0] for r in db.execute('SELECT version FROM coordination_schema')]
@@ -212,7 +230,7 @@ class CoordinationStore:
 
     def answer(self, actor, human, *, work_kind, work_id, room_id, thread_id,
                expected_generation, party_id, answer_kind, source_event, since, summary='', evidence=None,
-               approval_party='', next_parties=None, expected_owner=None):
+               approval_party='', next_parties=None, expected_owner=None, human_action=None):
         if not self.enabled:
             raise CoordinationError('coordination feature is disabled', 409)
         identity = self.identity(work_kind,work_id,room_id,thread_id)
@@ -250,7 +268,7 @@ class CoordinationStore:
             previous = db.execute('SELECT data FROM coordination_events WHERE identity=? AND generation=? AND source_event=? AND actor=? AND party_id=?',
                                   (identity,expected_generation,source_event,actor,party_id)).fetchone()
             event = {'kind':answer_kind,'since':since,'summary':summary,'evidence':refs,
-                     'approval_party':approval_party,'next_parties':next_parties}
+                     'approval_party':approval_party,'next_parties':next_parties,'human_action':human_action}
             if previous:
                 if json.loads(previous[0]) != event:
                     raise CoordinationError('source event already records a different answer', 409)
@@ -263,9 +281,11 @@ class CoordinationStore:
             if answer_kind == 'approved' and (not human or row['kind'] != 'human'):
                 raise CoordinationError('only a human principal may record human approval', 403)
             if answer_kind == 'change_list':
-                additions = [party({'kind':head['owner_kind'],'id':head['owner'],'required_surface':'interactive'})]
+                additions = [party({'kind':head['owner_kind'],'id':head['owner'],
+                                    'required_surface':'interactive','human_action':human_action})]
             elif answer_kind == 'pass_needing_human':
-                additions = [party({'kind':'human','id':text(approval_party,'approval party'),'required_surface':'interactive'})]
+                additions = [party({'kind':'human','id':text(approval_party,'approval party'),
+                                    'required_surface':'interactive','human_action':human_action})]
             elif answer_kind == 'handoff':
                 additions = validate_parties(next_parties)
             if owner_cancel:
@@ -417,3 +437,94 @@ class CoordinationStore:
                               (kind,party_id,'pending')).fetchall()
             return [{**json.loads(r['data']), 'generation':r['generation'], 'state':r['state'],
                      'work_kind':r['work_kind'],'work_id':r['work_id'],'room_id':r['room_id'],'thread_id':r['thread_id']} for r in rows]
+
+    def pending(self):
+        if not self.enabled:return []
+        with self.transaction() as db:
+            rows=db.execute("SELECT p.*,h.work_kind,h.work_id,h.room_id,h.thread_id FROM coordination_parties p JOIN coordination_heads h ON p.identity=h.identity AND p.generation=h.generation WHERE p.state='pending' ORDER BY h.identity,p.party_id").fetchall()
+            return [{**json.loads(r['data']),'generation':r['generation'],
+                     **{k:r[k] for k in ('work_kind','work_id','room_id','thread_id')}} for r in rows]
+
+    def attention_state(self,kind,item_id,source_key):
+        if not self.enabled:return {}
+        with self.transaction() as db:
+            row=db.execute('SELECT * FROM attention_actions WHERE kind=? AND item_id=?',(kind,item_id)).fetchone()
+            if not row:return {}
+            if row['source_key']!=source_key:return {'action_generation':row['generation']}
+            return {**json.loads(row['data']),'action_generation':row['generation']}
+
+    def attention_action(self,actor,human,item,source_key,action,target,reason,expected_action_generation):
+        if not human:raise CoordinationError('a human dashboard session is required',403)
+        if action not in {'reassign','dispatch'}:raise CoordinationError('unknown attention action')
+        actor=text(actor,'actor');reason=text(reason,'one-line reason',500)
+        if '\n' in reason or '\r' in reason:raise CoordinationError('reason must be one line')
+        target=party(target);source_key=text(source_key,'source key',128)
+        if action=='dispatch' and target['kind']!='agent':raise CoordinationError('dispatch requires an agent')
+        if action=='dispatch' and item.get('required_surface','interactive')=='interactive' and target['required_surface']!='interactive':
+            raise CoordinationError('this obligation needs an interactive session; reassign explicitly to change its surface',409)
+        expected=self.generation(expected_action_generation)
+        kind=text(item.get('kind'),'item kind');item_id=text(item.get('id') or item.get('event_id'),'item id')
+        with self.transaction(write=True) as db:
+            previous=db.execute('SELECT generation,source_key,data FROM attention_actions WHERE kind=? AND item_id=?',(kind,item_id)).fetchone()
+            if (previous[0] if previous else 0)!=expected:raise CoordinationError('attention item changed; refresh',409)
+            at=datetime.now(timezone.utc).isoformat()
+            prior=json.loads(previous['data']) if previous and previous['source_key']==source_key else {}
+            waiting_party=target if action=='reassign' else prior.get('waiting_party')
+            if action=='dispatch' and waiting_party and waiting_party['kind']=='agent' and waiting_party['id']!=target['id']:
+                raise CoordinationError('reassign before dispatching to a different party',409)
+            if item.get('kind')=='coordination_wait':
+                identity=self.identity(*(item[k] for k in ('work_kind','work_id','room_id','thread_id')))
+                head=db.execute('SELECT * FROM coordination_heads WHERE identity=?',(identity,)).fetchone()
+                if not head or head['generation']!=item['generation']:raise CoordinationError('stale waiting generation',409)
+                values=self.snapshot(db,identity)['coordination_waiting_on']
+                old=next((v for v in values if (v['kind'],v['id'])==(item['party_kind'],item['party_id'])),None)
+                if old is None:raise CoordinationError('obligation no longer pending',409)
+                if action=='dispatch' and (target['kind'],target['id'])!=(old['kind'],old['id']):
+                    raise CoordinationError('reassign before dispatching to a different party',409)
+                if action=='reassign':
+                    if any(v is not old and (v['kind'],v['id'])==(target['kind'],target['id']) for v in values):
+                        raise CoordinationError('target already holds another obligation in this thread',409)
+                    generation=head['generation']+1
+                    self.cancel_deliveries(db,identity)
+                    db.execute('UPDATE coordination_heads SET generation=? WHERE identity=?',(generation,identity))
+                    db.execute("UPDATE coordination_parties SET state='cancelled' WHERE identity=? AND state='pending'",(identity,))
+                    for value in values:
+                        replacement=target if value is old else value
+                        self.put_party(db,identity,generation,replacement,
+                                       old['source_event'] if value is old else value['source_event'],
+                                       at if value is old else value['since'])
+                    origin=db.execute('SELECT continuation_origin FROM coordination_origins WHERE identity=?',(identity,)).fetchone()
+                    if head['owner_kind']=='agent' and not (origin and origin[0]):
+                        self.record_continuation(db,identity,generation,head['owner'],old['source_event'],
+                                                 self.snapshot(db,identity)['coordination_waiting_on'])
+            data={'action':action,'party':target,'reason':reason,'actor':actor,'at':at,
+                  'priority':'high' if action=='dispatch' else 'normal','source_key':source_key,
+                  'waiting_party':waiting_party,
+                  'item':{k:item[k] for k in ('kind','id','event_id','work_kind','work_id','room_id','thread_id','generation','revision','state','latest_qualifying_event','title','source_refs') if k in item}}
+            db.execute('INSERT INTO attention_actions VALUES(?,?,?,?,?) ON CONFLICT(kind,item_id) DO UPDATE SET source_key=excluded.source_key,generation=excluded.generation,data=excluded.data',
+                       (kind,item_id,source_key,expected+1,json.dumps(data)))
+            db.execute('INSERT INTO attention_audit(kind,item_id,data) VALUES(?,?,?)',(kind,item_id,json.dumps(data)))
+            return {**data,'action_generation':expected+1}
+
+    def attention_audit(self):
+        if not self.enabled:return []
+        with self.transaction() as db:
+            return [{**json.loads(r['data']),'kind':r['kind'],'item_id':r['item_id']} for r in db.execute('SELECT * FROM attention_audit ORDER BY id')]
+
+    def attention_requests(self,agent):
+        if not self.enabled:return []
+        with self.transaction() as db:
+            result=[]
+            for row in db.execute('SELECT * FROM attention_actions ORDER BY generation DESC'):
+                data=json.loads(row['data'])
+                if data['party']['kind']=='agent' and data['party']['id']==agent:
+                    result.append({**data,'kind':row['kind'],'item_id':row['item_id'],'action_generation':row['generation']})
+            return result
+
+    def attention_wake_result(self,kind,item_id,generation,wake_state):
+        with self.transaction(write=True) as db:
+            row=db.execute('SELECT * FROM attention_actions WHERE kind=? AND item_id=?',(kind,item_id)).fetchone()
+            if not row or row['generation']!=generation:return
+            data=json.loads(row['data']);data['wake_state']=wake_state
+            db.execute('UPDATE attention_actions SET data=? WHERE kind=? AND item_id=?',(json.dumps(data),kind,item_id))
+            db.execute('INSERT INTO attention_audit(kind,item_id,data) VALUES(?,?,?)',(kind,item_id,json.dumps({'action':'wake_result','actor':data['actor'],'at':datetime.now(timezone.utc).isoformat(),'wake_state':wake_state})))

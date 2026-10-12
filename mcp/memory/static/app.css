@@ -302,4 +302,15 @@ details summary { cursor: pointer; padding: .7rem 0; color: var(--dim); }
 .inbox-item .acknowledgement-meta { grid-column: 1 / -1; margin: 0; font-size: .85rem; }
 
 button.small.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.human-action { padding: .8rem 1rem; margin: .5rem 0; background: var(--card-2); border-radius: 8px; overflow-wrap: anywhere; }
+.human-action h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.human-action ol { margin: .5rem 0; padding-left: 1.3rem; }
+.human-action li { margin: .4rem 0; }
+.human-action p { margin: .6rem 0; }
+.attention-form,.human-target-fields { display: flex; flex-direction: column; gap: .6rem; }
+.human-target-fields[hidden] { display: none; }
+.attention-form input,.attention-form select,.attention-form textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+.agent-waiting { padding: .8rem 1rem; margin: 1rem 0; border: 1px solid var(--line); border-radius: 8px; }
+.agent-wait-item { padding: .8rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.attention-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
 @media (max-width:650px) { .topbar .identity[data-role="reviewer"] { display: block; flex-basis:100%; white-space:normal; overflow-wrap:anywhere; } }

@@ -1,0 +1,40 @@
+{
+  "base_commit": "244186043bc609e3a7c77fd69cbdb3c8b23075ea",
+  "python_tests": {
+    "passed": 207,
+    "log": "inbox-release-python.log"
+  },
+  "node_tests": {
+    "passed": 18,
+    "skipped": 0,
+    "log": "inbox-node-complete.log"
+  },
+  "browser": {
+    "passed": true,
+    "widths": [
+      400,
+      1280
+    ],
+    "tabs": [
+      "now",
+      "work",
+      "memory"
+    ],
+    "keyboard": true,
+    "axe_tags": [
+      "wcag2a",
+      "wcag2aa",
+      "wcag21aa"
+    ],
+    "log": "inbox-release-browser-final2.log"
+  },
+  "package_required_files_present": true,
+  "independent_review": {
+    "findings": 2,
+    "severity": "P2",
+    "fixes_red_green_verified": true,
+    "blanket_pass": false
+  },
+  "production_deployed": false,
+  "spec_version": "1.6"
+}
