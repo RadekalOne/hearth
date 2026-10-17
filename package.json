@@ -17,6 +17,8 @@
     "mcp/matrix/package-lock.json",
     "mcp/memory/app.py",
     "mcp/memory/work.py",
+    "mcp/memory/commons_files.py",
+    "integrations/commons/client.mjs",
     "mcp/memory/dashboard.py",
     "mcp/memory/coordination.py",
     "mcp/memory/inbox_ack.py",
@@ -33,7 +35,7 @@
   "scripts": {
     "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs && node --check mcp/memory/static/app.js && node --check mcp/memory/static/work.js && node --check mcp/memory/static/slice.js",
     "test:dashboard": "node --test test/dashboard-slice.test.mjs",
-    "test": "node --test test/cli.test.mjs test/matrix-mcp.test.mjs test/notify.test.mjs",
+    "test": "node --test test/cli.test.mjs test/matrix-mcp.test.mjs test/notify.test.mjs test/commons-client.test.mjs",
     "prepublishOnly": "npm run check && npm test",
     "test:py": "python -m unittest discover -s test -p \"test_*.py\""
   },
