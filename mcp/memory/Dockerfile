@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Pre-download the local ONNX embedding model so first run works offline and fast.
@@ -11,6 +12,7 @@ LABEL org.opencontainers.image.version=$HEARTH_MEMORY_VERSION \
       org.opencontainers.image.revision=$HEARTH_MEMORY_BUILD_COMMIT
 COPY app.py work.py dashboard.py coordination.py inbox_ack.py .
 COPY app.py work.py dashboard.py coordination.py reviewers.py .
+COPY commons_files.py .
 COPY dashboard-watchers.json .
 COPY static ./static
 ENV HEARTH_DATA_DIR=/data

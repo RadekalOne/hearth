@@ -109,6 +109,50 @@ class CommonsFilesTests(unittest.TestCase):
             self.create(collection='journal', kind='prediction')
         self.assertEqual(self.history_count(), 0)
 
+    def test_valid_escaped_content_round_trips_after_commit(self):
+        content = 'x' + '\x00' * 65535
+        receipt = self.create(content=content)
+        self.assertEqual(len(self.store.list('glossary')['entries']), 1)
+        pages = []
+        offset = 0
+        while offset is not None:
+            page = self.store.read(receipt['entry_id'], offset)
+            pages.append(page['content'])
+            offset = page['next_offset']
+        self.assertEqual(''.join(pages), content)
+
+    def test_stale_git_lock_recovers_without_duplicate_commit(self):
+        self.create()
+        (self.root / 'history.git/index.lock').write_bytes(b'interrupted git index')
+        first = self.create(request_id='after-crash')
+        repeated = self.create(request_id='after-crash')
+        self.assertEqual(first['entry_id'], repeated['entry_id'])
+        self.assertTrue(repeated['replayed'])
+        self.assertEqual(self.history_count(), 2)
+
+    def test_interrupted_initialization_is_retried_without_losing_history(self):
+        (self.root / 'history.git').mkdir(parents=True)
+        first = self.create()
+        second = self.create(request_id='after-reinitialization')
+        self.assertNotEqual(first['entry_id'], second['entry_id'])
+        self.assertEqual(self.history_count(), 2)
+        self.assertEqual(self.store.read(first['entry_id'])['content'], contribution()['content'])
+
+    def test_live_git_process_prevents_lock_cleanup(self):
+        self.create()
+        lock = self.root / 'history.git/index.lock'
+        lock.write_bytes(b'active writer')
+        process = subprocess.Popen(['git', '--git-dir', str(self.root / 'history.git'),
+                                    'hash-object', '--stdin'], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'busy'):
+                self.create(request_id='while-git-active')
+            self.assertTrue(lock.exists())
+        finally:
+            process.communicate(timeout=5)
+        self.assertEqual(self.create(request_id='while-git-active')['author'], 'kimi3')
+
     def test_pagination_uses_one_snapshot_and_read_is_bounded(self):
         ids = {self.create(request_id=f'item-{i}')['entry_id'] for i in range(27)}
         page = self.store.list('glossary')
@@ -171,6 +215,7 @@ class CommonsFilesTests(unittest.TestCase):
         reflog = subprocess.run(['git', '--git-dir', str(self.root / 'history.git'),
                                  'reflog', 'show', 'HEAD'], capture_output=True, text=True, check=True)
         self.assertIn('Create glossary/distinction', reflog.stdout)
+        self.assertIn('bare history with service-owned worktree', reflog.stdout)
         files[0].write_text('uncommitted corruption', encoding='utf-8')
         self.assertEqual(self.store.read(receipt['entry_id'])['content'], contribution()['content'])
 

@@ -28,6 +28,7 @@ AUTHOR = re.compile(r'(?:[a-z][a-z0-9_.-]{0,63}|@[a-z0-9_.=-]+:[a-z0-9.-]+)\Z')
 MAX_BYTES = 65536
 PAGE_CHARS = 4000
 PAGE_ENTRIES = 25
+MAX_RECORD_BYTES = 524288  # JSON escapes can use six bytes per content character.
 
 
 def encoded(value):
@@ -96,6 +97,7 @@ class CommonsStore:
         result = subprocess.run(
             ['git', '-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false',
              '-c', 'core.fsmonitor=false', '-c', f'core.hooksPath={self.root / "disabled-hooks"}',
+             '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
              '-c', 'user.name=Commons Writer', '-c', 'user.email=commons@hearth.local',
              *location, *args],
             env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
@@ -104,10 +106,65 @@ class CommonsStore:
             raise RuntimeError('Commons history publication failed; retry the same request')
         return result
 
+    def _git_writer_active(self):
+        """Conservative ownership check before removing internal Git crash locks.
+
+        The repository is service-owned: all application writers hold _lock.
+        A surviving child Git command from a killed worker must finish first.
+        Administrative Git writes while the service is active are unsupported.
+        """
+        needle = str(self.repo)
+        if os.name == 'nt':
+            command = "Get-CimInstance Win32_Process -Filter \"Name='git.exe'\" | Select-Object -ExpandProperty CommandLine | ConvertTo-Json -Compress"
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', command],
+                                    capture_output=True, text=True, timeout=15)
+            if result.returncode:
+                raise RuntimeError('Commons store busy; cannot establish Git writer state')
+            rows = json.loads(result.stdout) if result.stdout.strip() else []
+            rows = rows if isinstance(rows, list) else [rows]
+            return any(not isinstance(row, str) or needle.lower().replace('/', '\\') in row.lower().replace('/', '\\') for row in rows)
+        proc = Path('/proc')
+        if proc.exists():
+            for process in proc.iterdir():
+                if not process.name.isdigit():
+                    continue
+                try:
+                    args = (process / 'cmdline').read_bytes().split(b'\0')
+                    if args and Path(os.fsdecode(args[0])).name == 'git' and os.fsencode(needle) in b' '.join(args):
+                        return True
+                except FileNotFoundError:
+                    continue
+                except PermissionError:
+                    # Unknown process ownership: do not remove its possible lock.
+                    raise RuntimeError('Commons store busy; cannot inspect Git writer state') from None
+            return False
+        result = subprocess.run(['ps', '-axo', 'command='], capture_output=True, text=True, timeout=15, check=True)
+        return any(needle in line and Path(line.strip().split(' ')[0]).name == 'git' for line in result.stdout.splitlines())
+
+    def _recover_locks(self):
+        if not self.repo.exists():
+            return
+        candidates = [self.repo / value for value in ('index.lock', 'HEAD.lock', 'config.lock',
+                      'packed-refs.lock', 'refs/heads/main.lock')]
+        candidates.extend(self.repo.glob('next-index-*.lock'))
+        locks = []
+        for candidate in candidates:
+            no_links(candidate)
+            if candidate.exists():
+                if not candidate.is_file():
+                    raise RuntimeError('Commons store busy; unexpected Git lock type')
+                locks.append(candidate)
+        if locks:
+            if self._git_writer_active():
+                raise RuntimeError('Commons store busy; a Git process is still active')
+            for lock in locks:
+                lock.unlink()  # internal crash locks only, never contribution files
+
     def _initialize(self):
         self.files.mkdir(exist_ok=True)
-        if not self.repo.exists():
-            self._git('init', '--bare', '--initial-branch=main', str(self.repo))
+        # git init is idempotent and preserves refs/objects. Directory existence
+        # alone does not establish that an interrupted first init completed.
+        self._git('init', '--bare', '--initial-branch=main', str(self.repo))
         self._git('config', 'core.logAllRefUpdates', 'true')
 
     def _head(self):
@@ -134,7 +191,7 @@ class CommonsStore:
 
     def _record(self, head, relative):
         blob = self._git('show', f'{head}:{relative}').stdout
-        if len(blob) > MAX_BYTES + 20000:
+        if len(blob) > MAX_RECORD_BYTES:
             raise RuntimeError('Commons record is too large')
         return json.loads(blob.decode('utf-8'))
 
@@ -170,7 +227,9 @@ class CommonsStore:
 
     def _publish(self, relative):
         self._git('add', '--', relative)
-        self._git('commit', '--only', '-m', f'Create {relative.split("/")[0]}/{self._pending_kind}', '--', relative)
+        self._git('commit', '--only', '-m',
+                  f'Create {relative.split("/")[0]}/{self._pending_kind}; bare history with service-owned worktree',
+                  '--', relative)
 
     def create(self, *, author, collection, kind, content, source_refs, links, request_id):
         self._validate(author, collection, kind, content, source_refs, links, request_id)
@@ -180,6 +239,7 @@ class CommonsStore:
         entry_id = 'entry_' + hashlib.sha256(encoded([author, request_id])).hexdigest()[:32]
         relative = f'{collection}/{entry_id}.json'
         with self._lock():
+            self._recover_locks()
             self._initialize()
             head = self._head()
             # The same author/request ID is unique across all collections.
