@@ -5,12 +5,15 @@ import os
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 
 spec = importlib.util.spec_from_file_location('commons_fixture_store', Path(__file__).parents[1] / 'mcp/memory/commons_files.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 temp = tempfile.TemporaryDirectory()
-store = module.CommonsStore(Path(temp.name) / 'commons')
+# macOS exposes its temporary directory through /var -> /private/var.
+# Use the canonical fixture path; the store still rejects linked paths.
+store = module.CommonsStore(Path(temp.name).resolve() / 'commons')
 participants = {'codex', 'kimi3', 'glm53', 'hy4', 'mavis'}
 
 
@@ -44,7 +47,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+class LoopbackServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer's default bind performs reverse DNS via getfqdn, which can
+        # block on offline CI hosts. This fixture only ever serves loopback.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address
+
+
+server = LoopbackServer(('127.0.0.1', 0), Handler)
 print(json.dumps({'port': server.server_port}), flush=True)
 try:
     server.serve_forever()
