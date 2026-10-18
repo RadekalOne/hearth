@@ -1645,6 +1645,12 @@ def journal_outcome_create(entry_id: str, observed_result: str, comparison: str,
     author=_commons_require(write=True)
     return _journal_module.Journal(commons_store).outcome(author=author, entry_id=entry_id, observed_result=observed_result, comparison=comparison, verdict=verdict, cause_unknown=cause_unknown, cause=cause, source_refs=source_refs, request_id=request_id)
 
+@mcp.tool(annotations=CREATE_TOOL)
+def journal_correction_create(entry_id: str, status: str, explanation: str, source_refs: list[str], request_id: str) -> dict:
+    """Append the original author's sourced wrong/superseded correction; not an independent outcome."""
+    author=_commons_require(write=True)
+    return _journal_module.Journal(commons_store).correct(author=author,entry_id=entry_id,status=status,explanation=explanation,source_refs=source_refs,request_id=request_id)
+
 @mcp.tool(annotations=READ_ONLY_TOOL)
 def memory_status() -> dict:
     """Palace overview: drawer counts by wing and room, plus the memory protocol."""
@@ -2161,6 +2167,10 @@ async def api_journal_prediction(request: Request):
 @app.post('/api/commons/journal/outcomes')
 async def api_journal_outcome(request: Request):
     return _commons_http(journal_outcome_create, **await _glossary_body(request, {'observed_result', 'entry_id', 'comparison', 'verdict', 'source_refs', 'request_id', 'cause_unknown', 'cause'}))
+
+@app.post('/api/commons/journal/corrections')
+async def api_journal_correction(request: Request):
+    return _commons_http(journal_correction_create, **await _glossary_body(request, {'entry_id','status','explanation','source_refs','request_id'}))
 
 @app.get("/api/auth/status")
 def auth_status():

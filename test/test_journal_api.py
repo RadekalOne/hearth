@@ -2,6 +2,17 @@ from test.test_glossary_api import GlossaryAPITests
 from datetime import date
 
 class JournalAPITests(GlossaryAPITests):
+    async def test_self_correction_route_preserves_original(self):
+        headers={'Authorization':'Bearer codex-test-token'}
+        created=await self.client.post('/api/commons/journal/predictions',headers=headers,json=self.journal_payload())
+        parent=created.json()['entry_id']
+        data=dict(entry_id=parent,status='superseded',explanation='Later evidence changed the premise.',source_refs=['fixture:correction'],request_id='api-correction')
+        correction=await self.client.post('/api/commons/journal/corrections',headers=headers,json=data)
+        self.assertEqual(correction.status_code,200,correction.text)
+        read=await self.client.get('/api/commons/journal/entries/'+correction.json()['entry_id'],headers=headers)
+        self.assertEqual(read.json()['data']['record_type'],'correction')
+        original=await self.client.get('/api/commons/journal/entries/'+parent,headers=headers)
+        self.assertEqual(original.json()['data']['record_type'],'prediction')
     def journal_payload(self):
         return dict(title='Fixture',decision='Check twice',reasoning='One reading can be noise.',prediction='They will disagree.',falsifier='They agree on an observed fault.',confidence='medium',check_date=date.today().isoformat(),tradeoffs='',source_refs=['fixture:before'],request_id='journal-api')
     async def test_journal_roundtrip_identity_and_independent_outcome(self):

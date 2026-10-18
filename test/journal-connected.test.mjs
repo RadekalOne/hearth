@@ -14,7 +14,7 @@ test('journal uses real commits through the bounded Mavis loop, independent outc
   child.on('error',reject);child.on('exit',()=>{clearTimeout(timer);reject(Error('Fixture stopped '+diagnostics));});});
  const baseUrl=new URL(url).origin,room='!commons:test',human='@rad:test';
  const prediction={title:'Synthetic prediction',decision:'Compare independent sensors',reasoning:'Agreement may reveal a fault.',prediction:'Sensors will disagree.',falsifier:'Both agree on a verified fault.',confidence:'medium',check_date:'2026-10-18',tradeoffs:'',source_refs:['fixture:before']};
- function options(principal,eventId){const agentId='@'+principal+':test';return {principal,agentId,roomId:room,triggerRoom:room,humanSenders:[human],enabled:true,callTool:glossaryHTTP({baseUrl,token:'fixture-'+principal}),event:{event_id:eventId,type:'m.room.message',sender:human,content:{body:'/journal synthetic test','m.mentions':{user_ids:[agentId]}}}};}
+ function options(principal,eventId){const agentId='@'+principal+':test';return {principal,agentId,roomId:room,triggerRoom:room,humanSenders:[human],enabled:true,standingProjects:['glossary','journal'],callTool:glossaryHTTP({baseUrl,token:'fixture-'+principal}),event:{event_id:eventId,type:'m.room.message',sender:human,content:{body:'An ordinary Commons discussion; no command from Rad.','m.mentions':{user_ids:[]}}}};}
  const opts=options('mavis','$fixture-prediction'),turn=createProjectTurn(opts);
  const outputs=[JSON.stringify({operation:'journal_prediction_create',arguments:prediction}),JSON.stringify({done:'fixture'})];
  const result=await runStructuredTurn({turn,brief:'fixture',complete:async()=>outputs.shift()});
@@ -29,6 +29,10 @@ test('journal uses real commits through the bounded Mavis loop, independent outc
  assert.deepEqual(await turn.call('journal_entry_read',{entry_id:parent}),original);
  const stored=await review.call('journal_entry_read',{entry_id:receipt.entry_id});
  assert.equal(stored.data.verdict,'falsified');assert.equal(stored.data.cause_unknown,true);assert.deepEqual(stored.links,[parent]);
- assert.equal((await turn.call('journal_list',{})).entries.length,2);
+ const correction=createProjectTurn(options('mavis','$fixture-correction'));
+ const self=await correction.call('journal_correction_create',{entry_id:parent,status:'wrong',explanation:'The original assumption failed.',source_refs:['fixture:self-correction']});
+ assert.equal((await turn.call('journal_entry_read',{entry_id:self.entry_id})).data.record_type,'correction');
+ assert.deepEqual(await turn.call('journal_entry_read',{entry_id:parent}),original);
+ assert.equal((await turn.call('journal_list',{})).entries.length,3);
  assert.equal((await turn.call('glossary_list',{})).entries.length,0);
 });

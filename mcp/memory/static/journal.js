@@ -32,9 +32,9 @@
   history.replaceState(null,'','#'+entry.entry_id);
   $('editor').hidden=true;$('welcome').hidden=true;$('record').hidden=false;
   const record=$('record');record.replaceChildren();const data=entry.data;
-  record.append(element('div',data.record_type,'eyebrow'),element('h2',data.title||'A later outcome'));
+  record.append(element('div',data.record_type,'eyebrow'),element('h2',data.title||(data.record_type==='correction'?'Author self-correction':'A later outcome')));
   record.append(element('p',`${entry.author} · ${new Date(entry.created_at).toLocaleString()}\n${entry.entry_id}`,'record-meta'));
-  const labels=data.record_type==='outcome'?{observed_result:'Observed result',comparison:'Comparison with prediction',verdict:'Verdict',cause_unknown:'Cause unknown',cause:'Evidenced cause'}:{decision:'Decision',reasoning:'Reasoning',prediction:'Prediction',falsifier:'Falsifier',confidence:'Confidence',check_date:'Check date (no automatic reminder)',tradeoffs:'Tradeoffs'};
+  const labels=data.record_type==='correction'?{status:'Self-correction status',explanation:'Author explanation'}:data.record_type==='outcome'?{observed_result:'Observed result',comparison:'Comparison with prediction',verdict:'Verdict',cause_unknown:'Cause unknown',cause:'Evidenced cause'}:{decision:'Decision',reasoning:'Reasoning',prediction:'Prediction',falsifier:'Falsifier',confidence:'Confidence',check_date:'Check date (no automatic reminder)',tradeoffs:'Tradeoffs'};
   for(const [field,label]of Object.entries(labels))record.append(element('h3',label),element('p',typeof data[field]==='boolean'?(data[field]?'Yes':'No'):data[field]||'Not recorded','prose'));
   record.append(element('h3','Sources'));const sources=document.createElement('ul');sources.className='sources';
   for(const source of entry.source_refs)sources.append(element('li',source));record.append(sources);
@@ -44,6 +44,7 @@
    if(entry.author.replace(/^@/,'').split(':')[0]===principal.replace(/^@/,'').split(':')[0])record.append(element('p','A different participant must record the outcome.','dim'));
    else{const button=element('button','Record later outcome','secondary');button.type='button';button.onclick=()=>edit('outcomes',entry);actions.append(button);}
   }
+  if(data.record_type==='correction')record.append(element('p','This is the author’s self-correction. A separately authored outcome remains a separate record.','dim'));
   record.append(actions);
  }
  function edit(kind,entry=null){
@@ -90,6 +91,7 @@
  $('reload').onclick=()=>list().catch(error=>status(error.message));
  $('more').onclick=()=>list(true).catch(error=>status(error.message));
  $('cause-unknown').onchange=()=>{$('cause').disabled=$('cause-unknown').checked;$('cause').required=!$('cause-unknown').checked;};
+ window.addEventListener('hashchange',()=>{if(!busy&&/^#entry_[a-f0-9]{32}$/.test(location.hash))show(location.hash.slice(1)).catch(error=>status(error.message));});
  async function start(){
   const auth=await fetch('/api/auth/status',{credentials:'same-origin'});const session=await auth.json();
   principal=session.principal||'';$('identity').textContent=principal?'Signed in as '+principal:'Sign in to read shared entries.';

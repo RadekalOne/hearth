@@ -45,4 +45,16 @@ class JournalTests(unittest.TestCase):
         self.outcome(parent,cause_unknown=False,cause='Second observation verified the fault.')
         with self.assertRaises(ValueError):self.outcome(parent,observed_result='Changed')
 
+    def test_author_self_correction_is_linked_not_an_independent_outcome(self):
+        parent=self.prediction()['entry_id'];original=self.journal.read(parent)
+        args=dict(author='mavis',entry_id=parent,status='wrong',explanation='My assumption failed.',source_refs=['fixture:correction'],request_id='self-correction')
+        result=self.journal.correct(**args)
+        self.assertEqual(self.journal.read(parent),original)
+        correction=self.journal.read(result['entry_id'])
+        self.assertEqual(correction['data']['record_type'],'correction')
+        self.assertEqual(correction['links'],[parent]);self.assertEqual(correction['author'],'mavis')
+        self.assertTrue(self.journal.correct(**args)['replayed'])
+        for changes in [dict(author='glm53'),dict(status='supported'),dict(explanation=''),dict(entry_id=result['entry_id'])]:
+            with self.subTest(changes=changes),self.assertRaises(ValueError):self.journal.correct(**{**args,**changes})
+
 if __name__=='__main__':unittest.main()

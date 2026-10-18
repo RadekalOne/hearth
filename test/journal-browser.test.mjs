@@ -22,6 +22,12 @@ test('prediction retries and survives independent failed outcome, reload and acc
  assert.match(await page.locator('#record').innerText(),/fixture-reviewer/);assert.match(await page.locator('#record').innerText(),/falsified/);
  await page.reload();await page.getByRole('button',{name:'Open original prediction'}).click();await page.waitForURL('**#'+original);
  assert.match(await page.locator('#record').innerText(),/The first may report noise/);assert.match(await page.locator('#record').innerText(),/fixture-author/);
+ const headers={Authorization:'Bearer local-only-synthetic-glossary-preview'};
+ const correction=await page.request.post(new URL('/api/commons/journal/corrections',url).href,{headers,data:{entry_id:original,status:'wrong',explanation:'Synthetic author correction.',source_refs:['fixture:self-correction'],request_id:'browser-correction'}});
+ assert.ok(correction.ok());const correctionId=(await correction.json()).entry_id;
+ await page.goto(new URL('/journal#'+correctionId,url).href);await page.getByRole('heading',{name:'Author self-correction',exact:true}).waitFor();
+ assert.match(await page.locator('#record').innerText(),/separately authored outcome/);
+ await page.getByRole('button',{name:'Open original prediction'}).click();await page.waitForURL('**#'+original);
  await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const artifacts=new URL('../test-artifacts/',import.meta.url);await mkdir(artifacts,{recursive:true});await page.screenshot({path:fileURLToPath(new URL('journal-mobile.png',artifacts)),fullPage:true});
  await page.setViewportSize({width:1280,height:960});await page.screenshot({path:fileURLToPath(new URL('journal-desktop.png',artifacts)),fullPage:true});

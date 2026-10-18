@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /** Explicit project command path; ordinary Mavis conversation stays unchanged. */
 import {spawn} from 'node:child_process';
-import {mkdtemp,writeFile,rm,rmdir} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
+import {mkdtemp,writeFile,readFile,rm,rmdir} from 'node:fs/promises';
+import {tmpdir,homedir} from 'node:os';
 import path from 'node:path';
-import {createProjectTurn,runStructuredTurn} from './turn.mjs';
+import {createProjectTurn,runStructuredTurn,runStandingConversation} from './turn.mjs';
 import {commonsProjectHTTP} from './http.mjs';
 const env=process.env;
 const room='!WO2IHWuW71x_ENPhkPb-HDw6nPDa-xIP37yJIeUmFVc';
@@ -32,6 +32,14 @@ async function complete(messages){
  }finally{await rm(file,{force:true});await rmdir(folder);}
 }
 try{
+ const standingChat=process.argv.includes('--standing-chat');
+ if(standingChat){
+  const profile=await readFile(path.join(homedir(),'AI Projects/hearth/secrets/agents/mavis.env'),'utf8');
+  for(const line of profile.split(/\r?\n/)){
+   const match=/^(MATRIX_HOMESERVER_URL|MATRIX_ACCESS_TOKEN|HEARTH_MEMORY_URL|HEARTH_MEMORY_TOKEN)=(.*)$/.exec(line);
+   if(match)env[match[1]]=match[2];
+  }
+ }
  const callTool=commonsProjectHTTP({baseUrl:env.HEARTH_MEMORY_URL,token:env.HEARTH_MEMORY_TOKEN});
  const who=await matrixGET('account/whoami');
  if(who.user_id!=='@mavis:hearth.radekal.me')throw Error('Mavis identity mismatch');
@@ -41,13 +49,21 @@ try{
   const event=await matrixGET('rooms/'+encodeURIComponent(room)+'/event/'+encodeURIComponent(env.HEARTH_EVENT_ID??''));
   if(event.event_id!==env.HEARTH_EVENT_ID)throw Error('Origin event mismatch');
   const turn=createProjectTurn({principal:'mavis',agentId:who.user_id,roomId:room,triggerRoom:env.HEARTH_ROOM_ID,
-   humanSenders:['@rad:hearth.radekal.me'],event,enabled:env.HEARTH_COMMONS_TOOLS==='1',callTool});
+   humanSenders:['@rad:hearth.radekal.me'],event,enabled:standingChat||env.HEARTH_COMMONS_TOOLS==='1',standingProjects:standingChat?['glossary','journal']:[],callTool});
   if(!turn.authorized){process.exitCode=3;}else{
    // Verify access before any paid completion. No write is performed by this read.
-   await turn.call(turn.tools.some(t=>t.function.name==='journal_prediction_create')?'journal_list':'glossary_list',{});
-   const result=await runStructuredTurn({turn,brief:event.content.body,complete});
+   let contextMessages=[];
+   if(standingChat){
+    const index=process.argv.indexOf('--messages-file'),file=process.argv[index+1];
+    if(index<0||!file)throw Error('Missing host message file');
+    const text=await readFile(file,'utf8');if(text.length>200000)throw Error('Oversized host context');
+    contextMessages=JSON.parse(text);
+    if(!Array.isArray(contextMessages)||contextMessages.length>5||contextMessages.some(m=>!m||!['system','user','assistant'].includes(m.role)||typeof m.content!=='string'))throw Error('Invalid host context');
+   }
+   const brief='Origin '+event.event_id+' from '+event.sender+':\n'+event.content.body;
+   if(!standingChat)await turn.call(turn.tools.some(t=>t.function.name==='journal_prediction_create')?'journal_list':'glossary_list',{});
    // stdout is an operational receipt, never automatically a Commons post.
-   console.log(JSON.stringify(result));
+   console.log(standingChat?await runStandingConversation({turn,brief,contextMessages,complete}):JSON.stringify(await runStructuredTurn({turn,brief,complete})));
   }
  }
 }catch{console.error('Mavis glossary turn failed. Inspect canonical glossary records before retrying; a lost response may already have committed.');process.exitCode=1;}

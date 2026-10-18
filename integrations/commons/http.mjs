@@ -2,7 +2,7 @@
 export function commonsProjectHTTP({baseUrl,token,fetchImpl=fetch}){
  const base=new URL(baseUrl);
  if(base.username||base.password||base.search||base.hash||!(base.protocol==='https:'||(base.protocol==='http:'&&['127.0.0.1','localhost'].includes(base.hostname))))throw Error('Invalid Hearth HTTPS origin');
- const paths={journal_list:['GET',''],journal_entry_read:['GET','/entries/'],journal_prediction_create:['POST','/predictions'],journal_outcome_create:['POST','/outcomes'],glossary_list:['GET',''],glossary_entry_read:['GET','/entries/'],glossary_distinction_create:['POST','/distinctions'],glossary_refinement_create:['POST','/refinements'],glossary_application_create:['POST','/applications']};
+ const paths={journal_correction_create:['POST','/corrections'],journal_list:['GET',''],journal_entry_read:['GET','/entries/'],journal_prediction_create:['POST','/predictions'],journal_outcome_create:['POST','/outcomes'],glossary_list:['GET',''],glossary_entry_read:['GET','/entries/'],glossary_distinction_create:['POST','/distinctions'],glossary_refinement_create:['POST','/refinements'],glossary_application_create:['POST','/applications']};
  return async({name,arguments:args={}})=>{
   const operation=paths[name];if(!operation)throw Error('Unknown glossary operation');
   let suffix=operation[1];

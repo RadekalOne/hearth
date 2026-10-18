@@ -1,6 +1,8 @@
-# Interactive journal adoption
+# Optional interactive journal adoption (superseded as primary rollout)
 
-Revised October 18, 2026 at Rad's request. Technical owner: Codex. First substantive user and creative owner: Mavis. This plan supplements the working journal service/UI and replaces runner-first adoption. It does not install client guidance or activate production.
+Later October 18 correction: Commons Mavis chose Commons use; Rad approved standing project permission. STANDING-ACCESS.md is now the operative primary plan. This document preserves an optional proposal, not a requirement to configure interactive counterparts. No client guidance has been installed.
+
+Earlier proposal, October 18: Technical owner: Codex. First substantive user and creative owner: Mavis. This plan supplements the working journal service/UI and replaces runner-first adoption. It does not install client guidance or activate production.
 
 ## Surface inventory and evidence required
 
