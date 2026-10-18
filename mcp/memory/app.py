@@ -111,6 +111,9 @@ _glossary_spec = importlib.util.spec_from_file_location(
     'hearth_glossary', os.path.join(os.path.dirname(__file__), 'glossary.py'))
 _glossary_module = importlib.util.module_from_spec(_glossary_spec)
 _glossary_spec.loader.exec_module(_glossary_module)
+_journal_spec=importlib.util.spec_from_file_location('hearth_journal',os.path.join(os.path.dirname(__file__),'journal.py'))
+_journal_module=importlib.util.module_from_spec(_journal_spec)
+_journal_spec.loader.exec_module(_journal_module)
 COMMONS_ENABLED = os.environ.get('HEARTH_COMMONS_ENABLED', 'false').strip().lower() in {'true', '1', 'yes'}
 COMMONS_PARTICIPANTS = {v.strip() for v in os.environ.get('HEARTH_COMMONS_PARTICIPANTS', '').split(',') if v.strip()}
 _coordination_spec = importlib.util.spec_from_file_location(
@@ -1619,6 +1622,30 @@ def glossary_application_create(entry_id: str, situation: str, how_used: str, as
 
 
 @mcp.tool(annotations=READ_ONLY_TOOL)
+def journal_list(cursor: str = '') -> dict:
+    """List committed predictions and separately authored outcomes."""
+    principal=_commons_require()
+    return {**_journal_module.Journal(commons_store).list(cursor),'can_create':principal in COMMONS_PARTICIPANTS}
+
+@mcp.tool(annotations=READ_ONLY_TOOL)
+def journal_entry_read(entry_id: str) -> dict:
+    """Read complete original reasoning or a later result with trusted author/time."""
+    _commons_require()
+    return _journal_module.Journal(commons_store).read(entry_id)
+
+@mcp.tool(annotations=CREATE_TOOL)
+def journal_prediction_create(title: str, decision: str, reasoning: str, prediction: str, falsifier: str, confidence: str, check_date: str, tradeoffs: str, source_refs: list[str], request_id: str) -> dict:
+    """Commit sourced journal records. Predictions remain unchanged; results require a different author."""
+    author=_commons_require(write=True)
+    return _journal_module.Journal(commons_store).predict(author=author, title=title, decision=decision, reasoning=reasoning, prediction=prediction, falsifier=falsifier, confidence=confidence, check_date=check_date, tradeoffs=tradeoffs, source_refs=source_refs, request_id=request_id)
+
+@mcp.tool(annotations=CREATE_TOOL)
+def journal_outcome_create(entry_id: str, observed_result: str, comparison: str, verdict: str, cause_unknown: bool, cause: str, source_refs: list[str], request_id: str) -> dict:
+    """Commit sourced journal records. Predictions remain unchanged; results require a different author."""
+    author=_commons_require(write=True)
+    return _journal_module.Journal(commons_store).outcome(author=author, entry_id=entry_id, observed_result=observed_result, comparison=comparison, verdict=verdict, cause_unknown=cause_unknown, cause=cause, source_refs=source_refs, request_id=request_id)
+
+@mcp.tool(annotations=READ_ONLY_TOOL)
 def memory_status() -> dict:
     """Palace overview: drawer counts by wing and room, plus the memory protocol."""
     return {
@@ -2118,6 +2145,22 @@ async def api_glossary_apply(request: Request):
     fields = set(_glossary_module.APPLICATION_FIELDS) | {'entry_id','source_refs','request_id'}
     return _commons_http(glossary_application_create, **await _glossary_body(request, fields))
 
+
+@app.get('/api/commons/journal')
+def api_journal_list(cursor: str = ''):
+    return _commons_http(journal_list,cursor)
+
+@app.get('/api/commons/journal/entries/{entry_id}')
+def api_journal_read(entry_id: str):
+    return _commons_http(journal_entry_read,entry_id)
+
+@app.post('/api/commons/journal/predictions')
+async def api_journal_prediction(request: Request):
+    return _commons_http(journal_prediction_create, **await _glossary_body(request, {'falsifier', 'check_date', 'reasoning', 'tradeoffs', 'decision', 'confidence', 'title', 'source_refs', 'request_id', 'prediction'}))
+
+@app.post('/api/commons/journal/outcomes')
+async def api_journal_outcome(request: Request):
+    return _commons_http(journal_outcome_create, **await _glossary_body(request, {'observed_result', 'entry_id', 'comparison', 'verdict', 'source_refs', 'request_id', 'cause_unknown', 'cause'}))
 
 @app.get("/api/auth/status")
 def auth_status():
@@ -3697,6 +3740,7 @@ async def api_timeline(days: int = 7):
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 STATIC_FILES = {
+    'journal.js':'application/javascript; charset=utf-8',
     'glossary.js': 'application/javascript; charset=utf-8',
     'glossary.css': 'text/css; charset=utf-8',
     "slice.js": "application/javascript; charset=utf-8",
@@ -3865,6 +3909,11 @@ async def api_work_communication():
 def dashboard():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"),
                         headers={"Cache-Control": "no-cache"})
+
+
+@app.get('/journal')
+def journal_page():
+    return FileResponse(os.path.join(STATIC_DIR,'journal.html'),headers={'Cache-Control':'no-cache'})
 
 
 @app.get('/glossary')

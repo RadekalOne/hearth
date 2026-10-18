@@ -4,8 +4,8 @@ import {spawn} from 'node:child_process';
 import {mkdtemp,writeFile,rm,rmdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {createGlossaryTurn,runStructuredTurn} from './turn.mjs';
-import {glossaryHTTP} from './http.mjs';
+import {createProjectTurn,runStructuredTurn} from './turn.mjs';
+import {commonsProjectHTTP} from './http.mjs';
 const env=process.env;
 const room='!WO2IHWuW71x_ENPhkPb-HDw6nPDa-xIP37yJIeUmFVc';
 async function matrixGET(suffix){
@@ -32,19 +32,19 @@ async function complete(messages){
  }finally{await rm(file,{force:true});await rmdir(folder);}
 }
 try{
- const callTool=glossaryHTTP({baseUrl:env.HEARTH_MEMORY_URL,token:env.HEARTH_MEMORY_TOKEN});
+ const callTool=commonsProjectHTTP({baseUrl:env.HEARTH_MEMORY_URL,token:env.HEARTH_MEMORY_TOKEN});
  const who=await matrixGET('account/whoami');
  if(who.user_id!=='@mavis:hearth.radekal.me')throw Error('Mavis identity mismatch');
  if(process.argv.includes('--probe')){
-  await callTool({name:'glossary_list'});console.log('Mavis authenticated glossary read OK; no model call or write.');
+  await callTool({name:process.argv.includes('--journal')?'journal_list':'glossary_list'});console.log('Mavis authenticated glossary read OK; no model call or write.');
  }else{
   const event=await matrixGET('rooms/'+encodeURIComponent(room)+'/event/'+encodeURIComponent(env.HEARTH_EVENT_ID??''));
   if(event.event_id!==env.HEARTH_EVENT_ID)throw Error('Origin event mismatch');
-  const turn=createGlossaryTurn({principal:'mavis',agentId:who.user_id,roomId:room,triggerRoom:env.HEARTH_ROOM_ID,
+  const turn=createProjectTurn({principal:'mavis',agentId:who.user_id,roomId:room,triggerRoom:env.HEARTH_ROOM_ID,
    humanSenders:['@rad:hearth.radekal.me'],event,enabled:env.HEARTH_COMMONS_TOOLS==='1',callTool});
   if(!turn.authorized){process.exitCode=3;}else{
    // Verify access before any paid completion. No write is performed by this read.
-   await turn.call('glossary_list',{});
+   await turn.call(turn.tools.some(t=>t.function.name==='journal_prediction_create')?'journal_list':'glossary_list',{});
    const result=await runStructuredTurn({turn,brief:event.content.body,complete});
    // stdout is an operational receipt, never automatically a Commons post.
    console.log(JSON.stringify(result));

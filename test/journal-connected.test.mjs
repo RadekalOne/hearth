@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {spawn} from 'node:child_process';
+import {createInterface} from 'node:readline';
+import {fileURLToPath} from 'node:url';
+import {createProjectTurn,runStructuredTurn} from '../integrations/commons/turn.mjs';
+import {glossaryHTTP} from '../integrations/commons/http.mjs';
+test('journal uses real commits through the bounded Mavis loop, independent outcome and restart retries',async t=>{
+ const child=spawn(process.env.HEARTH_TEST_PYTHON||'python',[fileURLToPath(new URL('./glossary_preview.py',import.meta.url))],{stdio:['ignore','pipe','pipe']});
+ t.after(()=>child.kill());let diagnostics='';child.stderr.on('data',v=>diagnostics+=v);
+ const lines=createInterface({input:child.stdout});t.after(()=>lines.close());
+ const url=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Startup timeout '+diagnostics)),30000);
+  lines.on('line',line=>{if(line.startsWith('GLOSSARY_PREVIEW=')){clearTimeout(timer);resolve(JSON.parse(line.slice(17)).url);}});
+  child.on('error',reject);child.on('exit',()=>{clearTimeout(timer);reject(Error('Fixture stopped '+diagnostics));});});
+ const baseUrl=new URL(url).origin,room='!commons:test',human='@rad:test';
+ const prediction={title:'Synthetic prediction',decision:'Compare independent sensors',reasoning:'Agreement may reveal a fault.',prediction:'Sensors will disagree.',falsifier:'Both agree on a verified fault.',confidence:'medium',check_date:'2026-10-18',tradeoffs:'',source_refs:['fixture:before']};
+ function options(principal,eventId){const agentId='@'+principal+':test';return {principal,agentId,roomId:room,triggerRoom:room,humanSenders:[human],enabled:true,callTool:glossaryHTTP({baseUrl,token:'fixture-'+principal}),event:{event_id:eventId,type:'m.room.message',sender:human,content:{body:'/journal synthetic test','m.mentions':{user_ids:[agentId]}}}};}
+ const opts=options('mavis','$fixture-prediction'),turn=createProjectTurn(opts);
+ const outputs=[JSON.stringify({operation:'journal_prediction_create',arguments:prediction}),JSON.stringify({done:'fixture'})];
+ const result=await runStructuredTurn({turn,brief:'fixture',complete:async()=>outputs.shift()});
+ assert.equal(result.receipts[0].author,'mavis');const parent=result.receipts[0].entry_id;
+ const original=await turn.call('journal_entry_read',{entry_id:parent});
+ assert.equal((await createProjectTurn(opts).call('journal_prediction_create',prediction)).entry_id,parent);
+ await assert.rejects(createProjectTurn(opts).call('journal_prediction_create',{...prediction,title:'Changed'}),/HTTP 400/);
+ const outcome={entry_id:parent,observed_result:'Both sensors agreed.',comparison:'The prediction was falsified.',verdict:'falsified',cause_unknown:true,cause:'',source_refs:['fixture:after']};
+ await assert.rejects(createProjectTurn(options('mavis','$fixture-self-review')).call('journal_outcome_create',outcome),/HTTP 400/);
+ const review=createProjectTurn(options('glm53','$fixture-outcome'));
+ const receipt=await review.call('journal_outcome_create',outcome);assert.equal(receipt.author,'glm53');
+ assert.deepEqual(await turn.call('journal_entry_read',{entry_id:parent}),original);
+ const stored=await review.call('journal_entry_read',{entry_id:receipt.entry_id});
+ assert.equal(stored.data.verdict,'falsified');assert.equal(stored.data.cause_unknown,true);assert.deepEqual(stored.links,[parent]);
+ assert.equal((await turn.call('journal_list',{})).entries.length,2);
+ assert.equal((await turn.call('glossary_list',{})).entries.length,0);
+});

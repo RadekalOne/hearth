@@ -19,6 +19,7 @@
     "mcp/memory/work.py",
     "mcp/memory/commons_files.py",
     "mcp/memory/glossary.py",
+    "mcp/memory/journal.py",
     "integrations/commons/",
     "mcp/memory/dashboard.py",
     "mcp/memory/coordination.py",
@@ -35,9 +36,10 @@
   ],
   "scripts": {
     "test:glossary": "node --test --test-concurrency=1 test/glossary-browser.test.mjs test/commons-connected.test.mjs",
+    "test:journal": "node --test --test-concurrency=1 test/journal-browser.test.mjs test/journal-connected.test.mjs",
     "check": "node --check cli/hearth.mjs && node --check cli/create-hearth.mjs && node --check mcp/matrix/index.mjs && node --check mcp/memory/static/app.js && node --check mcp/memory/static/work.js && node --check mcp/memory/static/slice.js",
     "test:dashboard": "node --test test/dashboard-slice.test.mjs",
-    "test": "node --test test/cli.test.mjs test/matrix-mcp.test.mjs test/notify.test.mjs test/commons-client.test.mjs test/commons-turn.test.mjs test/commons-runtime-patches.test.mjs",
+    "test": "node --test test/cli.test.mjs test/matrix-mcp.test.mjs test/notify.test.mjs test/commons-client.test.mjs test/commons-turn.test.mjs test/journal-turn.test.mjs test/commons-runtime-patches.test.mjs",
     "prepublishOnly": "npm run check && npm test",
     "test:py": "python -m unittest discover -s test -p \"test_*.py\""
   },
