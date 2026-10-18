@@ -39,3 +39,14 @@ export function patchMavis(source){
 
   # Pre-fetch recent room history for context`);
 }
+export function patchMavisMention(source){
+ if(source.includes('# Connected glossary mention routing'))throw Error('Glossary mention route already installed');
+ return replace(source,'# Condensed Mavis persona for mention-wake.',`# Connected glossary mention routing: delegate to the already installed bounded
+# project handler. It re-fetches the exact event and validates human/mention/room.
+if ($env:HEARTH_SENDER -eq '@rad:hearth.radekal.me' -and $env:HEARTH_BODY -match '\\A(?:[ \\t]*\\r?\\n)*/glossary(?:[ \\t]|$)') {
+  & (Join-Path $PSScriptRoot 'mavis-hearth-campfire-handler.ps1')
+  exit $LASTEXITCODE
+}
+
+# Condensed Mavis persona for mention-wake.`);
+}
