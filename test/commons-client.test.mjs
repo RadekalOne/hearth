@@ -68,3 +68,21 @@ test('failed, malformed and wrong-author receipts never become successful saves'
     await assert.rejects(client.call('commons_entry_create',payload));
   }
 });
+
+test('typed glossary tools are explicit, project-scoped and require real author receipts',async()=>{
+ const receipt={entry_id:'entry_'+'c'.repeat(32),author:'kimi3',created_at:'2026-10-17T15:00:00+00:00',sha256:'d'.repeat(64),replayed:false};
+ const draft={title:'Synthetic',distinction:'Evidence discriminates.',discriminating_example:'A second sensor rules out noise.',unresolved_edge_case:'Shared faults.',source_refs:['fixture'],request_id:'glossary-fixture'};
+ const ambient=await adapter({principal:'kimi3',includeGlossary:true,callTool:async()=>{throw Error('must not run');}});
+ assert.ok(ambient.tools.some(t=>t.function.name==='glossary_entry_read'));
+ assert.ok(!ambient.tools.some(t=>t.function.name==='glossary_distinction_create'));
+ await assert.rejects(ambient.call('glossary_distinction_create',draft),/authorized project/i);
+ const seen=[];
+ const project=await adapter({principal:'kimi3',includeGlossary:true,authorizedProject:true,callTool:async request=>{seen.push(request);return {structuredContent:receipt};}});
+ assert.equal((await project.call('glossary_distinction_create',draft)).author,'kimi3');
+ assert.deepEqual(seen[0].arguments,draft);
+ await assert.rejects(project.call('glossary_distinction_create',{...draft,author:'mavis'}),/unexpected/i);
+ const wrong=await adapter({principal:'kimi3',includeGlossary:true,authorizedProject:true,callTool:async()=>({structuredContent:{...receipt,author:'mavis'}})});
+ await assert.rejects(wrong.call('glossary_distinction_create',draft),/receipt/i);
+ const hidden=await adapter({principal:'kimi3',authorizedProject:true,callTool:async()=>{throw Error('must not run');}});
+ await assert.rejects(hidden.call('glossary_distinction_create',draft),/unknown/i);
+});
