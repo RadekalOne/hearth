@@ -13,6 +13,7 @@ LABEL org.opencontainers.image.version=$HEARTH_MEMORY_VERSION \
 COPY app.py work.py dashboard.py coordination.py inbox_ack.py .
 COPY app.py work.py dashboard.py coordination.py reviewers.py .
 COPY commons_files.py .
+COPY glossary.py .
 COPY dashboard-watchers.json .
 COPY static ./static
 ENV HEARTH_DATA_DIR=/data
