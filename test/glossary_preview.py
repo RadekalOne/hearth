@@ -15,7 +15,7 @@ from fastapi.routing import APIRoute
 temporary = tempfile.TemporaryDirectory(prefix='hearth-glossary-preview-')
 root = Path(temporary.name).resolve()
 token = 'local-only-synthetic-glossary-preview'
-fixture_tokens = {'fixture-author':token, **{name:'fixture-'+name for name in ['codex','kimi3','glm53','hy4','mavis']}}
+fixture_tokens = {'fixture-author':token,'fixture-reviewer':'fixture-reviewer-token', **{name:'fixture-'+name for name in ['codex','kimi3','glm53','hy4','mavis']}}
 os.environ.update(HEARTH_DATA_DIR=str(root), HEARTH_MEMORY_ADMIN_TOKEN='local-only-preview-admin',
                   HEARTH_HOMESERVER_URL='', HEARTH_MATRIX_TOKEN='', HEARTH_COMMONS_ENABLED='true',
                   HEARTH_COMMONS_PARTICIPANTS=','.join(fixture_tokens), HEARTH_MEMORY_COOKIE_SECURE='false')
@@ -32,8 +32,11 @@ for index, route in enumerate(memory.app.router.routes):
         break
 
 async def preview(request):
-    response = RedirectResponse('/glossary?preview=1')
-    response.set_cookie(memory.SESSION_COOKIE,memory.create_session('fixture-author','token',token),httponly=True,samesite='strict')
+    principal=request.query_params.get('as','fixture-author')
+    if principal not in fixture_tokens:return memory.JSONResponse({'error':'Unknown fixture identity'},status_code=400)
+    view='journal' if request.query_params.get('view')=='journal' else 'glossary'
+    response = RedirectResponse('/'+view+'?preview=1')
+    response.set_cookie(memory.SESSION_COOKIE,memory.create_session(principal,'token',fixture_tokens[principal]),httponly=True,samesite='strict')
     return response
 
 memory.app.router.routes.insert(0,Route('/preview',preview))

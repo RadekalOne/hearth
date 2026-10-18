@@ -48,5 +48,16 @@ if ($env:HEARTH_SENDER -eq '@rad:hearth.radekal.me' -and $env:HEARTH_BODY -match
   exit $LASTEXITCODE
 }
 
+
 # Condensed Mavis persona for mention-wake.`);
+}
+
+/** Upgrade the previously installed glossary bridge, preserving unrelated edits. */
+export function patchJournalRunner(source){
+ source=replace(source,'import {createGlossaryTurn,glossaryReceiptSummary}', 'import {createProjectTurn,glossaryReceiptSummary}');
+ source=replace(source,'const glossary=createGlossaryTurn(', 'const glossary=createProjectTurn(');
+ return replace(source,"name.startsWith('glossary_')?glossary.call", "/^(glossary|journal)_/.test(name)?glossary.call");
+}
+export function patchJournalMavis(source){
+ return replace(source,'/glossary(?:[ \\t]|$)', '/(?:glossary|journal)(?:[ \\t]|$)');
 }
