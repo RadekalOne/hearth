@@ -15,10 +15,11 @@ from fastapi.routing import APIRoute
 temporary = tempfile.TemporaryDirectory(prefix='hearth-glossary-preview-')
 root = Path(temporary.name).resolve()
 token = 'local-only-synthetic-glossary-preview'
+fixture_tokens = {'fixture-author':token, **{name:'fixture-'+name for name in ['codex','kimi3','glm53','hy4','mavis']}}
 os.environ.update(HEARTH_DATA_DIR=str(root), HEARTH_MEMORY_ADMIN_TOKEN='local-only-preview-admin',
                   HEARTH_HOMESERVER_URL='', HEARTH_MATRIX_TOKEN='', HEARTH_COMMONS_ENABLED='true',
-                  HEARTH_COMMONS_PARTICIPANTS='fixture-author', HEARTH_MEMORY_COOKIE_SECURE='false')
-(root/'memory-tokens.json').write_text(json.dumps({'fixture-author':token}),encoding='utf-8')
+                  HEARTH_COMMONS_PARTICIPANTS=','.join(fixture_tokens), HEARTH_MEMORY_COOKIE_SECURE='false')
+(root/'memory-tokens.json').write_text(json.dumps(fixture_tokens),encoding='utf-8')
 spec = importlib.util.spec_from_file_location('glossary_preview_app',Path(__file__).parents[1]/'mcp/memory/app.py')
 memory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(memory)
