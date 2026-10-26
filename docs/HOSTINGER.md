@@ -46,7 +46,7 @@ Save this as `/opt/traefik/docker-compose.yml`:
 ```yaml
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.6
     restart: unless-stopped
     command:
       - --providers.docker=true
