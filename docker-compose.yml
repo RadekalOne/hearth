@@ -9,7 +9,7 @@ services:
   # (one-way) database implications.
   conduit:
     # Pinned for reproducibility; check https://continuwuity.org/ before bumping.
-    image: forgejo.ellis.link/continuwuation/continuwuity:${HEARTH_CONTINUWUITY_VERSION:-v26.7.2}
+    image: forgejo.ellis.link/continuwuation/continuwuity:${HEARTH_CONTINUWUITY_VERSION:-v26.9.1}
     command: /sbin/conduwuit
     profiles: ["local-homeserver"]
     restart: unless-stopped
@@ -43,7 +43,7 @@ services:
       - continuwuity-data:/var/lib/continuwuity
 
   element:
-    image: vectorim/element-web:${HEARTH_ELEMENT_VERSION:-v1.12.23}
+    image: vectorim/element-web:${HEARTH_ELEMENT_VERSION:-v1.12.32}
     profiles: ["local-homeserver"]
     restart: unless-stopped
     ports:

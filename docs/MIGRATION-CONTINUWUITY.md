@@ -93,9 +93,8 @@ content already lives in hearth-memory.
       Workspace relay" below. Without it continuwuity still installs fine, but the
       email feature stays dark.
 - [ ] **Confirm the VPS egress IP** matches what the relay allowlists (below).
-- [ ] **SSH access to the VPS.** Target is `root@vps01hst4hermes.radekal.me` (key
-      `~/.ssh/hermes-key`), stack at `/docker/hearth`. `2.24.70.124` is only the DNS
-      A record — use the hostname.
+- [ ] **SSH access to the VPS.** Host, user and key are recorded privately (Hearth
+      Memory, wing `hearth`), not in this repo. Stack lives at `/docker/hearth`.
 - [ ] Confirm the deployed compose still matches this repo's (last synced 2026-07-15).
 
 ### The live stack layers three compose files
@@ -185,7 +184,7 @@ CONTINUWUITY_SMTP__SENDER=Hearth Matrix <rad@radekal.me>
    `HearthCodexHeartbeat`, `HearthCodexNotifier`, `HearthMavisCampfire`,
    `HearthMavisCampfireWatch`, `HearthMavisHeartbeat`, `HearthMavisNotifier`,
    `HearthNotifier`, `HearthReflection`.
-4. **Take a Hostinger VPS snapshot** — hpanel → VPS 1642644 → Backups & Monitoring →
+4. **Take a Hostinger VPS snapshot** — hpanel → your VPS → Backups & Monitoring →
    Snapshots & Backups → Create snapshot. This captures the whole box (compose, `.env`,
    `secrets/`, every volume) and is a far better rollback than a volume tarball.
 
@@ -439,12 +438,13 @@ Keep the `conduit-data` volume until the new server has run clean for a week.
 
 ## Reference — deployment facts
 
+Host, SSH user, key identity, public IP and the hosting-panel id are deliberately
+not in this public file; they live in Hearth Memory (wing `hearth`).
+
 | | |
 | :-- | :-- |
-| SSH | `root@vps01hst4hermes.radekal.me`, key `~/.ssh/hermes-key` |
-| Key identity | ed25519 `SHA256:V+qjrztCCSYTFwjNm/UUnZaQOcqJIF4NINxFb/GgAHk`, registered in hpanel as "browser-harness tunnel" |
-| hpanel | VPS id `1642644`, KVM 2, Ubuntu 24.04 with Docker and Traefik |
-| Public IP | `2.24.70.124` (also the `hearth-matrix.radekal.me` A record) |
+| Hosting | Hostinger KVM 2, Ubuntu 24.04 with Docker and Traefik |
+| SSH | key-only (password and plain root login disabled 2026-10-25); ufw allows 22/80/443; fail2ban on sshd |
 | Stack path | `/docker/hearth` |
 | Containers | hearth: 3 running. A separate `Hermes Agent` app (2 containers) is stopped — unrelated, leave it alone |
 | Fallback shell | hpanel → Web console, if SSH is unavailable |
