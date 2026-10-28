@@ -43,6 +43,35 @@ class Hearth2APITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await self.post('/projects',{'title':'disabled'})).status_code,409)
         self.assertEqual(Path(self.memory.DATA_DIR,'hearth2.sqlite3').read_bytes(),before)
 
+    async def test_runner_health_routes_enforce_roles_identity_and_cas(self):
+        path='/control/ticks'
+        epoch=self.memory.h2_runtime.store.control_snapshot()['restore_epoch']
+        data={'request_id':'api-poll','expected_seq':0,'expected_epoch':epoch,'evidence':['poll-proof']}
+        self.assertEqual((await self.post(path,data)).status_code,403)
+        self.assertEqual((await self.post(path,data,'codex-test-token')).status_code,403)
+        self.assertEqual((await self.post(path,{**data,'runner':'someone'},'controller-fixture-token')).status_code,400)
+        response=await self.post(path,data,'controller-fixture-token')
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(response.json()['runner'],'controller')
+        repeated=await self.post(path,data,'controller-fixture-token')
+        self.assertEqual(repeated.json(),response.json())
+        self.assertEqual((await self.post(path,{**data,'request_id':'stale'},'controller-fixture-token')).status_code,409)
+        failure={'kind':'runner_stale','target':'not-configured','key':'missed',
+                 'expected_seq':0,'state':'open','evidence':['tick-check']}
+        self.assertEqual((await self.post('/control/failures',failure,'controller-fixture-token')).status_code,400)
+        self.assertEqual((await self.post('/control/failures',{**failure,'target':'controller'},'controller-fixture-token')).status_code,200)
+        snap=await self.client.get('/api/hearth2/control',headers={'Authorization':'Bearer admin-test-token'})
+        self.assertEqual(snap.status_code,200,snap.text)
+        self.assertTrue(snap.json()['ticks'])
+        self.assertEqual((await self.client.get('/api/hearth2/control',headers={'Authorization':'Bearer codex-test-token'})).status_code,403)
+
+    async def test_answer_route_requires_human_and_rejects_identity_in_body(self):
+        data={'expected_revision':3,'run_id':'run-fixture','answer':'answer','evidence':['ref']}
+        for token in ['controller-fixture-token','codex-test-token']:
+            self.assertEqual((await self.post('/tasks/not-real/answers',data,token)).status_code,403)
+        self.assertEqual((await self.post('/tasks/not-real/answers',{**data,'actor':'admin'})).status_code,400)
+        self.assertEqual((await self.post('/tasks/not-real/answers',data)).status_code,409)
+
     async def test_export_is_management_only_and_restore_has_no_http_route(self):
         self.assertEqual((await self.client.get('/api/hearth2/export',headers={'Authorization':'Bearer codex-test-token'})).status_code,403)
         exported=await self.client.get('/api/hearth2/export',headers={'Authorization':'Bearer admin-test-token'})
@@ -85,10 +114,23 @@ class Hearth2APITests(unittest.IsolatedAsyncioTestCase):
         receipt={'ended_at':datetime.now(timezone.utc).isoformat(),'exit_status':0,'closeout':closeout,
                  'containment_state':'verified_empty','termination_evidence':['controller-verified-empty'],
                  'usage':{'state':'unknown','units':None}}
+        question={**receipt,'closeout':{**closeout,'status':'needs-decision'}}
+        asked=await self.post('/runs/'+claim['run_id']+'/receipt',{'claim':claim,'receipt':question},'controller-fixture-token')
+        self.assertEqual(asked.status_code,200,asked.text)
+        answered=await self.post('/tasks/'+task['id']+'/answers',{'expected_revision':3,
+            'run_id':claim['run_id'],'answer':'Use the approved fixture','evidence':['human-answer']})
+        self.assertEqual(answered.status_code,200,answered.text)
+        self.assertEqual((answered.json()['state'],answered.json()['revision'],answered.json()['attempts']),('ready',4,1))
+        stale=await self.post('/tasks/'+task['id']+'/answers',{'expected_revision':3,
+            'run_id':claim['run_id'],'answer':'old card','evidence':['stale-answer']})
+        self.assertEqual(stale.status_code,409,stale.text)
+        c=await self.post('/tasks/'+task['id']+'/claim',{'expected_revision':4,'request_id':'api-after-answer'},'controller-fixture-token')
+        self.assertEqual(c.status_code,200,c.text);claim=c.json()
+        receipt={**receipt,'ended_at':datetime.now(timezone.utc).isoformat(),'closeout':{**closeout,'attempt':2}}
         r=await self.post('/runs/'+claim['run_id']+'/receipt',{'claim':claim,'receipt':receipt},'controller-fixture-token')
         self.assertEqual(r.status_code,200,r.text)
-        review=await self.post('/tasks/'+task['id']+'/reviews',{'expected_revision':3,'verdict':'pass','evidence':['independent-check']},'claude-fixture-token')
+        review=await self.post('/tasks/'+task['id']+'/reviews',{'expected_revision':6,'verdict':'pass','evidence':['independent-check']},'claude-fixture-token')
         self.assertEqual(review.status_code,200,review.text)
-        accepted=await self.post('/tasks/'+task['id']+'/acceptance',{'expected_revision':4,'evidence':['human-acceptance']})
+        accepted=await self.post('/tasks/'+task['id']+'/acceptance',{'expected_revision':7,'evidence':['human-acceptance']})
         self.assertEqual(accepted.status_code,200,accepted.text)
         self.assertEqual(accepted.json()['state'],'accepted')

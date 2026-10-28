@@ -3963,6 +3963,9 @@ h2_runtime = _Hearth2Runtime(
     same_origin=_same_origin, bearer_principal=lambda request: token_principal(bearer(request)),
     human_ids=_h2_ids('HEARTH2_HUMAN_IDS'), controller_ids=_h2_ids('HEARTH2_CONTROLLER_IDS'),
     worker_ids=_h2_ids('HEARTH2_WORKER_IDS'), authenticated=bool(ADMIN_TOKEN),
+    timing={key:os.environ[name] for key,name in (
+        ('lease_seconds','HEARTH2_LEASE_SECONDS'), ('deadline_seconds','HEARTH2_DEADLINE_SECONDS'))
+        if name in os.environ},
 )
 
 # Register the catch-all MCP mount after all explicit REST routes.

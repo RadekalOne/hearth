@@ -4,6 +4,7 @@ Principal kinds are explicit per-instance configuration. Controller tokens are
 accepted only as bearer credentials, never as browser sessions or payloads.
 """
 import json
+import re
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -16,7 +17,7 @@ from .backup import export_record
 class Runtime:
     def __init__(self, app, *, enabled, data_dir, principal, typed_auth,
                  same_origin, bearer_principal, human_ids, controller_ids,
-                 worker_ids, authenticated):
+                 worker_ids, authenticated, timing=None):
         self.enabled = enabled
         self.store = Store(Path(data_dir) / 'hearth2.sqlite3')
         self.principal = principal
@@ -25,6 +26,7 @@ class Runtime:
         self.bearer_principal = bearer_principal
         self.humans, self.controllers, self.workers = map(set, (human_ids, controller_ids, worker_ids))
         self.authenticated = authenticated
+        self.timing = timing or {}
         self.initialized = False
         self.routes(app)
 
@@ -35,6 +37,15 @@ class Runtime:
         if (not self.authenticated or not self.humans or any('anonymous' in g for g in groups)
                 or self.humans & self.controllers or self.humans & self.workers or self.controllers & self.workers):
             raise RuntimeError('Hearth 2 requires authentication and disjoint explicit principal roles')
+        try:
+            if set(self.timing) - {'lease_seconds', 'deadline_seconds'}:
+                raise ValueError()
+            if any(not isinstance(v, str) or re.fullmatch(r'[0-9]{1,4}', v) is None for v in self.timing.values()):
+                raise ValueError()
+            store = Store(self.store.path, **{k:int(v) for k,v in self.timing.items()})
+        except (ValueError, TypeError):
+            raise RuntimeError('invalid Hearth 2 timing configuration') from None
+        self.store.lease_seconds, self.store.deadline_seconds = store.lease_seconds, store.deadline_seconds
         Schema.initialize(self.store.path, enabled=True)
         self.initialized = True
 
@@ -184,3 +195,28 @@ class Runtime:
             actor = self.actor(request, {'controller'})
             data = await self.body(request, {'expected_revision', 'revision_note'})
             return self.call(self.store.revise_task, actor, task_id, data.get('expected_revision'), data.get('revision_note'))
+
+        @app.post('/api/hearth2/tasks/{task_id}/answers')
+        async def answer(task_id: str, request: Request):
+            actor = self.actor(request, {'human'})
+            data = await self.body(request, {'expected_revision', 'run_id', 'answer', 'evidence'})
+            return self.call(self.store.answer_task, actor, task_id, **data)
+
+        @app.get('/api/hearth2/control')
+        def control_snapshot(request: Request):
+            self.actor(request, {'human', 'controller'})
+            return self.call(self.store.control_snapshot)
+
+        @app.post('/api/hearth2/control/ticks')
+        async def tick(request: Request):
+            actor = self.actor(request, {'controller'})
+            data = await self.body(request, {'request_id', 'expected_seq', 'expected_epoch', 'evidence'})
+            return self.call(self.store.runner_tick, actor, **data)
+
+        @app.post('/api/hearth2/control/failures')
+        async def failure(request: Request):
+            actor = self.actor(request, {'controller'})
+            data = await self.body(request, {'kind', 'target', 'key', 'expected_seq', 'state', 'evidence'})
+            if data.get('kind') == 'runner_stale' and data.get('target') not in self.controllers:
+                raise HTTPException(400, 'runner must be a configured controller')
+            return self.call(self.store.control_failure, actor, **data)
