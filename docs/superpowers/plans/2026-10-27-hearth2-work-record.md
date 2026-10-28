@@ -240,3 +240,16 @@ engineering-day piece-1 estimate stays provisional until that live evidence is
 known. If live Cloudroom fields differ, update the adapter mapping and ledger;
 do not silently change the approved requirements. No seven-night test begins
 until all pieces run together.
+
+
+## Execution amendments, 28 October
+
+Read `docs/hearth2/PREFLIGHT.md` and `PROGRESS.md` for observed results. Live
+access and all six questions are now resolved as pre-build findings. The
+implementation adds an immutable action manifest to bind authority and typed
+output/reviewed/accepted dependency gates to preserve A10. Requested revisions
+have one controlled resubmission path; a second changes verdict stays a human
+disagreement. Verified termination of a held successful receipt permits review
+without repeating work. Restore validates domain consistency as well as FKs and
+a digest. These changes address whole-branch review findings; no runner, model
+launch, production activation or seven-night PASS is implied.

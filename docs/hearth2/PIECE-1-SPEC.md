@@ -58,8 +58,10 @@ Their record interfaces are defined here without claiming those systems work.
    as a card action after that project's cutover. Gate 1 releases only actions
    the approved plan explicitly covers; gate 2 accepts the result.
 7. An agent-produced 'done' closeout does not itself make a task accepted or
-   unblock accepted-result dependencies. Preserve producer, independent
-   reviewer and human acceptance as distinct facts.
+   unblock reviewed-result dependencies. Dependency edges distinguish output
+   available, independently reviewed, and human-accepted results; the feasibility
+   review consumes output without an intermediate human prompt. Preserve producer,
+   independent reviewer and human acceptance as distinct facts.
 8. A11: export and restore projects, tasks, dependencies, claims, runs,
    decisions, notices, role grants, counts and audit with relationships intact.
    Active work is reconciled, never resumed. Backups contain no authentication,

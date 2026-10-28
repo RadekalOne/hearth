@@ -42,3 +42,40 @@ Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
   version refusal, foreign-database refusal, atomic DDL, exclusive backup and
   loss-refusing down migration. Seven real SQLite tests observed RED then GREEN.
   Nonempty downgrade intentionally requires offline backup restoration.
+- Tasks2–6 implemented in the isolated branch: immutable plan action manifests,
+  explicit dependency gates, records/roles/expiring decisions, atomic claims and
+  generation/epoch fences, three-attempt incident history, run evidence,
+  independent review and human acceptance, versioned logical backup/restore,
+  offline CLI and default-off authenticated REST integration. No UI or runner.
+- Initial service verification had environment failures (WSL missing httpx/MCP;
+  first isolated Python image omitted Git required by existing Commons tests).
+  Installed dependencies/Git only inside a disposable trial verification image.
+  Final Python3.12 run on the trial host: 336 tests PASS in86.172s.
+- Node24 check/test on the trial host:35 PASS,1 pre-existing skip,0 FAIL.
+  Packaging dry run includes Hearth2 schema, API and both migration files. An
+  initial packaging assertion had a shell quoting error; corrected standalone
+  package verification succeeds. No production install or dependencies changed.
+- Whole-branch read-only code review (Codex; NOT Claude's independent project
+  PASS) found three Important issues: unbound task scope, no revision path,
+  and no successful-held reconciliation. All reproduced RED and corrected GREEN.
+  Added regression for stale-plan result acceptance as well.
+- Review's restore-domain gap was treated as Important: reject inconsistent
+  accepted tasks/claim/run histories even when a bundle's digest is recomputed.
+  The impossible-accepted-task reproduction is now GREEN.
+- Ruling: bind approval to an immutable action manifest; materialize each action
+  once with its exact handoff/dependency gates. Required by bounded authority.
+  Cost if wrong: planners must revise their plan to change/add action slots.
+- Ruling: dependency gates distinguish output, independent review, human
+  acceptance. Feasibility review consumes output directly, preserving A10's
+  unattended path. This corrects the earlier blanket accepted-dependency rule.
+  Cost if wrong: an incorrectly selected gate can block a downstream task; the
+  gate is therefore visible in and bound by the approved action manifest.
+- Reviewer set aside runtime subscription/process enforcement, canonical Claude
+  independence and deployment: those are not inferred from record tests.
+  General secrets in prose cannot be excluded by a heuristic; export validates
+  known credential fields/patterns but is not a general DLP guarantee.
+- Ruling: no extra secret-detection subsystem in this slice. Keep private backup
+  handling and explicit bundle provenance; do not call heuristics exhaustive.
+  Cost if wrong: an operator must detect/remove an unrecognized prose secret.
+- Independent Claude review and fresh-container live service restore evidence
+  remain required before piece1 is called verified. Pieces2–5 remain unassigned.
