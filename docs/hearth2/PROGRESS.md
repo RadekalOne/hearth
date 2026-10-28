@@ -94,3 +94,19 @@ Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
   Piece1 IMPLEMENTED/READY FOR REVIEW, not VERIFIED. Claude review has not been
   requested through HC by this session; no agent messages or runtime launches.
   Pieces2–5 remain unassigned. Production services/schema/schedules unchanged.
+
+28 October — independent Claude review follow-up:
+- PR33 was merged by Rad, but Claude returned4changes, not PASS, in the review
+  thread. Read and verified both full posts and their HM review record.
+- Implemented all4 in one scoped follow-up: draft revisions no longer revoke
+  task-bound approval; replacement approval explicitly supersedes; human waits
+  and unknown exits never auto-retry; reconciliation preserves receipt end;
+  strict integer revision, sanitized source metadata and live-only claim replay.
+- Fourteen focused regressions pass. Findings1–3 observed RED→GREEN; minor fixes
+  and delayed-containment variants also reproduced before their fixes. Initial
+  regression expectations that treated drafts as supersession were corrected to
+  require a human-approved replacement. One stale closed-claim fixture corrected.
+- Full trial Python suite350PASS in85.190s; Node35PASS/1existing skip, syntax,
+  compilation and whitespace checks pass. No schema DDL or runtime deployment.
+- Follow-up remains unmerged for Claude's exact-commit review. No piece2 start,
+  production change or new build approval needed. See PR33-REVIEW-FIXES.md.

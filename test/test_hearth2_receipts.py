@@ -27,15 +27,16 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot()['claims'][0]['state'],'closed')
 
     def test_missing_closeout_and_nonzero_exit_are_failed_runs(self):
-        for change in [{'closeout':None},{'exit_status':9}]:
+        for number,change in enumerate([{'closeout':None},{'exit_status':9}]):
             # Each subcase is its own complete run and retry.
             r=self.store.record_run(self.controller,self.claim,{**self.receipt,**change})
             self.assertIn(r['closeout_validation'],['missing','valid'])
             task=self.store.snapshot()['tasks'][0]
             self.assertEqual(task['state'],'ready')
             self.assertEqual(len(self.store.snapshot()['incidents']),1)
-            self.claim=self.store.claim(self.controller,task['id'],expected_revision=task['revision'],request_id='retry-missing')
-            self.closeout['attempt']=2
+            if number == 0:
+                self.claim=self.store.claim(self.controller,task['id'],expected_revision=task['revision'],request_id='retry-missing')
+                self.closeout['attempt']=2
 
     def test_unconfirmed_termination_cannot_release_work(self):
         r=self.store.record_run(self.controller,self.claim,{**self.receipt,'containment_state':'unconfirmed','termination_evidence':[]})

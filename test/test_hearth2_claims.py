@@ -96,7 +96,10 @@ class ClaimTests(unittest.TestCase):
 
     def test_plan_and_role_are_rechecked_at_claim(self):
         self.assertTrue(callable(getattr(Store,'claim',None)), 'atomic claim is not implemented')
-        self.store.create_plan(self.rad,self.project['id'],{'content_ref':'new scope'})
+        replacement=self.store.create_plan(self.rad,self.project['id'],{'content_ref':'new scope'})
+        card=self.store.create_decision(self.controller,replacement['id'],intended_subject=self.rad.id,
+            expires_at=(self.time+timedelta(days=1)).isoformat())
+        self.store.record_decision(self.rad,card['id'],1,'approve','explicit supersession')
         with self.assertRaises(RecordError):self.claim()
         self.assertEqual(self.store.snapshot()['runs'],[])
 

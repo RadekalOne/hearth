@@ -258,6 +258,12 @@ class Store:
                 db.execute("UPDATE decisions SET state='consumed',action=?,consumed_at=?,revision=revision+1,data=? WHERE id=?",
                            (action, self.now().isoformat(), data, decision_id))
                 state = {'approve': 'approved', 'decline': 'declined', 'ask': 'revision_requested'}[action]
+                if action == 'approve':
+                    prior = db.execute("SELECT id FROM plans WHERE project_id=? AND state='approved' AND id<>?", (plan['project_id'], plan['id'])).fetchall()
+                    for approved in prior:
+                        db.execute("UPDATE plans SET state='superseded' WHERE id=?", (approved['id'],))
+                        self.audit(db, principal, approved['id'], 'plan_superseded',
+                                   {'replacement_plan': plan['id'], 'decision_id': decision_id})
                 db.execute('UPDATE plans SET state=? WHERE id=?', (state, plan['id']))
                 self.audit(db, principal, decision_id, 'decision_consumed', {'action': action, 'source': source})
                 return self.row(db, 'decisions', decision_id)
@@ -290,10 +296,9 @@ class Store:
 
     def _eligible(self, db, task):
         plan = self.row(db, 'plans', task['plan_id'])
-        latest = db.execute('SELECT MAX(revision) FROM plans WHERE project_id=?', (task['project_id'],)).fetchone()[0]
         role = self.row(db, 'role_grants', task['assignee'], column='agent')
-        if plan['state'] != 'approved' or plan['revision'] != latest or role['state'] != 'active':
-            raise RecordError('approved current plan and active role required')
+        if plan['state'] != 'approved' or role['state'] != 'active':
+            raise RecordError('task-bound approved plan and active role required')
         approvals = db.execute("SELECT data FROM decisions WHERE plan_id=? AND state='consumed' AND action='approve'", (plan['id'],)).fetchall()
         if not any(json.loads(a[0]).get('manifest_hash') == manifest_hash(plan) for a in approvals):
             raise RecordError('plan action manifest lacks matching human approval')
@@ -314,6 +319,9 @@ class Store:
                 claim = self.row(db, 'claims', existing['claim_id'])
                 if existing['task_id'] != task_id or claim['runner'] != runner.id or claim['restore_epoch'] != epoch:
                     raise RecordError('request identity conflict')
+                # A replay acknowledges the same live claim, never permission
+                # to relaunch completed, held, expired or superseded work.
+                self._live_claim(db, runner, claim)
                 return claim
             task = self.row(db, 'tasks', task_id)
             role = self._eligible(db, task)
@@ -448,9 +456,16 @@ class Store:
                  safe_payload(data), run['id']))
             success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
                        and exit_status == 0 and containment == 'verified_empty')
-            if containment != 'verified_empty':
+            if containment != 'verified_empty' or exit_status is None:
+                # A verified-empty process group does not prove a successful exit.
                 state, claim_state = 'held', 'held'
                 self._incident(db, task, run['id'], 'held')
+            elif validation == 'valid' and receipt['closeout']['status'] == 'needs-decision':
+                # Preserve this run as history, but do not turn a human wait into
+                # a failure/retry. The controller must not claim it again.
+                state, claim_state = 'needs_decision', 'closed'
+                if exit_status != 0:
+                    self._incident(db, task, run['id'], 'escalated')
             elif success:
                 state, claim_state = 'review', 'closed'
                 db.execute("UPDATE incidents SET state='recovered' WHERE task_id=?", (task['id'],))
@@ -530,24 +545,30 @@ class Store:
             claim = self.row(db, 'claims', run['claim_id'])
             if task['generation'] != claim['generation'] or claim['state'] not in {'active', 'held'}:
                 raise RecordError('run is not the current reconciliation target')
+            closeout = json.loads(run['closeout']) if run['closeout'] else None
+            valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
+            human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
+                          and run['exit_status'] is not None)
             if outcome == 'unknown':
                 db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
                 db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
             else:
                 if outcome == 'completed':
-                    closeout = json.loads(run['closeout']) if run['closeout'] else None
-                    if run['ended_at'] is None or run['exit_status'] != 0 or self._closeout_validation(closeout, task, run) != 'valid' or closeout['status'] != 'done':
+                    if (run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
+                            or closeout['status'] not in {'done', 'needs-decision'}):
                         raise RecordError('completed reconciliation requires an existing successful receipt')
-                    state = 'review'
+                    state = 'needs_decision' if human_wait else 'review'
                 else:
-                    state = 'ready' if task['attempts'] < 3 else 'failed'
+                    state = 'needs_decision' if human_wait else ('ready' if task['attempts'] < 3 else 'failed')
                 db.execute("UPDATE claims SET state='closed' WHERE id=?", (claim['id'],))
                 db.execute('UPDATE tasks SET state=?,revision=revision+1,generation=generation+1 WHERE id=?', (state, task['id']))
-                db.execute("UPDATE runs SET ended_at=?,containment_state='verified_empty',termination_evidence=? WHERE id=?",
-                           (self.now().isoformat(), safe_payload({'controller': controller.id, 'references': termination_evidence}), run_id))
+                reconciled_at = self.now().isoformat()
+                db.execute("UPDATE runs SET ended_at=COALESCE(ended_at,?),containment_state='verified_empty',termination_evidence=? WHERE id=?",
+                           (reconciled_at, safe_payload({'controller': controller.id,
+                            'references': termination_evidence, 'reconciled_at': reconciled_at}), run_id))
             incident = db.execute('SELECT id FROM incidents WHERE task_id=?', (task['id'],)).fetchone()
             incident_id = incident[0] if incident else identifier('incident')
-            state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if task['attempts'] >= 3 else 'open'))
+            state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if human_wait or task['attempts'] >= 3 else 'open'))
             if incident:
                 db.execute('UPDATE incidents SET state=? WHERE id=?', (state, incident_id))
             else:
@@ -564,7 +585,8 @@ class Store:
             task = self.row(db, 'tasks', task_id)
             self._eligible(db, task)
             data = json.loads(task['data'])
-            if (task['state'] != 'revision_required' or task['revision'] != expected_revision
+            if (task['state'] != 'revision_required' or type(expected_revision) is not int
+                    or task['revision'] != expected_revision
                     or task['attempts'] >= 3 or data.get('review_count') != 1):
                 raise RecordError('only the first requested revision may be resubmitted')
             data['revision_note'] = revision_note
