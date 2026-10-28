@@ -79,3 +79,18 @@ Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
   Cost if wrong: an operator must detect/remove an unrecognized prose secret.
 - Independent Claude review and fresh-container live service restore evidence
   remain required before piece1 is called verified. Pieces2–5 remain unassigned.
+- Final A11 drill now complete on the trial host: separate clean restore
+  container compared every table/link, refused the old claim, held active work
+  and pending approval. A further container booted the actual restored service
+  with fresh credentials; auth, build identity and credential-free re-export
+  passed. Temporary fixture service removed afterward; no model launched.
+  This is fresh-container evidence, not a new-VM or independent-Claude PASS.
+- Actual Dockerfile build passed, tested application commit004b4c2200cd2a12a022331d264d7d5bd9e4597d.
+  Initial unsigned pushes were rejected by GitHub's signature rule; used the
+  existing Windows signing key and identity to sign only our unpublished
+  commits, verified identical source tree, then pushed successfully. No rule,
+  global Git config or GitHub credential/key registration changed.
+- Draft PR33 created and attached: https://github.com/RadekalOne/hearth/pull/33.
+  Piece1 IMPLEMENTED/READY FOR REVIEW, not VERIFIED. Claude review has not been
+  requested through HC by this session; no agent messages or runtime launches.
+  Pieces2–5 remain unassigned. Production services/schema/schedules unchanged.
