@@ -57,8 +57,11 @@ class Hearth2APITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated.json(),response.json())
         self.assertEqual((await self.post(path,{**data,'request_id':'stale'},'controller-fixture-token')).status_code,409)
         failure={'kind':'runner_stale','target':'not-configured','key':'missed',
-                 'expected_seq':0,'state':'open','evidence':['tick-check']}
+                 'expected_seq':0,'expected_epoch':epoch,'state':'open','evidence':['tick-check']}
         self.assertEqual((await self.post('/control/failures',failure,'controller-fixture-token')).status_code,400)
+        valid_failure={**failure,'target':'controller'}
+        self.assertEqual((await self.post('/control/failures',{k:v for k,v in valid_failure.items() if k!='expected_epoch'},'controller-fixture-token')).status_code,400)
+        self.assertEqual((await self.post('/control/failures',{**valid_failure,'expected_epoch':'old-epoch'},'controller-fixture-token')).status_code,409)
         self.assertEqual((await self.post('/control/failures',{**failure,'target':'controller'},'controller-fixture-token')).status_code,200)
         snap=await self.client.get('/api/hearth2/control',headers={'Authorization':'Bearer admin-test-token'})
         self.assertEqual(snap.status_code,200,snap.text)

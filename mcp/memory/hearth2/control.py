@@ -54,7 +54,7 @@ class ControlJournal:
                 raise RecordError('runner tick sequence conflict')
             return self.append(db, actor, entity, 'runner_tick', data)
 
-    def failure(self, actor, *, kind, target, key, expected_seq, state, evidence):
+    def failure(self, actor, *, kind, target, key, expected_seq, expected_epoch, state, evidence):
         require(actor, {'controller'})
         self.validate(expected_seq, evidence)
         if kind not in {'missed_start', 'runner_stale', 'dispatch_blocked'} or state not in {'open', 'recovered'}:
@@ -63,6 +63,10 @@ class ControlJournal:
         text(key, 'failure key', 128)
         with self.store.transaction() as db:
             epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+            # Restored journals retain sequences; sequence equality alone cannot
+            # distinguish a new observation from an old in-flight write.
+            if expected_epoch != epoch:
+                raise RecordError('control failure restore epoch conflict')
             entity = self.entity(['control_failure', kind, target, key])
             row = db.execute("SELECT * FROM audit_events WHERE entity_id=? AND action='control_failure' ORDER BY seq DESC LIMIT 1", (entity,)).fetchone()
             data = dict(kind=kind, target=target, key=key, state=state, evidence=evidence,

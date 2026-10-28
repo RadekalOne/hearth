@@ -38,15 +38,23 @@ current liveness. A tick is poll evidence, not workload success or notification
 delivery proof.
 
 `POST /api/hearth2/control/failures` is also controller-only. Fields: `kind`,
-`target`, stable incident `key`, `expected_seq`, `state`, `evidence`.
-Kinds are `runner_stale` (configured controller target), `missed_start`
+`target`, stable incident `key`, `expected_seq`, `expected_epoch`, `state`, `evidence`.
+As with ticks, `expected_epoch` must match the caller-observed current snapshot;
+an old in-flight report or recovery is refused after restore, even if its
+sequence still matches a preserved journal event.
+Kinds are `runner_stale` (configured controller target, checked by the HTTP API), `missed_start`
 (ready task with no launches), and `dispatch_blocked` (ready task). Task targets
 must retain approved-plan/role/dependency eligibility. The caller supplies the
 observation references; this endpoint does not itself measure a start window.
 Opening uses sequence zero. Further observations or explicit recovery use the
 latest sequence. Recovery cannot create an incident; explicit evidence is
-required, and a tick does not recover a failure automatically. Same-event replay
-is idempotent. Failures never invent runs or consume attempts, requeue tasks,
+required, and a tick does not recover a failure automatically. An identical
+replay of the latest event in the current epoch is idempotent. Replaying an older
+event after a subsequent observation or recovery fails with a sequence conflict;
+it never reopens the incident. The store itself has no configured-controller
+registry: trusted direct Python callers must enforce the runner target allowlist
+the HTTP API obtains from its configured principal roles.
+Failures never invent runs or consume attempts, requeue tasks,
 overwrite run incidents, or act as containment proof.
 
 `GET /api/hearth2/control` is human/controller-only. It returns current
@@ -86,8 +94,9 @@ model tests, separate from the provisional 6–9 engineering days. Historical ze
 charges are not current cost evidence. The accepted credits-on/$75 seat-cap
 policy stays unchanged. Production and native accounts are not modified here.
 
-Full Python regression: 369 tests PASS on the isolated trial host, Python 3.12
-(94.704 seconds). The final additive server-observation timestamp was checked
-in the focused suite after that full run. Of the total, 90 tests cover Hearth 2
-and 19 are added here. Internal review has no remaining blocking findings;
-Claude exact-commit review is pending. No native provider calls were made.
+After Claude's PR35 review, full Python regression: 371 tests PASS on the
+isolated trial host, Python 3.12 (98.778 seconds). The restore/failure reproduction
+was observed before the fix; all eight focused control tests pass afterwards,
+including the old-epoch recovery and older-event replay cases. Internal review
+has no remaining blocking findings. Claude exact-commit re-review is pending.
+No native provider calls were made.

@@ -22,6 +22,7 @@ class ControlLogTests(unittest.TestCase):
 
     def failure(self, **changes):
         fields = dict(kind='runner_stale', target=self.controller.id, key='missed-tick-one',
+                      expected_epoch=self.store.control_snapshot()['restore_epoch'],
                       expected_seq=0, state='open', evidence=['supervisor-last-tick-ref'])
         fields.update(changes)
         return self.store.control_failure(Principal('supervisor','controller'), **fields)
@@ -58,7 +59,7 @@ class ControlLogTests(unittest.TestCase):
                 self.store.runner_tick(who, request_id='forged', expected_seq=0, expected_epoch='forged', evidence=['forged'])
             with self.assertRaises(RecordError):
                 self.store.control_failure(who, kind='runner_stale', target='runner', key='x',
-                    expected_seq=0, state='open', evidence=['forged'])
+                    expected_seq=0, expected_epoch='forged', state='open', evidence=['forged'])
         for change in [dict(evidence=[]), dict(kind='unknown'), dict(expected_seq=True),
                        dict(kind='missed_start',target='not-a-task'), dict(state='recovered')]:
             with self.subTest(change=change), self.assertRaises(RecordError):
@@ -100,3 +101,28 @@ class ControlLogTests(unittest.TestCase):
         with patch.object(self.store,'transaction',failing_transaction):
             with self.assertRaises(sqlite3.DatabaseError):self.tick()
         self.assertEqual(self.store.control_snapshot()['ticks'],[])
+
+    def test_old_epoch_failure_recovery_is_refused_after_restore(self):
+        first=self.failure()
+        bundle,target=Path(self.tmp.name)/'failure.json',Path(self.tmp.name)/'failure-restored.db'
+        export_record(self.path,bundle)
+        restore_record(bundle,target,controller_stopped=True)
+        restored=Store(target,clock=lambda:self.time)
+        fields=dict(kind='runner_stale',target=self.controller.id,key='missed-tick-one',
+                    expected_seq=first['seq'],expected_epoch=first['restore_epoch'],
+                    state='recovered',evidence=['pre-restore-recovery'])
+        before=restored.snapshot()
+        with self.assertRaises(RecordError):
+            restored.control_failure(Principal('supervisor','controller'),**fields)
+        self.assertEqual(restored.snapshot(),before)
+        self.assertEqual(restored.control_snapshot()['failures'],[first])
+        fields['expected_epoch']=restored.control_snapshot()['restore_epoch']
+        recovered=restored.control_failure(Principal('supervisor','controller'),**fields)
+        self.assertEqual(recovered['state'],'recovered')
+        self.assertEqual(recovered['restore_epoch'],fields['expected_epoch'])
+
+    def test_older_failure_replay_is_refused_without_reopening_incident(self):
+        first=self.failure()
+        recovered=self.failure(state='recovered',expected_seq=first['seq'],evidence=['recovery-ref'])
+        with self.assertRaises(RecordError):self.failure()
+        self.assertEqual(self.store.control_snapshot()['failures'],[recovered])

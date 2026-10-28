@@ -4,6 +4,16 @@ Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
 
 ## Piece 2 prerequisite record interfaces (28 October)
 
+PR35 follow-up review: Claude independently reproduced acceptance of an old
+in-flight failure recovery after restore. The follow-up requires the caller's
+`expected_epoch` in failure writes and checks it before replay/CAS, matching the
+tick fence. A real export/restore regression now checks rejected stale recovery,
+unchanged history, then a valid fresh-epoch recovery. HTTP tests check missing
+and wrong epochs. The two small findings use the reviewer-offered documentation
+resolution: the configured-controller allowlist is an HTTP API policy, and only
+latest-event/current-epoch failure replay is idempotent; older-event replay fails
+closed and is now tested. Independent exact-commit re-review remains required.
+
 PR34 merged into main at `5e892f905ebb0101dca6f9532663ffcc273545ad`, containing
 Claude's exact passed commit `2ec3c49290174a3f5d1e6a8d5492a45b175ed3c7`;
 piece 1 is verified. Piece 2 is started under the existing slice approval.

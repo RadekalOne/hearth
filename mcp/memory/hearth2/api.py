@@ -216,7 +216,7 @@ class Runtime:
         @app.post('/api/hearth2/control/failures')
         async def failure(request: Request):
             actor = self.actor(request, {'controller'})
-            data = await self.body(request, {'kind', 'target', 'key', 'expected_seq', 'state', 'evidence'})
+            data = await self.body(request, {'kind', 'target', 'key', 'expected_seq', 'expected_epoch', 'state', 'evidence'})
             if data.get('kind') == 'runner_stale' and data.get('target') not in self.controllers:
                 raise HTTPException(400, 'runner must be a configured controller')
             return self.call(self.store.control_failure, actor, **data)
