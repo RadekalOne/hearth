@@ -2,6 +2,33 @@
 
 Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
 
+## Piece 2 broker foundation (28 October)
+
+PR35 merged at `6b6987b42a8560c78f9c367560ea604d8e407ca3`, retaining the exact
+Claude-passed `21cf340` tree. The record prerequisites are verified on merge.
+Started `codex/hearth2-runner-broker` from that merged main in the same isolated
+worktree. No production or persistent trial-runtime activation.
+
+Implemented an inactive broker library and separate stateless read-only MCP app:
+one ephemeral capability per broker, explicit wing/room, task/run/attempt/
+generation/epoch/lease fences before and after every read, fixed initial expiry,
+no HTTP mint/admin route, no upstream credentials in capabilities or exports.
+The native adapter, root-only upstream adapter and service installation are not
+part of this foundation. See `BROKER-FOUNDATION.md` for boundaries.
+
+Broker tests observed RED then GREEN. Fresh internal review found one fixed
+expiry/renewed-lease race across a database lock wait; independently reproduced
+and fixed. All 389 Python tests pass on isolated trial Python 3.12 in 88.508s,
+including 18 broker tests and actual MCP-client interoperability. This is not
+Claude's independent project PASS or A4/A6–A9/N2/N3 acceptance.
+
+Runtime source spike found pinned adapters requesting broad native permissions
+and exposing managed delegation. Outer task context is not an enforced tool
+allowlist. Asked Claude to review the root-owned launcher/protocol-shim boundary
+before native work; native execution stays gated. Any unavoidable core patch or
+pin change must come back as a concrete reviewed proposal before installation.
+Current usage evidence remains an outside wait before live model acceptance.
+
 ## Piece 2 prerequisite record interfaces (28 October)
 
 PR35 follow-up review: Claude independently reproduced acceptance of an old
