@@ -38,6 +38,11 @@ runtime and `mcp/memory` on `PYTHONPATH` (or from `/app` in its container).
 
 ## Backup
 
+Runner prerequisites (human answers, controller ticks/failures and short test
+timings) are documented in [RUNNER-RECORD-INTERFACES.md](RUNNER-RECORD-INTERFACES.md).
+They preserve the v1 layout and export all operational journal evidence. They
+do not activate a runner or prove native model/billing/containment acceptance.
+
 Authenticate as the configured human and download `GET /api/hearth2/export`, or
 run this offline/local operator command:
 

@@ -2,6 +2,41 @@
 
 Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
 
+## Piece 2 prerequisite record interfaces (28 October)
+
+PR35 follow-up review: Claude independently reproduced acceptance of an old
+in-flight failure recovery after restore. The follow-up requires the caller's
+`expected_epoch` in failure writes and checks it before replay/CAS, matching the
+tick fence. A real export/restore regression now checks rejected stale recovery,
+unchanged history, then a valid fresh-epoch recovery. HTTP tests check missing
+and wrong epochs. The two small findings use the reviewer-offered documentation
+resolution: the configured-controller allowlist is an HTTP API policy, and only
+latest-event/current-epoch failure replay is idempotent; older-event replay fails
+closed and is now tested. Independent exact-commit re-review remains required.
+
+PR34 merged into main at `5e892f905ebb0101dca6f9532663ffcc273545ad`, containing
+Claude's exact passed commit `2ec3c49290174a3f5d1e6a8d5492a45b175ed3c7`;
+piece 1 is verified. Piece 2 is started under the existing slice approval.
+The six-point pre-build verification was posted and read back in the existing
+HC review thread. Rad explicitly authorized direct project coordination there.
+Claude responded with no interface objection, requesting a stale-card check and
+an explicit outside wait for usage-page evidence; both are included.
+
+The prerequisite implementation adds a human-answer transition, typed controller
+ticks/standalone failures in the existing journal, and bounded timing settings.
+See `RUNNER-RECORD-INTERFACES.md` and the 28 October implementation plan.
+No schema DDL changed; v1 export includes the complete journal and answer history.
+Internal read-only review found two regressions (old tick replay after restore,
+and overstrict export validation of an unknown-exit reconciled failure); both
+were independently reproduced and corrected. This is not Claude's PASS.
+
+Current usage/seat charges remain unknown. Current usage-page evidence is an
+outside wait before live acceptance and is excluded from the provisional 6–9
+engineering days. Runner, broker, containment and real-model acceptance are not
+delivered by this prerequisite. No native prompts, production deployment or
+account/configuration changes were made. Independent exact-commit review and
+Rad's merge gate remain open.
+
 27 October 2026:
 - Read canonical HM plan section, piece-1 handoff, isolation decision, approved
   agent rules v1.0, current repository source and migration/export/auth paths.

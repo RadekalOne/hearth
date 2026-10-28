@@ -87,6 +87,18 @@ def validate_domain(tables):
         history = sorted([r for r in runs.values() if r['task_id'] == task['id']], key=lambda r: r['attempt'])
         if [r['attempt'] for r in history] != list(range(1, task['attempts'] + 1)):
             raise RecordError('attempt history is incomplete')
+        if task['state'] == 'ready' and history:
+            last = history[-1]
+            closeout = json.loads(last['closeout']) if last['closeout'] else None
+            if (isinstance(closeout, dict) and closeout.get('status') == 'needs-decision'
+                    and last['exit_status'] is not None
+                    and Store._closeout_validation(closeout, task, last) == 'valid'):
+                answers = payload.get('human_answers', [])
+                if not any(a.get('run_id') == last['id'] and a.get('evidence') and a.get('answer')
+                           and any(event['entity_id'] == task['id'] and event['action'] == 'human_answered'
+                                   and json.loads(event['data']) == a and event['actor'] == a.get('actor')
+                                   for event in tables['audit_events']) for a in answers):
+                    raise RecordError('ready task has an unanswered human decision request')
         if task['state'] in {'review', 'reviewed', 'accepted', 'revision_required', 'needs_decision'}:
             if not history:
                 raise RecordError('completed state has no run')

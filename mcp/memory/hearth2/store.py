@@ -111,15 +111,31 @@ def manifest_hash(plan):
 
 
 class Store:
-    def __init__(self, path, *, clock=None):
+    def __init__(self, path, *, clock=None, lease_seconds=900, deadline_seconds=7200):
         self.path = path
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        for value in (lease_seconds, deadline_seconds):
+            if type(value) is not int or not 1 <= value <= 7200:
+                raise RecordError('timing must be integer seconds between 1 and 7200')
+        self.lease_seconds, self.deadline_seconds = lease_seconds, deadline_seconds
 
     def now(self):
         value = self.clock()
         if not isinstance(value, datetime) or value.tzinfo is None:
             raise RecordError('clock must return an aware datetime')
         return value.astimezone(timezone.utc)
+
+    def runner_tick(self, actor, **payload):
+        from .control import ControlJournal
+        return ControlJournal(self).tick(actor, **payload)
+
+    def control_failure(self, actor, **payload):
+        from .control import ControlJournal
+        return ControlJournal(self).failure(actor, **payload)
+
+    def control_snapshot(self):
+        from .control import ControlJournal
+        return ControlJournal(self).snapshot()
 
     @contextmanager
     def transaction(self):
@@ -330,8 +346,8 @@ class Store:
             now = self.now()
             claim_id, run_id = identifier('claim'), identifier('run')
             attempt, generation = task['attempts'] + 1, task['generation'] + 1
-            lease_until = (now + timedelta(minutes=15)).isoformat()
-            deadline_at = (now + timedelta(hours=2)).isoformat()
+            lease_until = (now + timedelta(seconds=min(self.lease_seconds, self.deadline_seconds))).isoformat()
+            deadline_at = (now + timedelta(seconds=self.deadline_seconds)).isoformat()
             db.execute('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?,?)',
                        (claim_id, task_id, run_id, runner.id, attempt, generation, epoch, lease_until, 'active', '{}'))
             db.execute('''INSERT INTO runs(id,task_id,claim_id,attempt,request_id,started_at,deadline_at,
@@ -529,6 +545,42 @@ class Store:
                 raise RecordError('independent review required before acceptance')
             db.execute("UPDATE tasks SET state='accepted',revision=revision+1 WHERE id=?", (task_id,))
             self.audit(db, human_principal, task_id, 'result_accepted', {'evidence': evidence})
+            return self.row(db, 'tasks', task_id)
+
+    def answer_task(self, human, task_id, *, expected_revision, run_id, answer, evidence):
+        """Answer a run's question within existing authority, never approve new scope."""
+        require(human, {'human'})
+        answer = text(answer, 'human answer')
+        if not isinstance(evidence, list) or not evidence or any(not isinstance(v, str) or not v.strip() for v in evidence):
+            raise RecordError('human answer requires evidence references')
+        safe_payload(evidence)
+        with self.transaction() as db:
+            task = self.row(db, 'tasks', task_id)
+            self._eligible(db, task)
+            run = db.execute('SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1', (task_id,)).fetchone()
+            if (task['state'] != 'needs_decision' or type(expected_revision) is not int
+                    or task['revision'] != expected_revision or task['attempts'] >= 3
+                    or run is None or run['id'] != run_id):
+                raise RecordError('task is not awaiting this answer or has no attempts remaining')
+            claim = self.row(db, 'claims', run['claim_id'])
+            closeout = json.loads(run['closeout']) if run['closeout'] else None
+            data = json.loads(task['data'])
+            if (data.get('review_count', 0) >= 2 or claim['state'] != 'closed'
+                    or run['ended_at'] is None or run['exit_status'] is None
+                    or run['containment_state'] != 'verified_empty'
+                    or self._closeout_validation(closeout, task, run) != 'valid'
+                    or closeout['status'] != 'needs-decision'):
+                raise RecordError('verified run question required; review disagreements need a separate decision')
+            plan = self.row(db, 'plans', task['plan_id'])
+            approval = db.execute("SELECT * FROM decisions WHERE plan_id=? AND state='consumed' AND action='approve' AND intended_subject=?",
+                                  (plan['id'], human.id)).fetchone()
+            if approval is None or json.loads(approval['data']).get('manifest_hash') != manifest_hash(plan):
+                raise RecordError('answer must come from the approving human')
+            entry = {'run_id': run_id, 'actor': human.id, 'answer': answer,
+                     'evidence': evidence, 'at': self.now().isoformat(), 'revision': expected_revision}
+            data.setdefault('human_answers', []).append(entry)
+            db.execute("UPDATE tasks SET state='ready',revision=revision+1,data=? WHERE id=?", (safe_payload(data), task_id))
+            self.audit(db, human, task_id, 'human_answered', entry)
             return self.row(db, 'tasks', task_id)
 
     def reconcile(self, controller, run_id, *, termination_evidence, outcome):
