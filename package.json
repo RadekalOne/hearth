@@ -17,6 +17,7 @@
     "mcp/matrix/package-lock.json",
     "mcp/memory/app.py",
     "mcp/memory/work.py",
+    "mcp/memory/hearth2/",
     "mcp/memory/commons_files.py",
     "mcp/memory/glossary.py",
     "mcp/memory/journal.py",

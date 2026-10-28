@@ -1996,6 +1996,7 @@ mcp_app = mcp.streamable_http_app(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     coordination_store.initialize()
+    h2_runtime.initialize()
     migrate_legacy_metadata()
     if CONSOLIDATE_AGENT_WINGS:
         run_consolidation(_roster())
@@ -3940,5 +3941,29 @@ def static_asset(name: str):
                         headers={"Cache-Control": "no-cache"})
 
 
-# MCP streamable HTTP endpoint lives at /mcp on this same port.
+
+
+# Hearth 2 is opt-in and has its own operational database in an isolated instance.
+# Package loading also supports tests that import this file directly by path.
+import sys as _h2_sys
+_h2_package_path = os.path.join(os.path.dirname(__file__), 'hearth2')
+if 'hearth2' not in _h2_sys.modules:
+    _h2_spec = importlib.util.spec_from_file_location('hearth2', os.path.join(_h2_package_path, '__init__.py'), submodule_search_locations=[_h2_package_path])
+    _h2_package = importlib.util.module_from_spec(_h2_spec)
+    _h2_sys.modules['hearth2'] = _h2_package
+    _h2_spec.loader.exec_module(_h2_package)
+from hearth2.api import Runtime as _Hearth2Runtime
+
+def _h2_ids(name):
+    return {v.strip() for v in os.environ.get(name, '').split(',') if v.strip()}
+
+h2_runtime = _Hearth2Runtime(
+    app, enabled=os.environ.get('HEARTH2_ENABLED', '').lower() in {'1', 'true', 'yes'},
+    data_dir=DATA_DIR, principal=_principal, typed_auth=CURRENT_AUTH.get,
+    same_origin=_same_origin, bearer_principal=lambda request: token_principal(bearer(request)),
+    human_ids=_h2_ids('HEARTH2_HUMAN_IDS'), controller_ids=_h2_ids('HEARTH2_CONTROLLER_IDS'),
+    worker_ids=_h2_ids('HEARTH2_WORKER_IDS'), authenticated=bool(ADMIN_TOKEN),
+)
+
+# Register the catch-all MCP mount after all explicit REST routes.
 app.mount("/", mcp_app)
