@@ -13,7 +13,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from .schema import Schema, TABLES, open_existing
-from .store import RecordError, Store, safe_payload, timestamp, action_manifest, manifest_hash
+from .store import RecordError, Store, safe_payload, timestamp, text, action_manifest, manifest_hash
 
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ROWS = 100000
@@ -58,10 +58,10 @@ def validate_domain(tables):
     runs = {r['id']: r for r in tables['runs']}
     states = {'ready', 'running', 'held', 'review', 'reviewed', 'accepted', 'failed', 'revision_required', 'needs_decision'}
     for plan in plans.values():
-        if plan['state'] not in {'draft', 'approved', 'declined', 'revision_requested'}:
+        if plan['state'] not in {'draft', 'approved', 'superseded', 'declined', 'revision_requested'}:
             raise RecordError('invalid plan state')
         action_manifest(json.loads(plan['data']))
-        if plan['state'] == 'approved' and not any(
+        if plan['state'] in {'approved', 'superseded'} and not any(
                 d['plan_id'] == plan['id'] and d['state'] == 'consumed' and d['action'] == 'approve'
                 and json.loads(d['data']).get('manifest_hash') == manifest_hash(plan) for d in tables['decisions']):
             raise RecordError('approved plan lacks matching decision')
@@ -92,8 +92,12 @@ def validate_domain(tables):
                 raise RecordError('completed state has no run')
             run = history[-1]
             closeout = json.loads(run['closeout']) if run['closeout'] is not None else None
-            if run['ended_at'] is None or run['exit_status'] != 0 or run['containment_state'] != 'verified_empty' or Store._closeout_validation(closeout, task, run) != 'valid' or closeout['status'] != 'done':
-                raise RecordError('completed state lacks successful run evidence')
+            valid = Store._closeout_validation(closeout, task, run) == 'valid'
+            success = valid and closeout['status'] == 'done' and run['exit_status'] == 0
+            human_wait = (valid and task['state'] == 'needs_decision'
+                          and closeout['status'] == 'needs-decision' and run['exit_status'] is not None)
+            if run['ended_at'] is None or run['containment_state'] != 'verified_empty' or not (success or human_wait):
+                raise RecordError('completed state lacks a validated result or human decision request')
         if task['state'] in {'reviewed', 'accepted'}:
             review = payload.get('review', {})
             if review.get('verdict') != 'pass' or not review.get('evidence') or review.get('reviewer') == task['assignee'] or review.get('family') == json.loads(history[-1]['data']).get('family'):
@@ -200,6 +204,8 @@ def read_bundle(bundle):
         manifest, tables = data['manifest'], data['tables']
         if not isinstance(manifest, dict) or manifest.get('format') != 'hearth2-work-record' or type(manifest.get('format_version')) is not int or manifest['format_version'] != 1 or manifest.get('schema_version') != 1:
             raise RecordError('unsupported backup version')
+        text(manifest['instance_id'], 'source instance id', 128)
+        text(manifest['restore_epoch'], 'source restore epoch', 128)
         timestamp(manifest['exported_at'])
         validate_rows(tables)
         validate_domain(tables)

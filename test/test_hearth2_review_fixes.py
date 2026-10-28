@@ -1,6 +1,7 @@
 """Regression tests for the whole-branch review findings."""
 import json
 import unittest
+from datetime import timedelta
 import test_hearth2_receipts as fixtures
 from hearth2.store import Store, Principal, RecordError
 
@@ -54,6 +55,9 @@ class ReviewFixTests(unittest.TestCase):
     def test_human_acceptance_of_result_for_superseded_plan_is_rejected(self):
         self.store.record_run(self.controller,self.claim,self.receipt)
         reviewed=self.store.record_review(self.reviewer(),self.task['id'],3,'pass',['independent'])
-        self.store.create_plan(self.rad,self.project['id'],{'content_ref':'new-scope'})
+        replacement=self.store.create_plan(self.rad,self.project['id'],{'content_ref':'new-scope'})
+        card=self.store.create_decision(self.controller,replacement['id'],intended_subject=self.rad.id,
+            expires_at=(self.time+timedelta(days=1)).isoformat())
+        self.store.record_decision(self.rad,card['id'],1,'approve','explicit supersession')
         with self.assertRaises(RecordError):
             self.store.accept_result(self.rad,self.task['id'],reviewed['revision'],['old-acceptance'])
