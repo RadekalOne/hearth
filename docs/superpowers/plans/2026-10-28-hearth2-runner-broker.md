@@ -17,7 +17,7 @@
 - Ruling: use an in-memory capability registry, so broker restart revokes all grants automatically; store only hashes of bearer capabilities. No mint/admin HTTP route. Trusted controller supplies scope; worker input cannot broaden it. Cost if wrong: controller must mint a fresh grant after broker restart or lease renewal.
 - Ruling: broker allows only `memory_search` and `memory_get`, within a required wing and room. Root-only upstream callback owns credentials; no general memory URL/token is sent to workers. Cost if wrong: planners must provide relevant scoped knowledge rather than relying on unrelated wings.
 - Runtime spike: pinned Codex adapter requests danger-full-access; Claude skips permissions and exposes managed delegation. An outer request containing a tool list does not itself enforce that list. Resolve actual enforcement before native prompts, without silently replacing the pinned runtime.
-- Current seat usage evidence is an outside wait before live native acceptance, not permission to skip fixture implementation.
+- Billing settings review completed by Rad on 29 October: both premium seats; retain Claude $75/month extra-usage limit; ChatGPT zero workspace credits and auto-reload off. Technical native acceptance gates remain.
 
 ## Review focus
 

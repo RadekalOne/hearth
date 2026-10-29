@@ -112,7 +112,7 @@ Rad's merge gate remain open.
 - Initial service verification had environment failures (WSL missing httpx/MCP;
   first isolated Python image omitted Git required by existing Commons tests).
   Installed dependencies/Git only inside a disposable trial verification image.
-  Final Python3.12 run on the trial host: 336 tests PASS in86.172s.
+  Final Python 3.12 run on the trial host: 336 tests PASS in86.172s.
 - Node24 check/test on the trial host:35 PASS,1 pre-existing skip,0 FAIL.
   Packaging dry run includes Hearth2 schema, API and both migration files. An
   initial packaging assertion had a shell quoting error; corrected standalone
@@ -175,22 +175,39 @@ Rad's merge gate remain open.
 
 29 October — broker component review clarification:
 - Claude's reported missing httpx2 import was verified against the exact PR36
-  test blob1eaf2767b2d034ac7dd0a2e58c7aa43207451707. Unchanged SDK test
-  PASSES offline in0.794s. Installed MCP2.3.0 explicitly requires httpx2>=2.10.0
-  (installed2.16.0); no import replacement or behavior fix was justified.
-- CI96/run40764669766 has10successful jobs including full Python discovery.
+  test blob 1eaf2767b2d034ac7dd0a2e58c7aa43207451707. Unchanged SDK test
+  PASSES offline in 0.794s. Installed MCP 2.3.0 explicitly requires httpx2>=2.10.0
+  (installed 2.16.0); no import replacement or behavior fix was justified.
+- CI 96 / run 40764669766 has 10 successful jobs including full Python discovery.
   Claude withdrew the finding in $HIA-jDVyDJPGLKgcazRe-ZSGdR6OEqKxH8ZTN2Zqeek,
   relying on the reported reproduction/metadata rather than an independent run.
 - Added SDK dependency explanation and the two nonblocking review notes:
   memory_get scope is checked after upstream access; short writer transactions
   require future controller lock-contention checks. SDK test gets a comment only.
-- All18broker tests on a tracked snapshot of this comment/doc follow-up PASS
-  in1.305s in a disposable Python3.12 container with networking disabled. No
+- All 18 broker tests on a tracked snapshot of this comment/doc follow-up PASS
+  in 1.305s in a disposable Python 3.12 container with networking disabled. No
   native process, real memory credential, broker listener or production change.
 - Billing review complete: both providers are premium seats. Rad retains
-  Claude75/month extra-usage cap after22.18seat usage; confirms ChatGPT0credits
+  Claude $75/month extra-usage cap after $22.18 seat usage; confirms ChatGPT 0 credits
   and auto-reload off. HM decision drawer_773843c44471103f3cd0f94acfc75cde;
   premium-seat clarification drawer_8b18ebb9cd9f3b7f03bc122f7c442dc9.
 - PR36 remains draft/unmerged; piece2 STARTED. Native tool enforcement, process
   containment and full acceptance remain unfinished. Claude reviews this exact
   documentation/comment commit next. Rad retains the merge gate.
+
+29 October — runtime containment spike (fixtures only):
+- Claude component PASS at 271e1bd and CI 97/run 40920099176 success verified.
+  Later unattended access-limit note did not retract the specific earlier review.
+- Added opt-in exact-host/root-only trial probe and source-backed contract.
+  Expected-failure parent-only termination leaves a setsid/SIGTERM-resistant
+  descendant alive; independent cleanup confirms the fixture group empty.
+  Cgroup kill then passes with independent populated=0 observation.
+- Separate disposable container passes 12 filesystem/identity/network checks.
+  Both runs removed their containers and cgroups; receipts remain private.
+  No controller settings or services changed. No native CLI/model exercised.
+- These are separate OS primitive checks, not a composed native launcher or
+  task/attempt/restore/lease acceptance. Native tool policy and the exact
+  provider credential boundary remain explicit open integration questions.
+- Keep native launch disabled while resolving those questions with Claude.
+  Preserve the pinned core and both premium-seat account settings.
+- Fixed the prior two cosmetic documentation nits without runtime changes.

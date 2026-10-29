@@ -96,6 +96,7 @@ not an installed broker, and not piece 2's runtime acceptance.
 
 Commands: `python -m unittest discover -s test -p 'test_*.py'`; focused
 `python -m unittest discover -s test -p 'test_hearth2_broker*.py'`.
+
 29 October dependency verification: the supported environment resolves
 `mcp>=2,<3` to MCP 2.3.0, whose package metadata declares `httpx2>=2.10.0`.
 The SDK interoperability fixture intentionally imports that client's package;
