@@ -63,6 +63,8 @@ class BrokerHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.calls,[])
 
     async def test_sdk_client_can_initialize_list_and_read_without_admin_auth(self):
+        # MCP 2 declares httpx2; its SDK transport uses that client, while the
+        # raw JSON-RPC fixtures above use the service's separate httpx client.
         import httpx2
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client

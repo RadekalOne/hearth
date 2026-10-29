@@ -43,6 +43,19 @@ arbitrary resource URI or destination proxy is exposed.
 - `memory_get`: one drawer ID; returned drawer must match the requested ID and
   authorized wing/room.
 
+`memory_get` performs its scope check **after** the upstream read. The current
+upstream API takes only a drawer ID, so the trusted callback may read an
+out-of-scope drawer before the broker refuses to release it. Upstream read logs
+or metering can therefore observe that access. This is not a guarantee that
+unauthorized drawers are never touched upstream; a future scoped upstream
+adapter must enforce that stronger boundary before reading.
+
+Each HTTP tool call currently performs about four short `BEGIN IMMEDIATE`
+transactions for capability checks. This is acceptable for the one-worker
+slice, but shares the writer lock with the future controller tick. Include
+lock contention in runner tests and treat expiry during a lock wait as a
+refused read, not evidence that the task or controller failed.
+
 Responses are copied to a plain JSON snapshot, checked for scope and structured
 credential fields, and bounded by the existing payload limit. Search releases
 only matching result rows, never upstream global counts. Transport errors and
@@ -83,3 +96,12 @@ not an installed broker, and not piece 2's runtime acceptance.
 
 Commands: `python -m unittest discover -s test -p 'test_*.py'`; focused
 `python -m unittest discover -s test -p 'test_hearth2_broker*.py'`.
+29 October dependency verification: the supported environment resolves
+`mcp>=2,<3` to MCP 2.3.0, whose package metadata declares `httpx2>=2.10.0`.
+The SDK interoperability fixture intentionally imports that client's package;
+the raw JSON-RPC fixtures use the service's separate `httpx` client. The
+unchanged SDK test passed again in 0.794 seconds with networking disabled;
+its Git blob `1eaf2767b2d034ac7dd0a2e58c7aa43207451707` matches PR #36 at
+`1484563ca676dc942252df385575905c0702a995`. CI run 96 (`40764669766`)
+also reports all 10 jobs successful. This resolves the reported missing-module
+claim for this environment; it does not add a native runtime acceptance result.

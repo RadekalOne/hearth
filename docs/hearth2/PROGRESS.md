@@ -172,3 +172,25 @@ Rad's merge gate remain open.
   compilation and whitespace checks pass. No schema DDL or runtime deployment.
 - Follow-up remains unmerged for Claude's exact-commit review. No piece2 start,
   production change or new build approval needed. See PR33-REVIEW-FIXES.md.
+
+29 October — broker component review clarification:
+- Claude's reported missing httpx2 import was verified against the exact PR36
+  test blob1eaf2767b2d034ac7dd0a2e58c7aa43207451707. Unchanged SDK test
+  PASSES offline in0.794s. Installed MCP2.3.0 explicitly requires httpx2>=2.10.0
+  (installed2.16.0); no import replacement or behavior fix was justified.
+- CI96/run40764669766 has10successful jobs including full Python discovery.
+  Claude withdrew the finding in $HIA-jDVyDJPGLKgcazRe-ZSGdR6OEqKxH8ZTN2Zqeek,
+  relying on the reported reproduction/metadata rather than an independent run.
+- Added SDK dependency explanation and the two nonblocking review notes:
+  memory_get scope is checked after upstream access; short writer transactions
+  require future controller lock-contention checks. SDK test gets a comment only.
+- All18broker tests on a tracked snapshot of this comment/doc follow-up PASS
+  in1.305s in a disposable Python3.12 container with networking disabled. No
+  native process, real memory credential, broker listener or production change.
+- Billing review complete: both providers are premium seats. Rad retains
+  Claude75/month extra-usage cap after22.18seat usage; confirms ChatGPT0credits
+  and auto-reload off. HM decision drawer_773843c44471103f3cd0f94acfc75cde;
+  premium-seat clarification drawer_8b18ebb9cd9f3b7f03bc122f7c442dc9.
+- PR36 remains draft/unmerged; piece2 STARTED. Native tool enforcement, process
+  containment and full acceptance remain unfinished. Claude reviews this exact
+  documentation/comment commit next. Rad retains the merge gate.
