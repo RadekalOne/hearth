@@ -59,6 +59,8 @@ def process_probe(mode, fixture_id):
         assert select.select([proc.stdout], [], [], 5)[0], 'child not ready'
         assert proc.stdout.readline().strip() == 'CHILD_READY'
         assert populated(group)
+        result['observer_outside_workload'] = str(os.getpid()) not in (group / 'cgroup.procs').read_text().split()
+        assert result['observer_outside_workload'], 'observer must be outside the live workload'
         if mode == 'parent':
             proc.send_signal(signal.SIGTERM)
             proc.wait(timeout=5)
@@ -69,7 +71,6 @@ def process_probe(mode, fixture_id):
             wait_empty(group)
             proc.wait(timeout=5)
             result['process_check_passed'] = True
-        result['observer_outside_workload'] = str(os.getpid()) not in (group / 'cgroup.procs').read_text().split()
         result['pids_cap_before_start'] = 16
     finally:
         if populated(group):
@@ -100,7 +101,7 @@ for name,path in [('rootfs_read_only','/etc/hearth2-probe'),('fixture_read_only'
     except OSError as e:
         checks[name]=e.errno in (errno.EACCES,errno.EPERM,errno.EROFS)
 checks['docker_socket_absent']=not Path('/var/run/docker.sock').exists()
-checks['host_account_home_absent']=not Path('/home/cloudroom-agent/.codex/auth.json').exists()
+checks['host_account_home_absent']=not Path('/home/cloudroom-agent').exists()
 try:
     checks['host_root_fixture_unavailable']=not Path('/root/hearth-runner-trial').exists()
 except PermissionError:

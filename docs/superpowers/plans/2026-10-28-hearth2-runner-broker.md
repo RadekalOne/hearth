@@ -18,6 +18,7 @@
 - Ruling: broker allows only `memory_search` and `memory_get`, within a required wing and room. Root-only upstream callback owns credentials; no general memory URL/token is sent to workers. Cost if wrong: planners must provide relevant scoped knowledge rather than relying on unrelated wings.
 - Runtime spike: pinned Codex adapter requests danger-full-access; Claude skips permissions and exposes managed delegation. An outer request containing a tool list does not itself enforce that list. Resolve actual enforcement before native prompts, without silently replacing the pinned runtime.
 - Billing settings review completed by Rad on 29 October: both premium seats; retain Claude $75/month extra-usage limit; ChatGPT zero workspace credits and auto-reload off. Technical native acceptance gates remain.
+- 30 October continuation: durable dispatch registration implements the single instance slot, one-use launch transition and persisted workload identity over the existing audit journal (`DISPATCH-REGISTRY.md`). It does not execute processes or establish host-wide containment. Controller task remains partial. Native seat-credential residual risk is accepted; no repeated consent or gateway requirement is introduced.
 
 ## Review focus
 

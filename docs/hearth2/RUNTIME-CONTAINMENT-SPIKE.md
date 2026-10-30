@@ -60,6 +60,16 @@ Cloudroom/native process, has no provider credentials and calls no model.
    host account path, unavailable host private directory, no supplied provider
    credentials, and refused reserved-address external connection.
 
+30 October follow-up: the observer-outside check now runs and asserts while the
+workload is live, before either termination path. The container's host-home check
+refuses the entire `/home/cloudroom-agent` path, covering credentials stored
+under that home, including Codex and Claude files, instead of one auth file.
+The fixture intentionally receives zero provider credentials. A native launcher
+must separately assert exactly its selected provider credential and no other
+provider, core, controller or upstream memory credential. These empty-fixture
+checks do not prove that native boundary. Network `none` continues to be a
+fixture condition, with no model/broker egress allowlist claim.
+
 The container isolation test and cgroup kill test use separate workloads.
 They do not prove a composed native launcher, approved endpoint routing,
 credential mediation, role-specific tools, durable identity, one-workload
@@ -99,7 +109,7 @@ approved code/input, scratch and read-only policy. Network requires a root-owned
 fixed-destination gate for the selected provider and private broker. No global
 HM/core token or existing agent home enters the worker.
 
-Two points still require source-backed resolution before implementation or
+One technical point still requires source-backed resolution before native
 activation:
 
 1. Determine an exact, tested root-owned policy/launch configuration supported
@@ -107,17 +117,18 @@ activation:
    per-turn config, direct tools, delegated MCP and malformed messages. If the
    pinned core cannot be constrained externally, bring the minimal pin patch
    for review before installing it. No pin change has been made.
-2. Clarify the native account boundary: the pinned Claude adapter passes the
-   seat OAuth token into the CLI. Does "no agent-home secrets" mean no broad
-   host home/HM/core credentials, while allowing the native client's own seat
-   login, or must provider credentials also be mediated outside the workload?
-   A CLI with its own login is not proof that an allowed shell tool cannot
-   read that login. If provider credentials must remain outside, a provider
-   credential gateway needs separate subscription-compatible verification;
-   a scratch mount or protocol shim cannot establish that property.
+The native account boundary is resolved: Claude's exact-head component review
+(`$sSn4FG-8id2yR-VEAdTQMOG_5T9nD6-leq1HeQR5UXk`) confirms the slice permits
+the native client's own seat login in the workload; a gateway is extra hardening,
+not a prerequisite. Rad accepted the explained residual credential risk
+(`drawer_4d573f232d2bd37c70f3769930e41fdf`). This does not waive technical guards.
+An allowed shell may read that login, permitted requests/outputs can leak it,
+and scratch deletion or workload termination cannot revoke an already copied
+token. The Claude $75 monthly extra-usage setting is not a worst-case harm cap.
+No broad host home, other provider, HM, core or controller credential may enter.
 
-Ruling: keep native launch disabled while these are unresolved. Continue
-fixture/controller work that does not depend on the chosen credential path.
+Ruling: keep native launch disabled until technical enforcement is proven.
+Continue fixture/controller work under the existing accepted credential design.
 This preserves current account settings, the pinned core and the approved
 premium-seat budget. Cost if wrong: live acceptance is delayed; no unsafe
 native launch or claim of containment is substituted for the missing proof.

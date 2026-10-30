@@ -211,3 +211,37 @@ Rad's merge gate remain open.
 - Keep native launch disabled while resolving those questions with Claude.
   Preserve the pinned core and both premium-seat account settings.
 - Fixed the prior two cosmetic documentation nits without runtime changes.
+
+30 October - resumed implementation under existing approval:
+- PR36 prior exact head 0cd86b6 has Claude component PASS and CI98/run40964744652
+  success, independently refreshed from GitHub. No new user approval required.
+- Added inactive durable DispatchRegistry over the existing audit journal:
+  canonical run/claim/attempt/generation/epoch/model/deadline registration,
+  one unresolved slot per database, one-use consume, restart/restore retention,
+  and release only after the record has independent termination evidence.
+- Tests observed RED for the missing registry and the probe's false observer
+  check, then GREEN. Independent review reproduced a further restore edge:
+  a closed run exported before slot release retained stale empty proof.
+  Regression observed RED then GREEN; release now requires matching-run
+  reconciliation after the latest restore. Reviewer independently confirmed
+  the correction and all 10 dispatch tests. A closed pre-restore run with an
+  unresolved slot remains conservatively blocked pending a dedicated recovery
+  operation; this integration gap is explicit, not silently bypassed.
+- Observer-outside evidence is asserted BEFORE termination. The fixture rejects
+  the entire host account home, covering its native credential files. Future
+  launcher must separately prove exactly one provider credential, no other
+  account/core/controller/upstream secrets, and fixed-destination egress.
+- Trial verification tag was absent; rebuilt its existing Dockerfile from cached
+  layers. No service or account changed. Full Python 3.12 suite PASS:
+  400 tests in 98.215s, disposable container, networking disabled.
+- Updated real trial parent-only control expectedFAIL(exit1), cgroup kill
+  PASS(exit0); both 12 container assertions PASS, observer checked live, cleanup
+  empty verified. Receipts/logs private under
+  /root/hearth-runner-trial/hearth2-dispatch-20261030-e9941c56.
+- Native credential design/risk acceptance is resolved; gateway is optional
+  extra hardening. Prior subjective 30/100 is not measured breach probability.
+  Technical guards remain. MiniMax existing prepaid/gifted credits authorized
+  for the bounded additional preliminary test; no purchases or recharge.
+- No native model called, broker listener enabled, pin changed, production
+  touched or PR merged. Piece2 remains STARTED. Native policy/egress, actual
+  account guards, scheduler, alarms and composed acceptance remain unfinished.
