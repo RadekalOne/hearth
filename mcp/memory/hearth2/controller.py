@@ -5,6 +5,7 @@ It runs outside the database lock. A role fence closes the gap between native
 preflight and atomic claim/reservation. This module never calls a model.
 """
 import copy
+import json
 from .dispatch import DispatchRegistry
 from .launch_guards import codex_launch_check, claude_launch_check
 from .store import RecordError, text
@@ -42,12 +43,32 @@ class PreflightController:
         establish that an observer/launcher is installed and correctly isolated.
         """
         text(request_id, 'controller request id', 64)
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise RecordError('preflight request revision required')
         with self.store.transaction() as db:
             task = self.store.row(db, 'tasks', task_id)
             role = dict(self.store._eligible(db, task))
-            if (task['state'] != 'ready' or type(expected_revision) is not int
+            existing = db.execute('SELECT * FROM runs WHERE request_id=?', (request_id,)).fetchone()
+            if existing:
+                prior = self.registry._latest(db).get(existing['id'])
+                if (prior is None or existing['task_id'] != task_id
+                        or prior['controller'] != self.controller.id
+                        or prior.get('request_revision') != expected_revision):
+                    raise RecordError('preflight reservation replay conflict')
+                observed_revision = json.loads(existing['data'])['role_revision']
+            elif (task['state'] != 'ready'
                     or task['revision'] != expected_revision or task['attempts'] >= 3):
                 raise RecordError('task is not ready for native preflight')
+        if existing:
+            # Acknowledgment only. The registry rechecks the live claim, epoch,
+            # role, approval and original policy; account metadata is NOT fresh.
+            dispatch = self.registry.claim_and_prepare(task_id,
+                expected_revision=expected_revision, request_id=request_id,
+                expected_role_revision=observed_revision, policy_sha256=self.policy_sha256)
+            self._failure(task_id, request_id, 'recovered')
+            return {'state':('prepared' if dispatch['registration']['phase']=='reserved'
+                             else 'already_consumed'),
+                    'replayed':True, **dispatch, 'account_check':None}
         try:
             observed = self.observe_account(role)
             if not isinstance(observed, dict):
@@ -71,4 +92,4 @@ class PreflightController:
             expected_revision=expected_revision, request_id=request_id,
             expected_role_revision=role['revision'], policy_sha256=self.policy_sha256)
         self._failure(task_id, request_id, 'recovered')
-        return {'state':'prepared', **dispatch, 'account_check':account_check}
+        return {'state':'prepared', 'replayed':False, **dispatch, 'account_check':account_check}

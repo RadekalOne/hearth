@@ -2,6 +2,7 @@
 import importlib
 from datetime import timedelta
 import unittest
+from unittest.mock import patch
 import test_hearth2_claims as fixtures
 from hearth2.store import RecordError
 
@@ -89,6 +90,61 @@ class ControllerTests(unittest.TestCase):
         result=self.prepare()
         self.assertEqual(result['state'],'blocked')
         self.assertEqual(self.store.snapshot()['runs'],[])
+
+    def test_retry_after_post_claim_failure_returns_same_reservation_once(self):
+        with patch.object(self.runner, '_failure', side_effect=RecordError('injected CAS conflict')):
+            with self.assertRaises(RecordError):self.prepare()
+        reserved=self.runner.registry.pending()[0]
+        result=self.prepare()
+        self.assertEqual(result['state'],'prepared')
+        self.assertTrue(result['replayed'])
+        self.assertIsNone(result['account_check'])
+        self.assertEqual(result['registration'],reserved)
+        self.assertEqual(len(self.observations),1)
+        self.assertEqual(len(self.store.snapshot()['runs']),1)
+        self.assertEqual(self.store.snapshot()['tasks'][0]['attempts'],1)
+
+    def test_replay_checks_original_task_revision_owner_policy_and_current_role(self):
+        result=self.prepare()
+        before=self.store.snapshot()
+        for revision in [2, True, '1']:
+            with self.subTest(revision=revision), self.assertRaises(RecordError):
+                self.prepare(expected_revision=revision)
+        other=self.store.create_task(self.controller,{**self.payload,'action_id':'parallel'})
+        with self.assertRaises(RecordError):
+            self.runner.prepare(other['id'],expected_revision=1,request_id='controller-one')
+        other_owner=self.kind(self.store,fixtures.Principal('other-controller','controller'),
+                              self.observe,policy_sha256='a'*64)
+        with self.assertRaises(RecordError):
+            other_owner.prepare(self.task['id'],expected_revision=1,request_id='controller-one')
+        changed=self.kind(self.store,self.controller,self.observe,policy_sha256='b'*64)
+        with self.assertRaises(RecordError):
+            changed.prepare(self.task['id'],expected_revision=1,request_id='controller-one')
+        self.store.set_role(self.rad,'codex',{**self.role,'model':'replacement'})
+        with self.assertRaises(RecordError):self.prepare()
+        self.assertEqual(len(self.observations),1)
+        self.assertEqual(len(self.store.snapshot()['runs']),1)
+
+    def test_consumed_replay_never_issues_another_launch_permission(self):
+        result=self.prepare();self.runner.registry.consume(result['claim'])
+        replay=self.prepare()
+        self.assertEqual(replay['state'],'already_consumed')
+        self.assertEqual(replay['registration']['phase'],'launching')
+        with self.assertRaises(RecordError):self.runner.registry.consume(replay['claim'])
+        self.assertEqual(self.store.snapshot()['tasks'][0]['attempts'],1)
+
+    def test_expired_replay_never_reobserves_or_reopens_a_reservation(self):
+        self.prepare();self.time+=timedelta(hours=1)
+        with self.assertRaises(RecordError):self.prepare()
+        self.assertEqual(len(self.observations),1)
+        self.assertEqual(self.runner.registry.pending()[0]['phase'],'reserved')
+
+    def test_unregistered_claim_cannot_skip_native_account_preflight(self):
+        self.store.claim(self.controller,self.task['id'],expected_revision=1,
+                         request_id='controller-one')
+        with self.assertRaises(RecordError):self.prepare()
+        self.assertEqual(self.observations,[])
+        self.assertEqual(self.runner.registry.pending(),[])
 
 
 if __name__ == '__main__':

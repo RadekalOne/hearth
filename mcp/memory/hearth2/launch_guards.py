@@ -68,6 +68,10 @@ def claude_launch_check(*, auth, route, review, accepted_seat_limit, observed_at
     _route(route, 'anthropic')
     if not isinstance(auth, dict) or auth.get('loggedIn') is not True:
         raise RecordError('native Claude login required')
+    # Match Rad's retained ON policy/checklist v3.1, not a command to enable
+    # paid usage: drawer_07d5151703d16c043e02fb7479f78ba1, renewed in
+    # drawer_773843c44471103f3cd0f94acfc75cde. A changed setting needs a new
+    # trusted policy observation; this function never modifies an account.
     if (not isinstance(review, dict) or review.get('billing_month') != now.strftime('%Y-%m')
             or not isinstance(review.get('source'), str) or not review['source'].strip()
             or not _number(accepted_seat_limit) or accepted_seat_limit <= 0

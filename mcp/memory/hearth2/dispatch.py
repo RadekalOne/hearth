@@ -6,8 +6,9 @@ authorizes another launch. A crash in that gap requires reconciliation rather
 than a retry. No credential, executable, host path or worker command is stored.
 """
 import json
+import hashlib
 import re
-from .store import RecordError, require
+from .store import RecordError, require, safe_payload
 
 
 class DispatchRegistry:
@@ -42,7 +43,7 @@ class DispatchRegistry:
         with self.store.transaction() as db:
             return self._prepare(db, claim, policy_sha256=policy_sha256)
 
-    def _prepare(self, db, claim, *, policy_sha256):
+    def _prepare(self, db, claim, *, policy_sha256, request_revision=None):
         """Register a live claim once; replay is status, not launch permission.
 
         The digest identifies a trusted launch-policy artifact. This library
@@ -56,6 +57,8 @@ class DispatchRegistry:
             existing = self._owned(latest, run['id'])
             if existing['policy_sha256'] != policy_sha256:
                 raise RecordError('launch policy changed for registered run')
+            if request_revision is not None and existing.get('request_revision') != request_revision:
+                raise RecordError('preflight request revision conflict')
             return existing
         if any(item['phase'] != 'released' for item in latest.values()):
             raise RecordError('one unresolved workload permitted per instance')
@@ -67,6 +70,7 @@ class DispatchRegistry:
             'workload_id':'hearth2-' + run['id'][4:],
             'deadline_at':run['deadline_at'], 'policy_sha256':policy_sha256,
             'model':meta['model'], 'role_revision':meta['role_revision'],
+            'request_revision':request_revision,
         })
 
     def consume(self, claim):
@@ -89,7 +93,7 @@ class DispatchRegistry:
         with self.store.transaction() as db:
             return self._release(db, run_id)
 
-    def _release(self, db, run_id):
+    def _release(self, db, run_id, *, receipt_sha256=None):
         """Release only after the authoritative record has trusted empty proof.
 
         This reads evidence, not the OS. A caller cannot pass its own boolean
@@ -117,7 +121,10 @@ class DispatchRegistry:
                 or run['containment_state'] != 'verified_empty'
                 or not proof.get('references')):
             raise RecordError('unresolved workload requires independent termination evidence')
-        return self._append(db, {**registration, 'phase':'released'})
+        finished = {**registration, 'phase':'released'}
+        if receipt_sha256 is not None:
+            finished['receipt_sha256'] = receipt_sha256
+        return self._append(db, finished)
 
     def pending(self):
         """Read all owners/epochs; restart or restore never implies termination."""
@@ -133,6 +140,8 @@ class DispatchRegistry:
         """
         if type(expected_role_revision) is not int or expected_role_revision < 1:
             raise RecordError('native preflight role revision required')
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise RecordError('preflight request revision required')
         with self.store.transaction() as db:
             pending = [item for item in self._latest(db).values() if item['phase'] != 'released']
             previous = db.execute('SELECT id FROM runs WHERE request_id=?', (request_id,)).fetchone()
@@ -142,7 +151,8 @@ class DispatchRegistry:
             claim = self.store._claim(db, self.controller, task_id,
                 expected_revision=expected_revision, request_id=request_id,
                 expected_role_revision=expected_role_revision)
-            registration = self._prepare(db, claim, policy_sha256=policy_sha256)
+            registration = self._prepare(db, claim, policy_sha256=policy_sha256,
+                                         request_revision=expected_revision)
             return {'claim':claim, 'registration':registration}
 
     def record_and_release(self, claim, receipt):
@@ -153,12 +163,25 @@ class DispatchRegistry:
         """
         if not isinstance(claim, dict):
             raise RecordError('registered launch claim required')
+        digest = hashlib.sha256(safe_payload(receipt).encode()).hexdigest()
         with self.store.transaction() as db:
             registration = self._owned(self._latest(db), claim.get('run_id'))
+            if registration['phase'] == 'released':
+                epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+                current = self.store.row(db, 'claims', registration['claim_id'])
+                fields = ['id', 'task_id', 'run_id', 'attempt', 'generation', 'restore_epoch']
+                if (registration['restore_epoch'] != epoch
+                        or any(type(claim.get(k)) is not type(current[k])
+                               or claim[k] != current[k] for k in fields)
+                        or current['runner'] != self.controller.id
+                        or registration.get('receipt_sha256') != digest):
+                    raise RecordError('completed receipt replay conflict or restore fence')
+                return {'run':self.store.row(db, 'runs', current['run_id']),
+                        'registration':registration}
             if registration['phase'] != 'launching':
                 raise RecordError('consumed launch registration required')
             run = self.store._record_run(db, self.controller, claim, receipt)
             current = self.store.row(db, 'claims', run['claim_id'])
             if current['state'] == 'closed':
-                registration = self._release(db, run['id'])
+                registration = self._release(db, run['id'], receipt_sha256=digest)
             return {'run':run, 'registration':registration}

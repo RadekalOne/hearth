@@ -93,10 +93,24 @@ Failure injection verifies rollback of both sides. Unknown outcomes stay held.
 This removes the normal export-between-receipt-and-release window for callers
 using the combined path. Standalone record APIs retain their prior behavior.
 
-The high-level `prepare` call is not replay-idempotent after a claim commits:
-it rejects a task that is no longer ready. A restarted caller must inspect
-`registry.pending()` and re-observe native/account state before recovery; it
-must not turn a replay error into another claim or prompt.
+The high-level `prepare` call acknowledges a committed reservation when retried
+with the original request, task, controller, requested task revision and policy.
+The original requested revision is bound in its dispatch journal entry. Replay
+rechecks the live epoch, lease, role and task-bound approval inside the same
+claim/reservation transaction. A plain claim without a matching preflight
+registration cannot use this path to skip account inspection. Old registrations
+without the revision marker remain conservatively held rather than guessing.
+
+A reserved replay returns `replayed=true` with `account_check=null`; this is NOT
+a fresh native-account observation. The actual launcher must recheck before
+consuming/sending any prompt. A consumed replay returns `already_consumed` and
+cannot reissue launch permission. Held, expired and restored claims fail closed.
+A failure recovering the preflight incident after claim commit can be retried
+without consuming another attempt. Completed receipt/release retries return the
+stored result only for the exact original receipt and claim in the current
+epoch. The terminal journal stores a canonical receipt digest; a different
+receipt or claim is refused without mutation. This does not make held/unknown
+closeouts replayable or confer new execution authority.
 
 Prepared means claimed/reserved, not a native task started. This coordinator has
 no scheduler, account collector, process launcher, renewal loop or outside alarm.

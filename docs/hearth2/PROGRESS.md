@@ -285,3 +285,23 @@ Rad's merge gate remain open.
   forbidden-tool proof, absolute claim deadline/recovery, scheduling/alarms and
   composed native acceptance remain. PR36 stays draft, Rad retains merge gate.
   No new purchase, account/pin/production change. Usage cost remains unmeasured.
+
+30 October - prepare and receipt recovery follow-up:
+- Claude componentPASS c4a2849 (source inspected, no tests/CI rerun), with a
+  nonblocking prepare recovery gap to close before adapter wiring. Reproduced
+  post-claim failure, consumed-replay and successful receipt-retry failures RED.
+- Original request/task revision is now bound in the dispatch journal. Matching
+  prepare retries acknowledge the same live reservation; foreign task/owner,
+  changed revision/policy/role, expired claim and unregistered claim refuse.
+  Reserved acknowledgment has no fresh account evidence; consumed replay is
+  already_consumed and cannot reissue launch authority or spend an attempt.
+- Completed combined receipt/release retries require matching canonical receipt
+  digest, typed claim identity, owner and current epoch. Conflicting receipts or
+  restored claims fail without mutation. Held/unknown runs remain held.
+- Added7 regressions and updated the prior successful-retry assertion. Fresh
+  reviewer48focusedPASS/no actionable findings. Full isolated trial suite438PASS
+  in84.842s, private source/log hearth2-preflight-replay-20261030-5c66901f.
+- Read original Claude billing decision: explicitly retained creditsON under
+  reviewed75monthlycap. Added source comment; no setting changed. Direct native
+  broker config still must configure Hearth tools explicitly before acceptance.
+- No native launch/activation/production change or merge. Piece2STARTED.

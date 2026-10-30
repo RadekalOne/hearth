@@ -77,9 +77,36 @@ class AtomicDispatchTests(unittest.TestCase):
         self.assertEqual(self.registry.pending(),[])
         self.assertEqual(self.store.snapshot()['tasks'][0]['state'],'review')
         before=self.store.snapshot()
-        with self.assertRaises(RecordError):
-            self.registry.record_and_release(claim,self.receipt(claim))
+        self.assertEqual(self.registry.record_and_release(claim,self.receipt(claim)),finished)
         self.assertEqual(self.store.snapshot(),before)
+
+    def test_completed_receipt_replay_rejects_changed_receipt_and_claim_without_mutation(self):
+        result=self.reserve();claim=result['claim'];self.registry.consume(claim)
+        receipt=self.receipt(claim)
+        self.registry.record_and_release(claim,receipt)
+        before=self.store.snapshot()
+        for changed in [{**receipt,'exit_status':1},
+                        {**receipt,'closeout':{**receipt['closeout'],'produced':'conflicting'}},
+                        {**receipt,'usage':{**receipt['usage'],'state':'measured','units':{'tokens':1}}}]:
+            with self.subTest(receipt=changed),self.assertRaises(RecordError):
+                self.registry.record_and_release(claim,changed)
+        for field,value in [('id','claim_fake'),('task_id','task_fake'),('attempt',2),
+                            ('generation',99),('restore_epoch','fake')]:
+            with self.subTest(field=field),self.assertRaises(RecordError):
+                self.registry.record_and_release({**claim,field:value},receipt)
+        self.assertEqual(self.store.snapshot(),before)
+
+    def test_completed_receipt_replay_after_restore_is_fenced(self):
+        from pathlib import Path
+        from hearth2.backup import export_record,restore_record
+        result=self.reserve();claim=result['claim'];self.registry.consume(claim)
+        receipt=self.receipt(claim);self.registry.record_and_release(claim,receipt)
+        bundle,target=Path(self.tmp.name)/'receipt.json',Path(self.tmp.name)/'restored.db'
+        export_record(self.path,bundle);restore_record(bundle,target,controller_stopped=True)
+        store=Store(target,clock=lambda:self.time);registry=DispatchRegistry(store,self.controller)
+        before=store.snapshot()
+        with self.assertRaises(RecordError):registry.record_and_release(claim,receipt)
+        self.assertEqual(store.snapshot(),before)
 
     def test_release_failure_rolls_back_receipt_and_claim_closure(self):
         result=self.reserve();claim=result['claim'];self.registry.consume(claim)

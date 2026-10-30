@@ -75,3 +75,13 @@ processes racing to consume the same registration. They use synthetic tasks and
 no provider credentials. Native integration must still prove account/allowance
 guards, exactly one provider credential, root-owned tool/network policy, resource
 limits before prompt, deadlines, verified termination, recovery and alarms.
+
+Combined preflight registrations now bind the original requested task revision.
+This supports controller prepare acknowledgment after a post-commit failure,
+without bypassing current epoch/role/lease/approval/owner/policy checks. Reserved
+replay is not a fresh account observation; consumed replay never reauthorizes
+spawn. Legacy registrations without this marker remain held. Terminal combined
+receipt/release entries carry a canonical receipt SHA256, permitting exact
+current-epoch result acknowledgment and refusing conflicting claim/receipt data.
+Standalone record/release APIs and held/unknown closeouts keep their earlier
+non-replay behavior. No schema change or token is introduced by either marker.
