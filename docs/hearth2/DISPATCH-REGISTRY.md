@@ -47,9 +47,27 @@ implemented; pre-restore proof never releases it. The normal active/held restore
 path supports fresh reconciliation before release. This conservative recovery
 gap must be resolved before enabling a production controller.
 
+Controller identity rotation or replacement is another recovery case: ordinary
+release is bound to the exact controller that registered the workload. A new
+controller may inspect pending registrations but cannot impersonate that owner
+or release its slot. Keep the slot blocked until a dedicated recovery operation
+can verify fresh termination and explicitly transfer responsibility. Changing
+credentials must not silently reassign controller identity or bypass this hold.
+
 The registry's evidence is included in the existing version-1 export because
 all audit rows are already exported. The previous binary retains those rows but
 does not implement launch registration. Production is untouched.
+
+The controller's combined `claim_and_prepare` operation checks the single slot,
+the role revision observed before account preflight, and task eligibility before
+committing a claim and registration together. Losing the global race or a failed
+reservation write consumes no attempt. `record_and_release` similarly commits
+receipt and eligible release together; a failed journal write rolls back receipt
+and task/claim closure. Unknown outcomes retain the slot. These operations reuse
+the Store transitions inside the caller-owned transaction; public standalone
+Store APIs retain their signatures and behavior. The normal closed-run export
+window is removed for this combined path. Existing/standalone closed-run and
+controller-rotation recovery cases still remain conservatively held as above.
 
 Tests exercise restart, duplicate consumption, changed policy, authorization,
 expiry, unknown termination, global slot ownership, restore, and two independent

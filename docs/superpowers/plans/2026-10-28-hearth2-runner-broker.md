@@ -6,7 +6,7 @@
 
 **Architecture:** A trusted controller owns the work record, broker, native-runtime connection and containment evidence. Workers receive only one ephemeral read-only memory capability, scoped to their current claim and selected memory wing/room. Every broker request is checked against the authoritative claim before reading upstream and again before releasing a response. Runtime activation remains disabled until account, tool enforcement and independent containment checks pass.
 
-**Tech stack:** Existing Python/SQLite/FastAPI service and pinned Cloudroom 0.1.58. No production change or model substitution.
+**Tech stack:** Existing Python/SQLite/FastAPI service and direct native CLI adapters under the approved fallback. Pinned Cloudroom 0.1.58 remains installed and unchanged. No production change or model substitution.
 
 **Spec:** Approved piece-2 HC handoff, six-item VERIFY, `docs/hearth2/PIECE-1-SPEC.md`, `PREFLIGHT.md` and `RUNNER-RECORD-INTERFACES.md`. PR35 is merged at `6b6987b42a8560c78f9c367560ea604d8e407ca3`; its tree matches the passed `21cf340`.
 
@@ -19,6 +19,9 @@
 - Runtime spike: pinned Codex adapter requests danger-full-access; Claude skips permissions and exposes managed delegation. An outer request containing a tool list does not itself enforce that list. Resolve actual enforcement before native prompts, without silently replacing the pinned runtime.
 - Billing settings review completed by Rad on 29 October: both premium seats; retain Claude $75/month extra-usage limit; ChatGPT zero workspace credits and auto-reload off. Technical native acceptance gates remain.
 - 30 October continuation: durable dispatch registration implements the single instance slot, one-use launch transition and persisted workload identity over the existing audit journal (`DISPATCH-REGISTRY.md`). It does not execute processes or establish host-wide containment. Controller task remains partial. Native seat-credential residual risk is accepted; no repeated consent or gateway requirement is introduced.
+- Later 30 October: native policy/argument boundary, account-guard validation, preflight coordinator and atomic claim/reserve + receipt/release are implemented as inactive components. Installed-client policy fixture passes without user turns or real credentials. See `NATIVE-PREFLIGHT.md`; actual collectors, root launch/projection, tool-call/egress/containment proofs and scheduling remain to build. Ruling: native observations expire after 60 seconds; current-month Claude admin review retains the accepted trade and is not reclassified as a per-run allowance. No new approval or activation implied.
+
+- Fallback ruling (30 October): installed Claude rejects the pinned core's required bootstrap request with both hardened and original arguments. Short declared-version check found no established compatible version. Under Rad's 15 October explicit fallback, reviewed with Claude, Hearth will launch BOTH native CLIs directly. Preserve all account/model/receipt/containment controls; remove core Command Guard/transcript coupling from this path. No new purchase, account or pin change. Direct adapters and their acceptance remain unimplemented. Independent systemd/Docker deadline fixture now passes after the submitter exits; not yet absolute claim-deadline or native acceptance.
 
 ## Review focus
 

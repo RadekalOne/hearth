@@ -245,3 +245,43 @@ Rad's merge gate remain open.
 - No native model called, broker listener enabled, pin changed, production
   touched or PR merged. Piece2 remains STARTED. Native policy/egress, actual
   account guards, scheduler, alarms and composed acceptance remain unfinished.
+
+30 October - native policy, account guards and approved direct-launch fallback:
+- Implemented inactive native-policy validation and trusted account-observation
+  guards, a preflight coordinator, atomic claim+reserve and receipt+release.
+  A role change during account inspection and an occupied slot consume no extra
+  attempt. Receipt/journal failures roll back together. Unknown outcomes hold.
+- Test-first new regressions and independent component review completed. Review
+  found an ambiguous Docker error being treated as absence in fixture cleanup;
+  fixed with successful exact-name inventory checks and three regressions.
+  Reviewer independently verified the fix. No raw native stderr is recorded.
+- Full isolated trial Python suite431PASS90.300s, snapshot
+  /root/hearth-runner-trial/hearth2-native-preflight-final-20261030-77c2d74d.
+  Installed Codex0.154.0 and Claude2.1.280 startup/managed-policy fixturePASS;
+  receipt native-policy-lvw5d10f. No native turns or real credentials used.
+- Projection spike found pinned core's required bootstrap rejected by installed
+  Claude. Hardened and unchanged-core argument controls both fail identically.
+  The native-transcript success path is NOT passed. All own containers and run
+  projections were verified absent. Failed responses remain private under
+  projection-fixture-gjbw0qte and projection-fixture-gej6xhrw.
+- Approved fallback now selected for BOTH providers: Hearth starts native CLIs
+  directly; installed core/pins unchanged, core unused by Hearth2. Original Rad
+  decision drawer_fcb3885641cd4b3a3d8849b269d690d9; Claude design confirmation
+  $zhE8qBx2q7RG5Ni4uxplCSzT15ZalNYK8IIwQXn0N2M. Short source check found
+  2.1.278/2.1.280 probe claims but no established working bootstrap version.
+  Retain one receipt shape, clean environment, allowance-stop pause/no retry,
+  exact model, unknown-usage handling and externally observed termination.
+- Independent systemd deadline fixturePASS after submitting process exits:
+  resistant child included, parent cgroup populated1->0, container exit137,
+  guard Resulttimeout, elapsed5.156s for5s limit; cleanup verified. Receipt
+  /root/hearth-runner-trial/deadline-fixture-5r0i9wri. Offline/no credentials.
+- Final complete source snapshot hearth2-direct-fallback-20261030-dc1fb4fc:
+  431 Python tests PASS in82.283s offline. Fresh focused reviewer41/41PASS,
+  no further actionable component findings; root-only fixtures not rerun by that
+  reviewer. AST and whitespace checks pass. Documentation-only refinements
+  after this snapshot do not change implementation or fixture behavior.
+- This is component progress, not installed runtime or piece2 verification.
+  Direct native adapter wiring, collectors, fixed egress/scoped memory, actual
+  forbidden-tool proof, absolute claim deadline/recovery, scheduling/alarms and
+  composed native acceptance remain. PR36 stays draft, Rad retains merge gate.
+  No new purchase, account/pin/production change. Usage cost remains unmeasured.

@@ -325,40 +325,51 @@ class Store:
         return role
 
     def claim(self, runner, task_id, *, expected_revision, request_id):
-        from datetime import timedelta
         require(runner, {'controller'})
         text(request_id, 'request id', 64)
         with self.transaction() as db:
-            existing = db.execute('SELECT * FROM runs WHERE request_id=?', (request_id,)).fetchone()
-            epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-            if existing:
-                claim = self.row(db, 'claims', existing['claim_id'])
-                if existing['task_id'] != task_id or claim['runner'] != runner.id or claim['restore_epoch'] != epoch:
-                    raise RecordError('request identity conflict')
-                # A replay acknowledges the same live claim, never permission
-                # to relaunch completed, held, expired or superseded work.
-                self._live_claim(db, runner, claim)
-                return claim
-            task = self.row(db, 'tasks', task_id)
-            role = self._eligible(db, task)
-            if task['state'] != 'ready' or type(expected_revision) is not int or task['revision'] != expected_revision or task['attempts'] >= 3:
-                raise RecordError('task is not claimable at that revision')
-            now = self.now()
-            claim_id, run_id = identifier('claim'), identifier('run')
-            attempt, generation = task['attempts'] + 1, task['generation'] + 1
-            lease_until = (now + timedelta(seconds=min(self.lease_seconds, self.deadline_seconds))).isoformat()
-            deadline_at = (now + timedelta(seconds=self.deadline_seconds)).isoformat()
-            db.execute('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?,?)',
-                       (claim_id, task_id, run_id, runner.id, attempt, generation, epoch, lease_until, 'active', '{}'))
-            db.execute('''INSERT INTO runs(id,task_id,claim_id,attempt,request_id,started_at,deadline_at,
-                          closeout_validation,containment_state,usage_state,data)
-                          VALUES(?,?,?,?,?,?,?,'missing','unconfirmed','unknown',?)''',
-                       (run_id, task_id, claim_id, attempt, request_id, now.isoformat(), deadline_at,
-                        safe_payload({'model': role['model'], 'family': role['family'],
-                                      'role_revision': role['revision'], 'rules_version': '1.0'})))
-            db.execute("UPDATE tasks SET state='running',revision=revision+1,generation=?,attempts=? WHERE id=?", (generation, attempt, task_id))
-            self.audit(db, runner, task_id, 'claimed', {'run_id': run_id, 'attempt': attempt, 'generation': generation})
-            return self.row(db, 'claims', claim_id)
+            return self._claim(db, runner, task_id, expected_revision=expected_revision, request_id=request_id)
+
+    def _claim(self, db, runner, task_id, *, expected_revision, request_id, expected_role_revision=None):
+        from datetime import timedelta
+        require(runner, {'controller'})
+        text(request_id, 'request id', 64)
+        if expected_role_revision is not None and (type(expected_role_revision) is not int or expected_role_revision < 1):
+            raise RecordError('invalid preflight role revision')
+        existing = db.execute('SELECT * FROM runs WHERE request_id=?', (request_id,)).fetchone()
+        epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+        if existing:
+            claim = self.row(db, 'claims', existing['claim_id'])
+            if existing['task_id'] != task_id or claim['runner'] != runner.id or claim['restore_epoch'] != epoch:
+                raise RecordError('request identity conflict')
+            # A replay acknowledges the same live claim, never permission
+            # to relaunch completed, held, expired or superseded work.
+            live, task, run = self._live_claim(db, runner, claim)
+            if expected_role_revision is not None and json.loads(run['data'])['role_revision'] != expected_role_revision:
+                raise RecordError('role changed since native preflight')
+            return claim
+        task = self.row(db, 'tasks', task_id)
+        role = self._eligible(db, task)
+        if expected_role_revision is not None and role['revision'] != expected_role_revision:
+            raise RecordError('role changed since native preflight')
+        if task['state'] != 'ready' or type(expected_revision) is not int or task['revision'] != expected_revision or task['attempts'] >= 3:
+            raise RecordError('task is not claimable at that revision')
+        now = self.now()
+        claim_id, run_id = identifier('claim'), identifier('run')
+        attempt, generation = task['attempts'] + 1, task['generation'] + 1
+        lease_until = (now + timedelta(seconds=min(self.lease_seconds, self.deadline_seconds))).isoformat()
+        deadline_at = (now + timedelta(seconds=self.deadline_seconds)).isoformat()
+        db.execute('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?,?)',
+                   (claim_id, task_id, run_id, runner.id, attempt, generation, epoch, lease_until, 'active', '{}'))
+        db.execute('''INSERT INTO runs(id,task_id,claim_id,attempt,request_id,started_at,deadline_at,
+                      closeout_validation,containment_state,usage_state,data)
+                      VALUES(?,?,?,?,?,?,?,'missing','unconfirmed','unknown',?)''',
+                   (run_id, task_id, claim_id, attempt, request_id, now.isoformat(), deadline_at,
+                    safe_payload({'model': role['model'], 'family': role['family'],
+                                  'role_revision': role['revision'], 'rules_version': '1.0'})))
+        db.execute("UPDATE tasks SET state='running',revision=revision+1,generation=?,attempts=? WHERE id=?", (generation, attempt, task_id))
+        self.audit(db, runner, task_id, 'claimed', {'run_id': run_id, 'attempt': attempt, 'generation': generation})
+        return self.row(db, 'claims', claim_id)
 
     def _live_claim(self, db, runner, supplied):
         require(runner, {'controller'})
@@ -424,6 +435,11 @@ class Store:
         return 'valid'
 
     def record_run(self, runner, claim, receipt):
+        require(runner, {'controller'})
+        with self.transaction() as db:
+            return self._record_run(db, runner, claim, receipt)
+
+    def _record_run(self, db, runner, claim, receipt):
         import math
         safe_payload(receipt)
         required = {'ended_at', 'exit_status', 'closeout', 'containment_state', 'termination_evidence', 'usage'}
@@ -455,43 +471,42 @@ class Store:
                     charge['amount'] < 0 or not isinstance(charge.get('currency'), str) or
                     not isinstance(charge.get('source'), str) or not charge['source'].strip()):
                 raise RecordError('cost requires measured amount, currency and source')
-        with self.transaction() as db:
-            current, task, run = self._live_claim(db, runner, claim)
-            if ended < timestamp(run['started_at']) or ended > self.now():
-                raise RecordError('run end must be between start and current time')
-            validation = self._closeout_validation(receipt['closeout'], task, run)
-            data = json.loads(run['data'])
-            data['receipt_controller'] = runner.id
-            db.execute("""UPDATE runs SET ended_at=?,exit_status=?,closeout=?,closeout_validation=?,
-                containment_state=?,termination_evidence=?,usage_state=?,usage=?,estimated_cost=?,actual_charge=?,data=? WHERE id=?""",
-                (ended.isoformat(), exit_status, safe_payload(receipt['closeout']), validation,
-                 containment, safe_payload({'controller': runner.id, 'references': evidence}),
-                 usage['state'], safe_payload(units) if units is not None else None,
-                 safe_payload(usage['estimated_cost']) if usage.get('estimated_cost') is not None else None,
-                 safe_payload(usage['actual_charge']) if usage.get('actual_charge') is not None else None,
-                 safe_payload(data), run['id']))
-            success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
-                       and exit_status == 0 and containment == 'verified_empty')
-            if containment != 'verified_empty' or exit_status is None:
-                # A verified-empty process group does not prove a successful exit.
-                state, claim_state = 'held', 'held'
-                self._incident(db, task, run['id'], 'held')
-            elif validation == 'valid' and receipt['closeout']['status'] == 'needs-decision':
-                # Preserve this run as history, but do not turn a human wait into
-                # a failure/retry. The controller must not claim it again.
-                state, claim_state = 'needs_decision', 'closed'
-                if exit_status != 0:
-                    self._incident(db, task, run['id'], 'escalated')
-            elif success:
-                state, claim_state = 'review', 'closed'
-                db.execute("UPDATE incidents SET state='recovered' WHERE task_id=?", (task['id'],))
-            else:
-                state, claim_state = ('ready' if task['attempts'] < 3 else 'failed'), 'closed'
-                self._incident(db, task, run['id'], 'open' if task['attempts'] < 3 else 'escalated')
-            db.execute('UPDATE claims SET state=? WHERE id=?', (claim_state, current['id']))
-            db.execute('UPDATE tasks SET state=?,revision=revision+1 WHERE id=?', (state, task['id']))
-            self.audit(db, runner, task['id'], 'run_receipt', {'run_id': run['id'], 'validation': validation, 'state': state})
-            return self.row(db, 'runs', run['id'])
+        current, task, run = self._live_claim(db, runner, claim)
+        if ended < timestamp(run['started_at']) or ended > self.now():
+            raise RecordError('run end must be between start and current time')
+        validation = self._closeout_validation(receipt['closeout'], task, run)
+        data = json.loads(run['data'])
+        data['receipt_controller'] = runner.id
+        db.execute("""UPDATE runs SET ended_at=?,exit_status=?,closeout=?,closeout_validation=?,
+            containment_state=?,termination_evidence=?,usage_state=?,usage=?,estimated_cost=?,actual_charge=?,data=? WHERE id=?""",
+            (ended.isoformat(), exit_status, safe_payload(receipt['closeout']), validation,
+             containment, safe_payload({'controller': runner.id, 'references': evidence}),
+             usage['state'], safe_payload(units) if units is not None else None,
+             safe_payload(usage['estimated_cost']) if usage.get('estimated_cost') is not None else None,
+             safe_payload(usage['actual_charge']) if usage.get('actual_charge') is not None else None,
+             safe_payload(data), run['id']))
+        success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
+                   and exit_status == 0 and containment == 'verified_empty')
+        if containment != 'verified_empty' or exit_status is None:
+            # A verified-empty process group does not prove a successful exit.
+            state, claim_state = 'held', 'held'
+            self._incident(db, task, run['id'], 'held')
+        elif validation == 'valid' and receipt['closeout']['status'] == 'needs-decision':
+            # Preserve this run as history, but do not turn a human wait into
+            # a failure/retry. The controller must not claim it again.
+            state, claim_state = 'needs_decision', 'closed'
+            if exit_status != 0:
+                self._incident(db, task, run['id'], 'escalated')
+        elif success:
+            state, claim_state = 'review', 'closed'
+            db.execute("UPDATE incidents SET state='recovered' WHERE task_id=?", (task['id'],))
+        else:
+            state, claim_state = ('ready' if task['attempts'] < 3 else 'failed'), 'closed'
+            self._incident(db, task, run['id'], 'open' if task['attempts'] < 3 else 'escalated')
+        db.execute('UPDATE claims SET state=? WHERE id=?', (claim_state, current['id']))
+        db.execute('UPDATE tasks SET state=?,revision=revision+1 WHERE id=?', (state, task['id']))
+        self.audit(db, runner, task['id'], 'run_receipt', {'run_id': run['id'], 'validation': validation, 'state': state})
+        return self.row(db, 'runs', run['id'])
 
     def append_notice(self, actor, payload, *, claim):
         safe_payload(payload)

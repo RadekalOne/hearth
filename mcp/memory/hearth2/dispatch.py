@@ -39,6 +39,10 @@ class DispatchRegistry:
         return registration
 
     def prepare(self, claim, *, policy_sha256):
+        with self.store.transaction() as db:
+            return self._prepare(db, claim, policy_sha256=policy_sha256)
+
+    def _prepare(self, db, claim, *, policy_sha256):
         """Register a live claim once; replay is status, not launch permission.
 
         The digest identifies a trusted launch-policy artifact. This library
@@ -46,25 +50,24 @@ class DispatchRegistry:
         """
         if not isinstance(policy_sha256, str) or re.fullmatch(r'[0-9a-f]{64}', policy_sha256) is None:
             raise RecordError('launch policy requires a SHA256 digest')
-        with self.store.transaction() as db:
-            current, task, run = self.store._live_claim(db, self.controller, claim)
-            latest = self._latest(db)
-            if run['id'] in latest:
-                existing = self._owned(latest, run['id'])
-                if existing['policy_sha256'] != policy_sha256:
-                    raise RecordError('launch policy changed for registered run')
-                return existing
-            if any(item['phase'] != 'released' for item in latest.values()):
-                raise RecordError('one unresolved workload permitted per instance')
-            meta = json.loads(run['data'])
-            return self._append(db, {
-                'phase':'reserved', 'claim_id':current['id'], 'run_id':run['id'],
-                'task_id':task['id'], 'attempt':current['attempt'],
-                'generation':current['generation'], 'restore_epoch':current['restore_epoch'],
-                'workload_id':'hearth2-' + run['id'][4:],
-                'deadline_at':run['deadline_at'], 'policy_sha256':policy_sha256,
-                'model':meta['model'], 'role_revision':meta['role_revision'],
-            })
+        current, task, run = self.store._live_claim(db, self.controller, claim)
+        latest = self._latest(db)
+        if run['id'] in latest:
+            existing = self._owned(latest, run['id'])
+            if existing['policy_sha256'] != policy_sha256:
+                raise RecordError('launch policy changed for registered run')
+            return existing
+        if any(item['phase'] != 'released' for item in latest.values()):
+            raise RecordError('one unresolved workload permitted per instance')
+        meta = json.loads(run['data'])
+        return self._append(db, {
+            'phase':'reserved', 'claim_id':current['id'], 'run_id':run['id'],
+            'task_id':task['id'], 'attempt':current['attempt'],
+            'generation':current['generation'], 'restore_epoch':current['restore_epoch'],
+            'workload_id':'hearth2-' + run['id'][4:],
+            'deadline_at':run['deadline_at'], 'policy_sha256':policy_sha256,
+            'model':meta['model'], 'role_revision':meta['role_revision'],
+        })
 
     def consume(self, claim):
         """Return a launch transition exactly once, after its durable commit.
@@ -83,37 +86,79 @@ class DispatchRegistry:
             return self._append(db, {**registration, 'phase':'launching'})
 
     def release(self, run_id):
+        with self.store.transaction() as db:
+            return self._release(db, run_id)
+
+    def _release(self, db, run_id):
         """Release only after the authoritative record has trusted empty proof.
 
         This reads evidence, not the OS. A caller cannot pass its own boolean
         assertion here. Unknown/active work retains the slot, even past expiry.
         """
-        with self.store.transaction() as db:
-            registration = self._owned(self._latest(db), run_id)
-            if registration['phase'] == 'released':
-                return registration
-            epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-            if registration['restore_epoch'] != epoch:
-                restored = db.execute("SELECT seq FROM audit_events WHERE action='restored' ORDER BY seq DESC LIMIT 1").fetchone()
-                fresh = any(
-                    json.loads(row['data']).get('run_id') == run_id
-                    and json.loads(row['data']).get('outcome') in {'failed', 'completed'}
-                    for row in db.execute(
-                        "SELECT data FROM audit_events WHERE action='run_reconciled' AND seq>?",
-                        (restored['seq'],))
-                ) if restored else False
-                if not fresh:
-                    raise RecordError('restored dispatch requires fresh run reconciliation')
-            run = self.store.row(db, 'runs', run_id)
-            claim = self.store.row(db, 'claims', run['claim_id'])
-            proof = json.loads(run['termination_evidence']) if run['termination_evidence'] else {}
-            if (claim['state'] != 'closed' or run['ended_at'] is None
-                    or run['containment_state'] != 'verified_empty'
-                    or not proof.get('references')):
-                raise RecordError('unresolved workload requires independent termination evidence')
-            return self._append(db, {**registration, 'phase':'released'})
+        registration = self._owned(self._latest(db), run_id)
+        if registration['phase'] == 'released':
+            return registration
+        epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+        if registration['restore_epoch'] != epoch:
+            restored = db.execute("SELECT seq FROM audit_events WHERE action='restored' ORDER BY seq DESC LIMIT 1").fetchone()
+            fresh = any(
+                event.get('run_id') == run_id
+                and event.get('outcome') in {'failed', 'completed'}
+                for event in (json.loads(row['data']) for row in db.execute(
+                    "SELECT data FROM audit_events WHERE action='run_reconciled' AND seq>?",
+                    (restored['seq'],)))
+            ) if restored else False
+            if not fresh:
+                raise RecordError('restored dispatch requires fresh run reconciliation')
+        run = self.store.row(db, 'runs', run_id)
+        claim = self.store.row(db, 'claims', run['claim_id'])
+        proof = json.loads(run['termination_evidence']) if run['termination_evidence'] else {}
+        if (claim['state'] != 'closed' or run['ended_at'] is None
+                or run['containment_state'] != 'verified_empty'
+                or not proof.get('references')):
+            raise RecordError('unresolved workload requires independent termination evidence')
+        return self._append(db, {**registration, 'phase':'released'})
 
     def pending(self):
         """Read all owners/epochs; restart or restore never implies termination."""
         with self.store.transaction() as db:
             return [item for item in self._latest(db).values() if item['phase'] != 'released']
+
+    def claim_and_prepare(self, task_id, *, expected_revision, request_id,
+                          expected_role_revision, policy_sha256):
+        """Claim and reserve together, after fresh trusted account preflight.
+
+        The role revision is the one observed before the account check. A role
+        change or occupied slot consumes no attempt. No native prompt is sent.
+        """
+        if type(expected_role_revision) is not int or expected_role_revision < 1:
+            raise RecordError('native preflight role revision required')
+        with self.store.transaction() as db:
+            pending = [item for item in self._latest(db).values() if item['phase'] != 'released']
+            previous = db.execute('SELECT id FROM runs WHERE request_id=?', (request_id,)).fetchone()
+            if pending and (len(pending) != 1 or previous is None
+                            or pending[0]['run_id'] != previous['id']):
+                raise RecordError('one unresolved workload permitted per instance')
+            claim = self.store._claim(db, self.controller, task_id,
+                expected_revision=expected_revision, request_id=request_id,
+                expected_role_revision=expected_role_revision)
+            registration = self._prepare(db, claim, policy_sha256=policy_sha256)
+            return {'claim':claim, 'registration':registration}
+
+    def record_and_release(self, claim, receipt):
+        """Commit the trusted receipt and eligible slot release atomically.
+
+        Held/unknown outcomes keep their slot. A normal closed run cannot be
+        exported between receipt commit and slot release through this path.
+        """
+        if not isinstance(claim, dict):
+            raise RecordError('registered launch claim required')
+        with self.store.transaction() as db:
+            registration = self._owned(self._latest(db), claim.get('run_id'))
+            if registration['phase'] != 'launching':
+                raise RecordError('consumed launch registration required')
+            run = self.store._record_run(db, self.controller, claim, receipt)
+            current = self.store.row(db, 'claims', run['claim_id'])
+            if current['state'] == 'closed':
+                registration = self._release(db, run['id'])
+            return {'run':run, 'registration':registration}
