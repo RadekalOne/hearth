@@ -185,7 +185,7 @@ def receive(match):
             buffer+=chunk
     raise RuntimeError('native control response deadline')
 
-result=None;failure=None
+result=None;failure=None;failures=[]
 try:
     if provider=='codex':
         send({'id':1,'method':'initialize','params':{'clientInfo':{'name':'hearth2-direct-mcp-fixture','version':'1'},
@@ -283,7 +283,7 @@ try:
 
     assert not auth_failures and 'initialize' in methods and 'tools/list' in methods
 except BaseException as error:
-    failure=type(error).__name__
+    failure=type(error).__name__;failures.append(failure)
 finally:
     if client.poll() is None:client.kill()
     client.wait(timeout=5);client.stdin.close();client.stdout.close();selector.close()
@@ -292,9 +292,11 @@ finally:
     if server_thread.is_alive():raise RuntimeError('fixture broker shutdown unconfirmed')
     errors.seek(0);stderr=errors.read(1_000_001).decode('utf-8')
     errors.close()
-    if cap in stderr:failure='SyntheticCapabilityInNativeStderr'
+    if cap in stderr:
+        failures.append('SyntheticCapabilityInNativeStderr')
+        if failure is None:failure='SyntheticCapabilityInNativeStderr'
 private={'provider':provider,'version':version,'result':result,'failure':failure,'native_messages':seen,
-         'native_stderr':stderr,'mcp_methods':methods,'mcp_rpc_shapes':rpc_shapes,'mcp_auth_failures':len(auth_failures),'fake_codex_requests':fake_codex_requests}
+         'native_stderr':stderr,'failures':failures,'mcp_methods':methods,'mcp_rpc_shapes':rpc_shapes,'mcp_auth_failures':len(auth_failures),'fake_codex_requests':fake_codex_requests}
 print(json.dumps(private))
 """
 
@@ -303,6 +305,16 @@ def command(*args,timeout=10):
     result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
     if result.returncode:raise RuntimeError('fixture host operation failed: '+args[0])
     return result.stdout.strip()
+
+
+def codex_fixture_config(config):
+    """Only the synthetic network-none tool fixture may use this route."""
+    substitutions=[('forced_login_method = "chatgpt"','forced_login_method = "api"'),
+                   ('model_provider = "openai"','model_provider = "hearth-fixture"')]
+    if any(config.count(before)!=1 for before,after in substitutions):
+        raise ValueError('fixture requires exactly one normal provider/login setting')
+    for before,after in substitutions:config=config.replace(before,after)
+    return config+'\n[model_providers.hearth-fixture]\nname = "OpenAI synthetic fixture only"\nbase_url = "http://127.0.0.1:8099/v1"\nwire_api = "responses"\nenv_key = "HEARTH_FIXTURE_API_KEY"\nrequires_openai_auth = false\n'
 
 
 def main():
@@ -323,9 +335,7 @@ def main():
     payload=directory/'probe.py';payload.write_text(PAYLOAD);payload.chmod(0o444)
     policy=directory/'policy';policy.write_text(codex_requirements() if provider=='codex' else json.dumps(claude_managed_settings()));policy.chmod(0o444)
     config=directory/'config.toml';native_config=codex_config(model='gpt-6.1-sol')
-    if args.exercise_codex_tools:
-        native_config=native_config.replace('forced_login_method = "chatgpt"','forced_login_method = "api"').replace('model_provider = "openai"','model_provider = "hearth-fixture"')
-        native_config+='\n[model_providers.hearth-fixture]\nname = "OpenAI synthetic fixture only"\nbase_url = "http://127.0.0.1:8099/v1"\nwire_api = "responses"\nenv_key = "HEARTH_FIXTURE_API_KEY"\nrequires_openai_auth = false\n'
+    if args.exercise_codex_tools:native_config=codex_fixture_config(native_config)
     config.write_text(native_config);config.chmod(0o444)
     container=None
     try:

@@ -29,7 +29,7 @@ def codex_config(*,model):
         'web_search = "disabled"\n'
         '[features]\nshell_tool = false\nshell_snapshot = false\n'
         '[shell_environment_policy]\ninherit = "none"\nignore_default_excludes = false\n'
-        'experimental_use_profile = false\n[shell_environment_policy.filters]\n"HEARTH_*" = "exclude"\n'
+        'experimental_use_profile = false\nexclude = ["HEARTH_*"]\n'
         '[history]\npersistence = "none"\n'
         '[mcp_servers.hearth]\n'
         'url = "'+BROKER_URL+'"\n'

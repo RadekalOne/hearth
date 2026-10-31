@@ -197,3 +197,16 @@ as the later fixture-file hash; the private extracted fixture was updated.
 Independent review found no remaining Important findings and inspected earlier
 qmvw19pz raw synthetic tool outputs itself. That reviewer did not run final
 privileged fixtures or broad tests.
+
+Further source-review follow-up: the fixture provider swap now requires exactly
+one occurrence of EACH normal login/provider setting BEFORE any replacement; a
+regression covers missing/duplicate matches. Structured diagnostics retain both
+an earlier failure and a stderr sentinel finding. The shell policy now uses the
+documented legacy exclude=["HEARTH_*"] form rather than relying on filters support
+in the installed0.154.0. No claim that shell inheritance filtering was exercised:
+the primary effective restriction remains no shell tool.
+
+Final minor-follow-up unit/native verification is recorded in
+ABSOLUTE-DEADLINE-TRIAL.md:485 full Python tests PASS; final installed Codex and
+Claude loops PASS after counted override/diagnostic/legacy-exclude changes.
+Exact native fixture SHA dff51dcca1c45e1148e1f9d9155c00ef32388c6268d07e61923dc4f83fffd2f9.

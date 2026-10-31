@@ -27,6 +27,8 @@
 
 - Further 31 October: direct native profile builders and actual broker compatibility fixtures implemented (`DIRECT-NATIVE-PROFILES.md`). Native MCP progress metadata is transport-only. Conditional ruling: an explicitly full-run initial lease/grant may avoid mid-run bearer renewal only after absolute deadline/delayed-start/restart proof; current defaults are unchanged. Native expiry checks do not substitute for authoritative late-exit settlement. Actual auth/quota stops consume launches; no attempt refunds.
 
+- Absolute-deadline primitive (31 October): PID1 sealed UTC timer before start, kernel quiescence before Docker, immutable-ID removal, delayed/never-started/daemon-failure controls and error cleanup verified (`ABSOLUTE-DEADLINE-TRIAL.md`). This is not DB-bound launcher/restart acceptance. Keep full-run lease policy inactive until composition.
+
 ## Review focus
 
 Old claim/restore/role/plan/lease; worker tool/argument spoofing; scope leakage from search/get; revocation during an upstream read; token leakage and restart; adapter permission/delegation bypass; surviving descendants at deadline; measured usage versus unknown.

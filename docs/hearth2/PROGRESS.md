@@ -399,3 +399,33 @@ Rad's merge gate remain open.
   fake-auth/provider limitations detailed in DIRECT-NATIVE-PROFILES.md.
 - No installed launcher, realcredential/provider, production/account/pin changes
   or merge. Piece2STARTED; absolute deadline/trustedlate recovery continues.
+
+31 October - absolute deadline OS primitive and fixture robustness:
+- Added opt-in sealed UTC timer before stopped immutable Docker ID start. PID1
+  independently freezes/kills retained parent before Docker operations; successful
+  removal prevents late start. Simulated resubmission with deadline+60s refuses
+  same unit and preserves original deadline. Outside observer checks actual OS.
+- Independent review found error cleanup could disarm timer before emptiness and
+  daemon case lacked timing bound. Single fix pass: quiesce first, retain guard
+  on cleanup failure, stop only after removal proof; daemon outside timing bound.
+  Collected transient units handled with successful active inventory/parentabsence.
+- Real unsafe-order control reproduces live workload/guardgone; fixed regression
+  stops workload/retains guard, both before deadline, own outsidecleanupverified.
+  Injected two-second late guard is refused by daemon-case acceptance/exit1.
+- Final absolute fixture SHA1d31a0a4, source archive8c952e40. Delayedstart,
+  neverstarted and daemonfailure cases PASS: receiptsitytrm_3/ga_havre/ev3ab324.
+  Worker exit137 when actually started, None when not; daemon guard failure has
+  no removal/release success proof, separate outsidecleanup later verified.
+- Addressed Claudea4d componentPASS notes: counted fixture provider swap before
+  any replacement, new regression RED->GREEN, preserve multiple diagnostics;
+  documented legacy exclude form instead of assuming filters in installedclient.
+  Final native tool loops/discovery PASS k3wgy8kj/0n_thwpj/byqh2i1x.
+- Full offline485PASS94.591s on e481e6d8; afterwards only opt-in deadline fixture
+  fixes/docs. Library/unit source unchanged. Exact evidence/review limits in
+  ABSOLUTE-DEADLINE-TRIAL.md and DIRECT-NATIVE-PROFILES.md.
+- Prior a4d12f2 separately Claude source-only componentPASS and exact CI104
+  run41212063900SUCCESS. New component needs own externalreview/CI.
+- Still not actual controller restart, DB-claim/deadline binding, late OS-record
+  settlement, native credential/egress composition, installed service or piece2
+  acceptance. Fullrunlease policy INACTIVE/900sdefault unchanged; no production,
+  account, pin, credential, model call, purchase or merge. Continue integration.

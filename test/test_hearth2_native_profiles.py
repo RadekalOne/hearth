@@ -30,7 +30,8 @@ class NativeProfileTests(unittest.TestCase):
         self.assertFalse(config['features']['shell_tool'])
         self.assertFalse(config['features']['shell_snapshot'])
         self.assertEqual(config['shell_environment_policy']['inherit'],'none')
-        self.assertEqual(config['shell_environment_policy']['filters'],{'HEARTH_*':'exclude'})
+        self.assertEqual(config['shell_environment_policy']['exclude'],['HEARTH_*'])
+        self.assertNotIn('filters',config['shell_environment_policy'])
 
     def test_direct_models_cannot_inject_flags_config_or_provider_routes(self):
         for model in ['--dangerously-skip-permissions','gpt\n[model_providers.evil]',
@@ -54,6 +55,21 @@ class NativeProfileTests(unittest.TestCase):
         self.assertNotIn('--fallback-model',args)
         self.assertEqual(args[args.index('--allowedTools')+1],
                          'mcp__hearth__memory_search,mcp__hearth__memory_get')
+
+    def test_fixture_route_swap_aborts_on_missing_or_duplicate_settings(self):
+        path=Path(__file__).parent/'fixtures/hearth2_direct_mcp_probe.py'
+        spec=importlib.util.spec_from_file_location('hearth2_direct_mcp_fixture',path)
+        fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+        self.assertTrue(hasattr(fixture,'codex_fixture_config'),'fixture swap guard missing')
+        config=self.profiles.codex_config(model='gpt-6.1-sol')
+        changed=tomllib.loads(fixture.codex_fixture_config(config))
+        self.assertEqual(changed['model_provider'],'hearth-fixture')
+        self.assertEqual(changed['forced_login_method'],'api')
+        self.assertFalse(changed['features']['shell_tool'])
+        for line in ['forced_login_method = "chatgpt"','model_provider = "openai"']:
+            for malformed in [config.replace(line,''),config+'\n'+line+'\n']:
+                with self.subTest(line=line),self.assertRaises(ValueError):
+                    fixture.codex_fixture_config(malformed)
 
     def test_invalid_session_or_context_is_rejected_before_native_start(self):
         fields={'model':'sonnet','session_id':'11111111-1111-4111-8111-111111111111','context':'rules'}
