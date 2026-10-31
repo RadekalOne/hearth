@@ -17,8 +17,9 @@ COLLECTOR inputs; creation binding/OS validation still need implementation.
 For active/held claims, one SQLite writer transaction records the trusted OS
 observation, explicitly classifies failed/completed under the existing record
 rules and releases the slot. Unknown native protocol cannot become completed.
-A zero exit with unknown native protocol remains uncertain rather than being
-classified as failure for automatic retry. Use OS-only observation to retain that
+A zero exit can be classified failed only with recorded native_state=failed.
+Completed/observed/interrupted/unknown alone are not positive failure evidence;
+a valid success cannot be turned into an automatic retry. Use OS-only observation to retain that
 proof while held. A known nonzero process failure can be explicitly classified.
 A previously valid native success can reach review; needs-decision stays a human
 wait. Failure keeps attempt history/one incident and escalates at three attempts.
@@ -26,7 +27,8 @@ Role pause is not reset. Prior known end/exit and evidence history are preserved
 The Store and Dispatch helpers now have transaction-local implementations so
 there is no unlock between proof check, receipt, reconciliation and release.
 
-For a closed pre-restore unresolved registration, recovery accepts ONLY preserve.
+For a closed unresolved registration, in the same epoch or after restore,
+recovery accepts ONLY preserve.
 Fresh current-epoch OS/removal evidence goes into a new immutable recovery audit,
 and the slot is released without changing historical task/run/claim/incident/role
 rows. It cannot reinterpret an old task result. A changed task attempt or another
@@ -75,3 +77,20 @@ Only documentation/ledger changed after this check. Exact-commit Claude review
 and CI are separate from this implementation evidence. No prior native/OS
 fixtures were gratuitously rerun: their executable paths were unchanged; new
 coordinator behavior is covered by real SQLite integration/restore/fault tests.
+
+## Successful-result protection follow-up
+
+Claude's source-only b1d6b30 component PASS identified that completed/observed
+zero-exit results could still be labelled failed and retried. The strict
+coordinator now requires positive recorded native_state=failed for a zero-exit
+failure classification. A valid successful closeout cannot be overwritten by a
+failed classification. Its regression observed RED then GREEN; separate coverage
+retains zero-exit positive-native-failure recovery. Legacy reconcile is unchanged.
+The same-epoch closed-preserve behavior is documented and tested alongside restore.
+
+Twenty-one recovery cases pass. Full offline Python521PASS84.236s, immutable
+source/log hearth2-recovery-success-20261031-a0bb4c26, original source.tar.gz
+SHA256 a0bb4c265a05b04039e932fef03775d34f1fa39b002e49e1ff239ad95fee5da1.
+Only documentation/ledger corrections followed this full check. Prior b1d6b30
+separately has source-only Claude componentPASS and CI108/run41219397183SUCCESS;
+new exact-commit review/CI are separate. No activation or actual collector proof.

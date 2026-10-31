@@ -142,6 +142,29 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(result['run']['ended_at'],prior['ended_at'])
         self.assertEqual(result['registration']['phase'],'released')
 
+    def test_failed_classification_cannot_override_valid_zero_exit_success(self):
+        proof=self.successful_receipt();before=self.store.snapshot()
+        with self.assertRaises(RecordError):self.recover(outcome='failed',observation=proof['observation'])
+        self.assertEqual(self.store.snapshot(),before)
+
+    def test_positive_native_failure_evidence_allows_zero_exit_failure_recovery(self):
+        self.time-=timedelta(seconds=900)
+        self.store.record_run(self.controller,self.claim,{'ended_at':self.time.isoformat(),'exit_status':0,
+            'closeout':None,'containment_state':'unconfirmed','termination_evidence':[],
+            'usage':{'state':'unknown','units':None},'native_state':'failed',
+            'native_stop_reason':None,'native_usage_scope':'unknown'})
+        self.time+=timedelta(seconds=901)
+        proof=self.packet();proof['observation']['exit_status']=0
+        result=self.recover(outcome='failed',observation=proof['observation'])
+        self.assertEqual(result['task']['state'],'ready');self.assertEqual(result['task']['attempts'],1)
+        self.assertEqual(result['registration']['phase'],'released')
+
+    def test_same_epoch_closed_slot_preserves_history(self):
+        self.store.reconcile(self.controller,self.claim['run_id'],outcome='failed',termination_evidence=['earlier-empty'])
+        before=self.store.snapshot();result=self.recover(outcome='preserve');after=self.store.snapshot()
+        for table in ['tasks','runs','claims','role_grants','incidents']:self.assertEqual(after[table],before[table])
+        self.assertEqual(result['registration']['phase'],'released');self.assertEqual(self.registry.pending(),[])
+
     def test_needs_decision_receipt_remains_a_human_wait_after_recovery(self):
         proof=self.successful_receipt(status='needs-decision')
         result=self.recover(outcome='completed',observation=proof['observation'])

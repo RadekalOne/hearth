@@ -80,8 +80,8 @@ class RecoveryCoordinator:
                 if latest!={**osproof,'restore_epoch':epoch,'generation':expected_generation,'registration_seq':current['seq']}:
                     raise RecordError('recovery cannot reuse superseded OS observation')
                 native_state,_,_=native_receipt_metadata(json.loads(run['data']))
-                if outcome=='failed' and native_state=='unknown' and run['exit_status']==0:
-                    raise RecordError('zero exit without native outcome remains uncertain')
+                if outcome=='failed' and native_state!='failed' and run['exit_status']==0:
+                    raise RecordError('zero exit requires positive native failure evidence before retry')
                 references=osproof['termination_evidence']+removal['references']+proof['classification_evidence']
                 task=self.store._reconcile(db,self.controller,run['id'],outcome=outcome,termination_evidence=references)
             self.store.audit(db,self.controller,run['id'],'dispatch_recovery',

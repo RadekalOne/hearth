@@ -503,3 +503,15 @@ Rad's merge gate remain open.
   safe arm/consume/start/restart, actual account/settings/credential projection
   and provider/broker egress, scheduling/supervision/alarms/composed acceptance.
   No production/account/pin/purchase/merge. Exact new-head review/CI next.
+
+31 October - prevent recovery from rerunning a known success:
+- Claude b1d6b30 exact componentPASS/source-only and CI108SUCCESS verified.
+  His valid-success->failed->retry note regraded Important by actual effect.
+  New regression RED/GREEN: zero-exit failure classification now requires
+  recorded native_state=failed; completed/observed/unknown alone cannot retry.
+  Positive native-failure/zero-exit recovery remains supported and tested.
+- Document/test same-epoch closed-preserve as well as restored-preserve; history
+  rows remain unchanged. No legacy reconcile behavior change.
+-21recovery cases PASS; full offline521PASS84.236s immutablea0bb4c26. Docs-only
+  corrections afterwards. New exact peer review/CI pending. No actual collector,
+  native activation, production/account/pin/purchase or merge; Piece2STARTED.
