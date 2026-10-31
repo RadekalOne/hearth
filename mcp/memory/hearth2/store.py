@@ -18,6 +18,25 @@ class RecordError(ValueError):
     pass
 
 
+NATIVE_STOPS = {'allowance_stop', 'authentication_stop', 'rate_limit_stop', 'budget_stop'}
+NATIVE_STATES = {'observed', 'completed', 'failed', 'interrupted', 'unknown'} | NATIVE_STOPS
+NATIVE_USAGE_SCOPES = {'unknown', 'native_thread_total', 'query_model_totals',
+                       'main_loop_only', 'main_loop_partial'}
+
+
+def native_receipt_metadata(receipt):
+    state = receipt.get('native_state', 'observed')
+    stop = receipt.get('native_stop_reason')
+    scope = receipt.get('native_usage_scope', 'unknown')
+    if (not isinstance(state, str) or state not in NATIVE_STATES
+            or not isinstance(scope, str) or scope not in NATIVE_USAGE_SCOPES
+            or stop is not None and (not isinstance(stop, str) or stop not in NATIVE_STOPS)
+            or state in NATIVE_STOPS and stop != state
+            or stop is not None and state not in {stop, 'unknown'}):
+        raise RecordError('invalid native receipt metadata')
+    return state, stop, scope
+
+
 @dataclass(frozen=True)
 class Principal:
     id: str
@@ -325,40 +344,51 @@ class Store:
         return role
 
     def claim(self, runner, task_id, *, expected_revision, request_id):
-        from datetime import timedelta
         require(runner, {'controller'})
         text(request_id, 'request id', 64)
         with self.transaction() as db:
-            existing = db.execute('SELECT * FROM runs WHERE request_id=?', (request_id,)).fetchone()
-            epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-            if existing:
-                claim = self.row(db, 'claims', existing['claim_id'])
-                if existing['task_id'] != task_id or claim['runner'] != runner.id or claim['restore_epoch'] != epoch:
-                    raise RecordError('request identity conflict')
-                # A replay acknowledges the same live claim, never permission
-                # to relaunch completed, held, expired or superseded work.
-                self._live_claim(db, runner, claim)
-                return claim
-            task = self.row(db, 'tasks', task_id)
-            role = self._eligible(db, task)
-            if task['state'] != 'ready' or type(expected_revision) is not int or task['revision'] != expected_revision or task['attempts'] >= 3:
-                raise RecordError('task is not claimable at that revision')
-            now = self.now()
-            claim_id, run_id = identifier('claim'), identifier('run')
-            attempt, generation = task['attempts'] + 1, task['generation'] + 1
-            lease_until = (now + timedelta(seconds=min(self.lease_seconds, self.deadline_seconds))).isoformat()
-            deadline_at = (now + timedelta(seconds=self.deadline_seconds)).isoformat()
-            db.execute('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?,?)',
-                       (claim_id, task_id, run_id, runner.id, attempt, generation, epoch, lease_until, 'active', '{}'))
-            db.execute('''INSERT INTO runs(id,task_id,claim_id,attempt,request_id,started_at,deadline_at,
-                          closeout_validation,containment_state,usage_state,data)
-                          VALUES(?,?,?,?,?,?,?,'missing','unconfirmed','unknown',?)''',
-                       (run_id, task_id, claim_id, attempt, request_id, now.isoformat(), deadline_at,
-                        safe_payload({'model': role['model'], 'family': role['family'],
-                                      'role_revision': role['revision'], 'rules_version': '1.0'})))
-            db.execute("UPDATE tasks SET state='running',revision=revision+1,generation=?,attempts=? WHERE id=?", (generation, attempt, task_id))
-            self.audit(db, runner, task_id, 'claimed', {'run_id': run_id, 'attempt': attempt, 'generation': generation})
-            return self.row(db, 'claims', claim_id)
+            return self._claim(db, runner, task_id, expected_revision=expected_revision, request_id=request_id)
+
+    def _claim(self, db, runner, task_id, *, expected_revision, request_id, expected_role_revision=None):
+        from datetime import timedelta
+        require(runner, {'controller'})
+        text(request_id, 'request id', 64)
+        if expected_role_revision is not None and (type(expected_role_revision) is not int or expected_role_revision < 1):
+            raise RecordError('invalid preflight role revision')
+        existing = db.execute('SELECT * FROM runs WHERE request_id=?', (request_id,)).fetchone()
+        epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+        if existing:
+            claim = self.row(db, 'claims', existing['claim_id'])
+            if existing['task_id'] != task_id or claim['runner'] != runner.id or claim['restore_epoch'] != epoch:
+                raise RecordError('request identity conflict')
+            # A replay acknowledges the same live claim, never permission
+            # to relaunch completed, held, expired or superseded work.
+            live, task, run = self._live_claim(db, runner, claim)
+            if expected_role_revision is not None and json.loads(run['data'])['role_revision'] != expected_role_revision:
+                raise RecordError('role changed since native preflight')
+            return claim
+        task = self.row(db, 'tasks', task_id)
+        role = self._eligible(db, task)
+        if expected_role_revision is not None and role['revision'] != expected_role_revision:
+            raise RecordError('role changed since native preflight')
+        if task['state'] != 'ready' or type(expected_revision) is not int or task['revision'] != expected_revision or task['attempts'] >= 3:
+            raise RecordError('task is not claimable at that revision')
+        now = self.now()
+        claim_id, run_id = identifier('claim'), identifier('run')
+        attempt, generation = task['attempts'] + 1, task['generation'] + 1
+        lease_until = (now + timedelta(seconds=min(self.lease_seconds, self.deadline_seconds))).isoformat()
+        deadline_at = (now + timedelta(seconds=self.deadline_seconds)).isoformat()
+        db.execute('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?,?)',
+                   (claim_id, task_id, run_id, runner.id, attempt, generation, epoch, lease_until, 'active', '{}'))
+        db.execute('''INSERT INTO runs(id,task_id,claim_id,attempt,request_id,started_at,deadline_at,
+                      closeout_validation,containment_state,usage_state,data)
+                      VALUES(?,?,?,?,?,?,?,'missing','unconfirmed','unknown',?)''',
+                   (run_id, task_id, claim_id, attempt, request_id, now.isoformat(), deadline_at,
+                    safe_payload({'model': role['model'], 'family': role['family'],
+                                  'role_revision': role['revision'], 'rules_version': '1.0'})))
+        db.execute("UPDATE tasks SET state='running',revision=revision+1,generation=?,attempts=? WHERE id=?", (generation, attempt, task_id))
+        self.audit(db, runner, task_id, 'claimed', {'run_id': run_id, 'attempt': attempt, 'generation': generation})
+        return self.row(db, 'claims', claim_id)
 
     def _live_claim(self, db, runner, supplied):
         require(runner, {'controller'})
@@ -408,7 +438,7 @@ class Store:
             return 'invalid'
         if closeout['task'] != task['id'] or closeout['attempt'] != run['attempt']:
             return 'invalid'
-        if closeout['status'] not in {'done', 'partial', 'failed', 'invalid-task', 'needs-decision'}:
+        if not isinstance(closeout['status'], str) or closeout['status'] not in {'done', 'partial', 'failed', 'invalid-task', 'needs-decision'}:
             return 'invalid'
         checks = closeout['checks-run']
         if not isinstance(checks, list) or any(not isinstance(c, dict) or
@@ -424,11 +454,17 @@ class Store:
         return 'valid'
 
     def record_run(self, runner, claim, receipt):
+        require(runner, {'controller'})
+        with self.transaction() as db:
+            return self._record_run(db, runner, claim, receipt)
+
+    def _record_run(self, db, runner, claim, receipt):
         import math
         safe_payload(receipt)
         required = {'ended_at', 'exit_status', 'closeout', 'containment_state', 'termination_evidence', 'usage'}
         if not isinstance(receipt, dict) or not required.issubset(receipt):
             raise RecordError('incomplete run receipt')
+        native_state, native_stop, native_scope = native_receipt_metadata(receipt)
         ended = timestamp(receipt['ended_at'])
         exit_status = receipt['exit_status']
         if exit_status is not None and type(exit_status) is not int:
@@ -455,43 +491,54 @@ class Store:
                     charge['amount'] < 0 or not isinstance(charge.get('currency'), str) or
                     not isinstance(charge.get('source'), str) or not charge['source'].strip()):
                 raise RecordError('cost requires measured amount, currency and source')
-        with self.transaction() as db:
-            current, task, run = self._live_claim(db, runner, claim)
-            if ended < timestamp(run['started_at']) or ended > self.now():
-                raise RecordError('run end must be between start and current time')
-            validation = self._closeout_validation(receipt['closeout'], task, run)
-            data = json.loads(run['data'])
-            data['receipt_controller'] = runner.id
-            db.execute("""UPDATE runs SET ended_at=?,exit_status=?,closeout=?,closeout_validation=?,
-                containment_state=?,termination_evidence=?,usage_state=?,usage=?,estimated_cost=?,actual_charge=?,data=? WHERE id=?""",
-                (ended.isoformat(), exit_status, safe_payload(receipt['closeout']), validation,
-                 containment, safe_payload({'controller': runner.id, 'references': evidence}),
-                 usage['state'], safe_payload(units) if units is not None else None,
-                 safe_payload(usage['estimated_cost']) if usage.get('estimated_cost') is not None else None,
-                 safe_payload(usage['actual_charge']) if usage.get('actual_charge') is not None else None,
-                 safe_payload(data), run['id']))
-            success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
-                       and exit_status == 0 and containment == 'verified_empty')
-            if containment != 'verified_empty' or exit_status is None:
-                # A verified-empty process group does not prove a successful exit.
-                state, claim_state = 'held', 'held'
-                self._incident(db, task, run['id'], 'held')
-            elif validation == 'valid' and receipt['closeout']['status'] == 'needs-decision':
-                # Preserve this run as history, but do not turn a human wait into
-                # a failure/retry. The controller must not claim it again.
-                state, claim_state = 'needs_decision', 'closed'
-                if exit_status != 0:
-                    self._incident(db, task, run['id'], 'escalated')
-            elif success:
-                state, claim_state = 'review', 'closed'
-                db.execute("UPDATE incidents SET state='recovered' WHERE task_id=?", (task['id'],))
-            else:
-                state, claim_state = ('ready' if task['attempts'] < 3 else 'failed'), 'closed'
-                self._incident(db, task, run['id'], 'open' if task['attempts'] < 3 else 'escalated')
-            db.execute('UPDATE claims SET state=? WHERE id=?', (claim_state, current['id']))
-            db.execute('UPDATE tasks SET state=?,revision=revision+1 WHERE id=?', (state, task['id']))
-            self.audit(db, runner, task['id'], 'run_receipt', {'run_id': run['id'], 'validation': validation, 'state': state})
-            return self.row(db, 'runs', run['id'])
+        current, task, run = self._live_claim(db, runner, claim)
+        if ended < timestamp(run['started_at']) or ended > self.now():
+            raise RecordError('run end must be between start and current time')
+        validation = self._closeout_validation(receipt['closeout'], task, run)
+        data = json.loads(run['data'])
+        data['receipt_controller'] = runner.id
+        if 'native_state' in receipt:
+            data.update(native_state=native_state, native_stop_reason=native_stop,
+                        native_usage_scope=native_scope)
+        db.execute("""UPDATE runs SET ended_at=?,exit_status=?,closeout=?,closeout_validation=?,
+            containment_state=?,termination_evidence=?,usage_state=?,usage=?,estimated_cost=?,actual_charge=?,data=? WHERE id=?""",
+            (ended.isoformat(), exit_status, safe_payload(receipt['closeout']), validation,
+             containment, safe_payload({'controller': runner.id, 'references': evidence}),
+             usage['state'], safe_payload(units) if units is not None else None,
+             safe_payload(usage['estimated_cost']) if usage.get('estimated_cost') is not None else None,
+             safe_payload(usage['actual_charge']) if usage.get('actual_charge') is not None else None,
+             safe_payload(data), run['id']))
+        success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
+                   and exit_status == 0 and containment == 'verified_empty'
+                   and native_state in {'observed', 'completed'})
+        if containment != 'verified_empty' or exit_status is None or native_state == 'unknown':
+            # A verified-empty process group does not prove a successful exit.
+            state, claim_state = 'held', 'held'
+            self._incident(db, task, run['id'], 'held')
+        elif (validation == 'valid' and receipt['closeout']['status'] == 'needs-decision'
+              and native_state in {'observed', 'completed'}):
+            # Preserve this run as history, but do not turn a human wait into
+            # a failure/retry. The controller must not claim it again.
+            state, claim_state = 'needs_decision', 'closed'
+            if exit_status != 0:
+                self._incident(db, task, run['id'], 'escalated')
+        elif success:
+            state, claim_state = 'review', 'closed'
+            db.execute("UPDATE incidents SET state='recovered' WHERE task_id=?", (task['id'],))
+        else:
+            state, claim_state = ('ready' if task['attempts'] < 3 else 'failed'), 'closed'
+            self._incident(db, task, run['id'], 'open' if task['attempts'] < 3 else 'escalated')
+        db.execute('UPDATE claims SET state=? WHERE id=?', (claim_state, current['id']))
+        db.execute('UPDATE tasks SET state=?,revision=revision+1 WHERE id=?', (state, task['id']))
+        self.audit(db, runner, task['id'], 'run_receipt', {'run_id': run['id'], 'validation': validation, 'state': state})
+        if native_stop is not None:
+            role = self.row(db, 'role_grants', task['assignee'], column='agent')
+            revision = role['revision'] + 1
+            db.execute("UPDATE role_grants SET state='paused',revision=? WHERE agent=?",
+                       (revision, task['assignee']))
+            self.audit(db, runner, task['assignee'], 'native_role_paused',
+                       {'run_id':run['id'], 'reason':native_stop, 'revision':revision})
+        return self.row(db, 'runs', run['id'])
 
     def append_notice(self, actor, payload, *, claim):
         safe_payload(payload)
@@ -584,6 +631,11 @@ class Store:
             return self.row(db, 'tasks', task_id)
 
     def reconcile(self, controller, run_id, *, termination_evidence, outcome):
+        with self.transaction() as db:
+            return self._reconcile(db, controller, run_id,
+                termination_evidence=termination_evidence, outcome=outcome)
+
+    def _reconcile(self, db, controller, run_id, *, termination_evidence, outcome):
         require(controller, {'controller'})
         if outcome not in {'failed', 'unknown', 'completed'}:
             raise RecordError('unknown reconciliation outcome')
@@ -591,43 +643,45 @@ class Store:
             raise RecordError('termination evidence must contain references')
         if outcome in {'failed', 'completed'} and not termination_evidence:
             raise RecordError('verified termination evidence is required before retry')
-        with self.transaction() as db:
-            run = self.row(db, 'runs', run_id)
-            task = self.row(db, 'tasks', run['task_id'])
-            claim = self.row(db, 'claims', run['claim_id'])
-            if task['generation'] != claim['generation'] or claim['state'] not in {'active', 'held'}:
-                raise RecordError('run is not the current reconciliation target')
-            closeout = json.loads(run['closeout']) if run['closeout'] else None
-            valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
-            human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
-                          and run['exit_status'] is not None)
-            if outcome == 'unknown':
-                db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
-                db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
+        run = self.row(db, 'runs', run_id)
+        task = self.row(db, 'tasks', run['task_id'])
+        claim = self.row(db, 'claims', run['claim_id'])
+        if task['generation'] != claim['generation'] or claim['state'] not in {'active', 'held'}:
+            raise RecordError('run is not the current reconciliation target')
+        closeout = json.loads(run['closeout']) if run['closeout'] else None
+        valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
+        native_state, native_stop, native_scope = native_receipt_metadata(json.loads(run['data']))
+        human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
+                      and run['exit_status'] is not None
+                      and native_state in {'observed', 'completed'})
+        if outcome == 'unknown':
+            db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
+            db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
+        else:
+            if outcome == 'completed':
+                if (native_state not in {'observed', 'completed'}
+                        or run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
+                        or closeout['status'] not in {'done', 'needs-decision'}):
+                    raise RecordError('completed reconciliation requires an existing successful receipt')
+                state = 'needs_decision' if human_wait else 'review'
             else:
-                if outcome == 'completed':
-                    if (run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
-                            or closeout['status'] not in {'done', 'needs-decision'}):
-                        raise RecordError('completed reconciliation requires an existing successful receipt')
-                    state = 'needs_decision' if human_wait else 'review'
-                else:
-                    state = 'needs_decision' if human_wait else ('ready' if task['attempts'] < 3 else 'failed')
-                db.execute("UPDATE claims SET state='closed' WHERE id=?", (claim['id'],))
-                db.execute('UPDATE tasks SET state=?,revision=revision+1,generation=generation+1 WHERE id=?', (state, task['id']))
-                reconciled_at = self.now().isoformat()
-                db.execute("UPDATE runs SET ended_at=COALESCE(ended_at,?),containment_state='verified_empty',termination_evidence=? WHERE id=?",
-                           (reconciled_at, safe_payload({'controller': controller.id,
-                            'references': termination_evidence, 'reconciled_at': reconciled_at}), run_id))
-            incident = db.execute('SELECT id FROM incidents WHERE task_id=?', (task['id'],)).fetchone()
-            incident_id = incident[0] if incident else identifier('incident')
-            state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if human_wait or task['attempts'] >= 3 else 'open'))
-            if incident:
-                db.execute('UPDATE incidents SET state=? WHERE id=?', (state, incident_id))
-            else:
-                db.execute('INSERT INTO incidents VALUES(?,?,?,?)', (incident_id, task['id'], state, '{}'))
-            db.execute('INSERT OR IGNORE INTO incident_attempts VALUES(?,?)', (incident_id, run_id))
-            self.audit(db, controller, task['id'], 'run_reconciled', {'run_id': run_id, 'outcome': outcome})
-            return self.row(db, 'tasks', task['id'])
+                state = 'needs_decision' if human_wait else ('ready' if task['attempts'] < 3 else 'failed')
+            db.execute("UPDATE claims SET state='closed' WHERE id=?", (claim['id'],))
+            db.execute('UPDATE tasks SET state=?,revision=revision+1,generation=generation+1 WHERE id=?', (state, task['id']))
+            reconciled_at = self.now().isoformat()
+            db.execute("UPDATE runs SET ended_at=COALESCE(ended_at,?),containment_state='verified_empty',termination_evidence=? WHERE id=?",
+                       (reconciled_at, safe_payload({'controller': controller.id,
+                        'references': termination_evidence, 'reconciled_at': reconciled_at}), run_id))
+        incident = db.execute('SELECT id FROM incidents WHERE task_id=?', (task['id'],)).fetchone()
+        incident_id = incident[0] if incident else identifier('incident')
+        state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if human_wait or task['attempts'] >= 3 else 'open'))
+        if incident:
+            db.execute('UPDATE incidents SET state=? WHERE id=?', (state, incident_id))
+        else:
+            db.execute('INSERT INTO incidents VALUES(?,?,?,?)', (incident_id, task['id'], state, '{}'))
+        db.execute('INSERT OR IGNORE INTO incident_attempts VALUES(?,?)', (incident_id, run_id))
+        self.audit(db, controller, task['id'], 'run_reconciled', {'run_id': run_id, 'outcome': outcome})
+        return self.row(db, 'tasks', task['id'])
 
 
     def revise_task(self, controller, task_id, expected_revision, revision_note):

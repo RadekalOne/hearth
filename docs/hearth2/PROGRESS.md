@@ -2,6 +2,33 @@
 
 Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
 
+## Piece 2 broker foundation (28 October)
+
+PR35 merged at `6b6987b42a8560c78f9c367560ea604d8e407ca3`, retaining the exact
+Claude-passed `21cf340` tree. The record prerequisites are verified on merge.
+Started `codex/hearth2-runner-broker` from that merged main in the same isolated
+worktree. No production or persistent trial-runtime activation.
+
+Implemented an inactive broker library and separate stateless read-only MCP app:
+one ephemeral capability per broker, explicit wing/room, task/run/attempt/
+generation/epoch/lease fences before and after every read, fixed initial expiry,
+no HTTP mint/admin route, no upstream credentials in capabilities or exports.
+The native adapter, root-only upstream adapter and service installation are not
+part of this foundation. See `BROKER-FOUNDATION.md` for boundaries.
+
+Broker tests observed RED then GREEN. Fresh internal review found one fixed
+expiry/renewed-lease race across a database lock wait; independently reproduced
+and fixed. All 389 Python tests pass on isolated trial Python 3.12 in 88.508s,
+including 18 broker tests and actual MCP-client interoperability. This is not
+Claude's independent project PASS or A4/A6–A9/N2/N3 acceptance.
+
+Runtime source spike found pinned adapters requesting broad native permissions
+and exposing managed delegation. Outer task context is not an enforced tool
+allowlist. Asked Claude to review the root-owned launcher/protocol-shim boundary
+before native work; native execution stays gated. Any unavoidable core patch or
+pin change must come back as a concrete reviewed proposal before installation.
+Current usage evidence remains an outside wait before live model acceptance.
+
 ## Piece 2 prerequisite record interfaces (28 October)
 
 PR35 follow-up review: Claude independently reproduced acceptance of an old
@@ -85,7 +112,7 @@ Rad's merge gate remain open.
 - Initial service verification had environment failures (WSL missing httpx/MCP;
   first isolated Python image omitted Git required by existing Commons tests).
   Installed dependencies/Git only inside a disposable trial verification image.
-  Final Python3.12 run on the trial host: 336 tests PASS in86.172s.
+  Final Python 3.12 run on the trial host: 336 tests PASS in86.172s.
 - Node24 check/test on the trial host:35 PASS,1 pre-existing skip,0 FAIL.
   Packaging dry run includes Hearth2 schema, API and both migration files. An
   initial packaging assertion had a shell quoting error; corrected standalone
@@ -145,3 +172,346 @@ Rad's merge gate remain open.
   compilation and whitespace checks pass. No schema DDL or runtime deployment.
 - Follow-up remains unmerged for Claude's exact-commit review. No piece2 start,
   production change or new build approval needed. See PR33-REVIEW-FIXES.md.
+
+29 October — broker component review clarification:
+- Claude's reported missing httpx2 import was verified against the exact PR36
+  test blob 1eaf2767b2d034ac7dd0a2e58c7aa43207451707. Unchanged SDK test
+  PASSES offline in 0.794s. Installed MCP 2.3.0 explicitly requires httpx2>=2.10.0
+  (installed 2.16.0); no import replacement or behavior fix was justified.
+- CI 96 / run 40764669766 has 10 successful jobs including full Python discovery.
+  Claude withdrew the finding in $HIA-jDVyDJPGLKgcazRe-ZSGdR6OEqKxH8ZTN2Zqeek,
+  relying on the reported reproduction/metadata rather than an independent run.
+- Added SDK dependency explanation and the two nonblocking review notes:
+  memory_get scope is checked after upstream access; short writer transactions
+  require future controller lock-contention checks. SDK test gets a comment only.
+- All 18 broker tests on a tracked snapshot of this comment/doc follow-up PASS
+  in 1.305s in a disposable Python 3.12 container with networking disabled. No
+  native process, real memory credential, broker listener or production change.
+- Billing review complete: both providers are premium seats. Rad retains
+  Claude $75/month extra-usage cap after $22.18 seat usage; confirms ChatGPT 0 credits
+  and auto-reload off. HM decision drawer_773843c44471103f3cd0f94acfc75cde;
+  premium-seat clarification drawer_8b18ebb9cd9f3b7f03bc122f7c442dc9.
+- PR36 remains draft/unmerged; piece2 STARTED. Native tool enforcement, process
+  containment and full acceptance remain unfinished. Claude reviews this exact
+  documentation/comment commit next. Rad retains the merge gate.
+
+29 October — runtime containment spike (fixtures only):
+- Claude component PASS at 271e1bd and CI 97/run 40920099176 success verified.
+  Later unattended access-limit note did not retract the specific earlier review.
+- Added opt-in exact-host/root-only trial probe and source-backed contract.
+  Expected-failure parent-only termination leaves a setsid/SIGTERM-resistant
+  descendant alive; independent cleanup confirms the fixture group empty.
+  Cgroup kill then passes with independent populated=0 observation.
+- Separate disposable container passes 12 filesystem/identity/network checks.
+  Both runs removed their containers and cgroups; receipts remain private.
+  No controller settings or services changed. No native CLI/model exercised.
+- These are separate OS primitive checks, not a composed native launcher or
+  task/attempt/restore/lease acceptance. Native tool policy and the exact
+  provider credential boundary remain explicit open integration questions.
+- Keep native launch disabled while resolving those questions with Claude.
+  Preserve the pinned core and both premium-seat account settings.
+- Fixed the prior two cosmetic documentation nits without runtime changes.
+
+30 October - resumed implementation under existing approval:
+- PR36 prior exact head 0cd86b6 has Claude component PASS and CI98/run40964744652
+  success, independently refreshed from GitHub. No new user approval required.
+- Added inactive durable DispatchRegistry over the existing audit journal:
+  canonical run/claim/attempt/generation/epoch/model/deadline registration,
+  one unresolved slot per database, one-use consume, restart/restore retention,
+  and release only after the record has independent termination evidence.
+- Tests observed RED for the missing registry and the probe's false observer
+  check, then GREEN. Independent review reproduced a further restore edge:
+  a closed run exported before slot release retained stale empty proof.
+  Regression observed RED then GREEN; release now requires matching-run
+  reconciliation after the latest restore. Reviewer independently confirmed
+  the correction and all 10 dispatch tests. A closed pre-restore run with an
+  unresolved slot remains conservatively blocked pending a dedicated recovery
+  operation; this integration gap is explicit, not silently bypassed.
+- Observer-outside evidence is asserted BEFORE termination. The fixture rejects
+  the entire host account home, covering its native credential files. Future
+  launcher must separately prove exactly one provider credential, no other
+  account/core/controller/upstream secrets, and fixed-destination egress.
+- Trial verification tag was absent; rebuilt its existing Dockerfile from cached
+  layers. No service or account changed. Full Python 3.12 suite PASS:
+  400 tests in 98.215s, disposable container, networking disabled.
+- Updated real trial parent-only control expectedFAIL(exit1), cgroup kill
+  PASS(exit0); both 12 container assertions PASS, observer checked live, cleanup
+  empty verified. Receipts/logs private under
+  /root/hearth-runner-trial/hearth2-dispatch-20261030-e9941c56.
+- Native credential design/risk acceptance is resolved; gateway is optional
+  extra hardening. Prior subjective 30/100 is not measured breach probability.
+  Technical guards remain. MiniMax existing prepaid/gifted credits authorized
+  for the bounded additional preliminary test; no purchases or recharge.
+- No native model called, broker listener enabled, pin changed, production
+  touched or PR merged. Piece2 remains STARTED. Native policy/egress, actual
+  account guards, scheduler, alarms and composed acceptance remain unfinished.
+
+30 October - native policy, account guards and approved direct-launch fallback:
+- Implemented inactive native-policy validation and trusted account-observation
+  guards, a preflight coordinator, atomic claim+reserve and receipt+release.
+  A role change during account inspection and an occupied slot consume no extra
+  attempt. Receipt/journal failures roll back together. Unknown outcomes hold.
+- Test-first new regressions and independent component review completed. Review
+  found an ambiguous Docker error being treated as absence in fixture cleanup;
+  fixed with successful exact-name inventory checks and three regressions.
+  Reviewer independently verified the fix. No raw native stderr is recorded.
+- Full isolated trial Python suite431PASS90.300s, snapshot
+  /root/hearth-runner-trial/hearth2-native-preflight-final-20261030-77c2d74d.
+  Installed Codex0.154.0 and Claude2.1.280 startup/managed-policy fixturePASS;
+  receipt native-policy-lvw5d10f. No native turns or real credentials used.
+- Projection spike found pinned core's required bootstrap rejected by installed
+  Claude. Hardened and unchanged-core argument controls both fail identically.
+  The native-transcript success path is NOT passed. All own containers and run
+  projections were verified absent. Failed responses remain private under
+  projection-fixture-gjbw0qte and projection-fixture-gej6xhrw.
+- Approved fallback now selected for BOTH providers: Hearth starts native CLIs
+  directly; installed core/pins unchanged, core unused by Hearth2. Original Rad
+  decision drawer_fcb3885641cd4b3a3d8849b269d690d9; Claude design confirmation
+  $zhE8qBx2q7RG5Ni4uxplCSzT15ZalNYK8IIwQXn0N2M. Short source check found
+  2.1.278/2.1.280 probe claims but no established working bootstrap version.
+  Retain one receipt shape, clean environment, allowance-stop pause/no retry,
+  exact model, unknown-usage handling and externally observed termination.
+- Independent systemd deadline fixturePASS after submitting process exits:
+  resistant child included, parent cgroup populated1->0, container exit137,
+  guard Resulttimeout, elapsed5.156s for5s limit; cleanup verified. Receipt
+  /root/hearth-runner-trial/deadline-fixture-5r0i9wri. Offline/no credentials.
+- Final complete source snapshot hearth2-direct-fallback-20261030-dc1fb4fc:
+  431 Python tests PASS in82.283s offline. Fresh focused reviewer41/41PASS,
+  no further actionable component findings; root-only fixtures not rerun by that
+  reviewer. AST and whitespace checks pass. Documentation-only refinements
+  after this snapshot do not change implementation or fixture behavior.
+- This is component progress, not installed runtime or piece2 verification.
+  Direct native adapter wiring, collectors, fixed egress/scoped memory, actual
+  forbidden-tool proof, absolute claim deadline/recovery, scheduling/alarms and
+  composed native acceptance remain. PR36 stays draft, Rad retains merge gate.
+  No new purchase, account/pin/production change. Usage cost remains unmeasured.
+
+30 October - prepare and receipt recovery follow-up:
+- Claude componentPASS c4a2849 (source inspected, no tests/CI rerun), with a
+  nonblocking prepare recovery gap to close before adapter wiring. Reproduced
+  post-claim failure, consumed-replay and successful receipt-retry failures RED.
+- Original request/task revision is now bound in the dispatch journal. Matching
+  prepare retries acknowledge the same live reservation; foreign task/owner,
+  changed revision/policy/role, expired claim and unregistered claim refuse.
+  Reserved acknowledgment has no fresh account evidence; consumed replay is
+  already_consumed and cannot reissue launch authority or spend an attempt.
+- Completed combined receipt/release retries require matching canonical receipt
+  digest, typed claim identity, owner and current epoch. Conflicting receipts or
+  restored claims fail without mutation. Held/unknown runs remain held.
+- Added7 regressions and updated the prior successful-retry assertion. Fresh
+  reviewer48focusedPASS/no actionable findings. Full isolated trial suite438PASS
+  in84.842s, private source/log hearth2-preflight-replay-20261030-5c66901f.
+- Read original Claude billing decision: explicitly retained creditsON under
+  reviewed75monthlycap. Added source comment; no setting changed. Direct native
+  broker config still must configure Hearth tools explicitly before acceptance.
+- No native launch/activation/production change or merge. Piece2STARTED.
+
+31 October - native output to authoritative receipts:
+- Rad explicitly resumed. Clean basef344ad4, prior exactClaudecomponentPASS and
+  CI101SUCCESS. Added bounded NativeStream with Codex/Claude root identity
+  filters, nonfinite/duplicate/Unicode/depth/byte/record limits and explicit
+  unknown usage. Claude query-model totals preferred; missing cache counts
+  stay absent; native cost is estimated, never an actual seat charge.
+- New record_native_result binds provider to claimed role and settles through
+  the atomic receipt/release path. Unknown native output preserves actual exit
+  and OS observations while holding task/claim. Typed auth/quota/budget stops
+  atomically pause the role and journal its reason. Verified-empty known-exit
+  stopped runs release the slot, but that role cannot consume another attempt.
+  Recovery and logical restore both reject unknown-native success promotion.
+- Test-first output/settlement tests plus independent component review. Review
+  reproduced two important edge cases: malformed/coalesced tails dropped a stop;
+  deeply nested JSON inside result text crashed receipt settlement. Four RED
+  regressions cover both plus output-budget tails and related malformed-status
+  validator error. Fixed in one pass;79focusedPASS. No repeat internal review.
+- Final trial Python3.12 offline477PASS87.413s. Source/log:
+  /root/hearth-runner-trial/hearth2-native-settlement-final-20261031-db2ca692.
+- Actual Claude2.1.280 against fake loopback401/429 APIs in disposable network-none
+  containers: initial no-intervention controls retried5/6times until20s timeout.
+  Adapter now stops first typed native api_retry, exactlyONE local request for
+  each status, exit-9 observed, no timeout, own cleanupverified. Final receipts
+  claude-error-olqpnaiv andclaude-error-32vw5q_h; fake key only, no provider/model.
+  Typed subscription rate_limit_event rejected mapping remains contract-tested
+  only; no real-seat depletion, numeric allowance or actual charge is inferred.
+- No schema DDL/bundle-format change. New native metadata requires matched
+  controller/restore code; old binaries lack these semantics. Activation must
+  pin code and verify stopped-controller/pre-change-backup rollback rather than
+  assume binary-only downgrade safety. No active deployment in this change.
+- Piece2STARTED/PR36draft/unmerged. Next direct native profiles/MCP wiring,
+  account/config/credential collection, fixed egress, absolute claim deadline
+  and lease/restart/revocation integration remain before composed acceptance.
+  No real login, provider inference, production/pin/account change or purchase.
+
+31 October - direct native profiles and actual broker interoperability:
+- Added inactive fixed native profiles, no raw secrets/provider/helper override.
+  Four profile tests observed RED then GREEN. Actual Codex initialization against
+  the real broker exposed tools/list transport _meta.progressToken rejection.
+  Two new HTTP regressions reproduced the gap; validated transport metadata is
+  removed before tools/args/scope, never promoted to authority. Seven HTTP tests
+  PASS, including the original SDK interoperability case.
+- Installed Codex0.154.0 and Claude2.1.280 connect to actual scoped broker code
+  with synthetic SQLite/upstream data in disposable network-none containers.
+  Codex read forwards; Claude fake-local-SSE tool loop forwards one read and
+  refuses requested memory_add/Bash. Both clients visibly refuse expired grants,
+  zero upstream reads and one MCP call/no silent retry. Synthetic input/fake key
+  only; no real login, provider call or billing inference.
+- Poisoned-output fixtures catch feed AND finish RecordError, preserve auth/rate
+  stop, terminate after exactly one fake request and verify own cleanup. Added
+  actual-record regression for exception -> held task/paused role/retained slot.
+- Final trial offline Python484PASS91.675s, source/log
+  hearth2-native-mcp-final-20261031-42b941a8. Actual native final-source positive/
+  expiry and401/429 poison-tail fixtures PASS. Independent component review33
+  focusedPASS/no Important findings; privileged/HTTP evidence limits disclosed in
+  DIRECT-NATIVE-PROFILES.md. Fixture header/doc refinements only after full run.
+- Conditional design ruling: single bounded-run lease and fixed grant ending AT
+  sealed deadline, no margin, only AFTER absolute deadline/delayed-start/restart
+  proof. Existing900s defaults/live settings unchanged; no automatic grant
+  extension. Every call still fences ownership/epoch/revocation. Actual auth/quota
+  stops consume approved attempts, no refunds or limit change.
+- Previous4ca51f3 has separate Claude componentPASS/source only and verified
+  CI102SUCCESS. New component needs its own exact-head external review/CI.
+  Piece2 STARTED, PR36 draft/unmerged; no activation, real credential/provider,
+  account/pin/production change. Next absolute deadline/trusted late termination,
+  real credential/settings collection, fixed egress and composed acceptance.
+
+31 October - installed-client tool-policy follow-up:
+- Claude2d5 componentPASS/source-only and CI103SUCCESS verified. Root-managed
+  settings already disable Codex shell and explicitly allow Claude's read tools;
+  profiles now repeat shell restrictions/empty HEARTH-filtered child env and
+  Claude allowedTools so the intention is visible. Two strengthened assertions
+  observed RED, all four profile tests GREEN. Shell refusal, not child env alone,
+  protects against same-UID parent /proc environment reads.
+- New Codex fake-local-Responses loop actually injects three shell variants plus
+  read/write calls. Shell names absent including nested namespaces; all three
+  unsupported, write refused, permitted read reaches synthetic model input, no
+  marker/capability in stdout/stderr/model requests. Uses FIXTURE-ONLY custom API
+  route/auth because installed native refuses overriding built-in openai. Normal
+  ChatGPT profile discovery/expiry also rerun; no real account/inference proof.
+- Stronger test exposed actual model memory read approval failure that control
+  RPC had bypassed. Added truthful readOnlyHint/destructiveHint/idempotentHint
+  to both broker tools; model read now works without broader approval policy.
+  HTTP regression covers hints. Auth/scope/tool/lease enforcement unchanged.
+- Full offline Python484PASS88.893s, source/log bc74f692. Later changes only
+  strengthen opt-in fixture assertions; five native final-file cases PASS with
+  SHA c031fb3895330920f5cabc5c2b75e4beef2e42a044becf24a27a47704713fa12.
+  Receipts6gux0nbx/37uy7nfa/_jd2jijc/er7zuic_/velcnmzx; all cleanupverified.
+  Independent review no remainingImportant; independently read prior synthetic
+  tool outputs, not broad/final-rootfixture execution. Evidence precision and
+  fake-auth/provider limitations detailed in DIRECT-NATIVE-PROFILES.md.
+- No installed launcher, realcredential/provider, production/account/pin changes
+  or merge. Piece2STARTED; absolute deadline/trustedlate recovery continues.
+
+31 October - absolute deadline OS primitive and fixture robustness:
+- Added opt-in sealed UTC timer before stopped immutable Docker ID start. PID1
+  independently freezes/kills retained parent before Docker operations; successful
+  removal prevents late start. Simulated resubmission with deadline+60s refuses
+  same unit and preserves original deadline. Outside observer checks actual OS.
+- Independent review found error cleanup could disarm timer before emptiness and
+  daemon case lacked timing bound. Single fix pass: quiesce first, retain guard
+  on cleanup failure, stop only after removal proof; daemon outside timing bound.
+  Collected transient units handled with successful active inventory/parentabsence.
+- Real unsafe-order control reproduces live workload/guardgone; fixed regression
+  stops workload/retains guard, both before deadline, own outsidecleanupverified.
+  Injected two-second late guard is refused by daemon-case acceptance/exit1.
+- Final absolute fixture SHA1d31a0a4, source archive8c952e40. Delayedstart,
+  neverstarted and daemonfailure cases PASS: receiptsitytrm_3/ga_havre/ev3ab324.
+  Worker exit137 when actually started, None when not; daemon guard failure has
+  no removal/release success proof, separate outsidecleanup later verified.
+- Addressed Claudea4d componentPASS notes: counted fixture provider swap before
+  any replacement, new regression RED->GREEN, preserve multiple diagnostics;
+  documented legacy exclude form instead of assuming filters in installedclient.
+  Final native tool loops/discovery PASS k3wgy8kj/0n_thwpj/byqh2i1x.
+- Full offline485PASS94.591s on e481e6d8; afterwards only opt-in deadline fixture
+  fixes/docs. Library/unit source unchanged. Exact evidence/review limits in
+  ABSOLUTE-DEADLINE-TRIAL.md and DIRECT-NATIVE-PROFILES.md.
+- Prior a4d12f2 separately Claude source-only componentPASS and exact CI104
+  run41212063900SUCCESS. New component needs own externalreview/CI.
+- Still not actual controller restart, DB-claim/deadline binding, late OS-record
+  settlement, native credential/egress composition, installed service or piece2
+  acceptance. Fullrunlease policy INACTIVE/900sdefault unchanged; no production,
+  account, pin, credential, model call, purchase or merge. Continue integration.
+
+31 October - trusted late OS-only observations:
+- Added inactive controller-owned observe_termination, separate from ordinary
+  live-claim native receipt. Exact durable registration/current epoch/current
+  generation captured before inspection, current owned attempt, typed fresh
+  <=60s OS fields only. Actual known exit retained after expiry without accepting
+  late worker closeout, usage, role or success fields. Missing protocol unknown.
+- Active/held work remains held; no slot release, retry authority, attempt or role
+  change. Closed historical claims refused; prior known end/exit/history preserved.
+  Once observed, immutable container ID cannot be replaced. Exact fresh replay
+  acknowledges without mutation; conflicting observation ID refuses.
+- Eleven focused tests PASS: missing API RED/GREEN; own-found closed-history
+  overwrite and container replacement each RED/GREEN, restore current-epoch/gen
+  fencing, unknown exit, freshness/identity/worker-field negatives, receipt replay,
+  historical preservation and atomic journal rollback. Independent reviewer
+  separately ran11PASS/no Important findings. >60s exact retry conservatively
+  refuses rather than refreshing old evidence.
+- Full offline Python496PASS85.247s, immutable source/log b199a110. Only docs
+  changed afterwards. No real OS collector or HTTP authority installed; first
+  actual container binding/evidence remain trusted collector inputs. See
+  LATE-OS-OBSERVATION.md for limits.
+- Prior c689f76 separately Claude source-only componentPASS and verified
+  CI105/run41213322812SUCCESS. New component needs exact externalreview/CI.
+  Generic reconciliation freshness/current-proof release and closed-restored
+  slot recovery remain separate work, as do actual DB-bound launcher/guard,
+  credential/settings/account collection, fixed egress and composed acceptance.
+- Piece2STARTED/PR36draft/unmerged. Fullrunlease remainsINACTIVE/900sdefault
+  unchanged. No production/account/pin/realcredential/provider/purchase change.
+
+31 October - preserve complete OS evidence and typed storage bounds:
+- Claude exact0c6 componentPASS and CI106SUCCESS verified. Addressed two small
+  source-review notes: immutable run_os_observed events retain each full bounded
+  proof with actor/time/digest; latest containment remains a separate view.
+  verified_empty->unconfirmed preserves both proofs through export/restore,
+  never releases work or loses prior references.
+- Signed64 SQLite storage bounds checked before binding; bool/oversized integers
+  typed-refused, not OverflowError. Both boundary values tested. This does not
+  assert those extremes are meaningful OS exits; collector contract is separate.
+- Four new tests reproduced missing proof plus four OverflowErrors RED then
+  GREEN. Fifteen focused tests independentlyPASS/no Important review findings.
+- Full offline Python500PASS89.933s, immutable source/log a32389a7; docs-only
+  refinements afterwards. Current component needs exact Claude review/CI.
+  No real collector/native activation/production/account/pin/purchase/merge.
+  Piece2 remainsSTARTED; remaining runtime/reconciliation gates unchanged.
+
+31 October - atomic strict recovery and restored closed slots:
+- Claude exact196PASS and existing approvals suffice; no new handoff/decision
+  blocker. Continued actual implementation in the isolated linked worktree.
+- Added inactive root RecoveryCoordinator: exact owner/registration/current
+  epoch/generation, fresh typed OS proof PLUS matching immutable container absence
+  and explicit classification. Process-group empty alone cannot release.
+- Active/held path records observed exit, reconciles and releases atomically in
+  one SQLite transaction; private Store/Dispatch helpers avoid an unlock gap.
+  Unknown exits refuse; unknown protocol with zero exit stays uncertain; valid
+  native success reaches review and needs-decision remains a human wait. Roles,
+  three-attempt limit, incidents and prior known history remain intact.
+- Closed pre-restore unresolved slots accept only preserve. Fresh current recovery
+  journal proof releases the slot while task/run/claim/role/incident rows stay
+  unchanged. Exact replay read-only/currentepochfenced, no new launch authority.
+- Nine missing-API tests RED/GREEN;18 recovery cases pass including both restore
+  modes, context/absence/freshness negatives, replay, two journal fault rollbacks,
+  role pause/three-attempt escalation and human wait. Fresh reviewer independently
+ 90 focusedPASS/no Important; review coverage limits in RECOVERY-COORDINATOR.md.
+  Root then found unknown-protocol/zero-exit retry edge, new RED/GREEN regression
+  and one fix pass. No repeated internal review claimed.
+- Final offline518PASS80.154s immutable0d1a284a source/log; docs-onlyafter. No
+  actual OS collector, native credentials/provider, root launcher or HTTP worker
+  authority installed. Generic legacy root APIs remain earlier contracts; actual
+  native controller must be wired to strict recovery before activation.
+- Piece2STARTED/PR36draft/unmerged, fullrunlease policyINACTIVE/default900s
+  unchanged. Next durable immutable container/guard/run/deadline creation binding,
+  safe arm/consume/start/restart, actual account/settings/credential projection
+  and provider/broker egress, scheduling/supervision/alarms/composed acceptance.
+  No production/account/pin/purchase/merge. Exact new-head review/CI next.
+
+31 October - prevent recovery from rerunning a known success:
+- Claude b1d6b30 exact componentPASS/source-only and CI108SUCCESS verified.
+  His valid-success->failed->retry note regraded Important by actual effect.
+  New regression RED/GREEN: zero-exit failure classification now requires
+  recorded native_state=failed; completed/observed/unknown alone cannot retry.
+  Positive native-failure/zero-exit recovery remains supported and tested.
+- Document/test same-epoch closed-preserve as well as restored-preserve; history
+  rows remain unchanged. No legacy reconcile behavior change.
+-21recovery cases PASS; full offline521PASS84.236s immutablea0bb4c26. Docs-only
+  corrections afterwards. New exact peer review/CI pending. No actual collector,
+  native activation, production/account/pin/purchase or merge; Piece2STARTED.
