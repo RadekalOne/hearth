@@ -110,7 +110,7 @@ class DispatchRegistry:
         ended=timestamp(observation['ended_at']) if observation['ended_at'] is not None else None
         exit_status=observation['exit_status'];containment=observation['containment_state']
         references=observation['termination_evidence']
-        if (exit_status is not None and type(exit_status) is not int
+        if (exit_status is not None and (type(exit_status) is not int or not -(1<<63)<=exit_status<(1<<63))
                 or not isinstance(containment,str) or containment not in {'verified_empty','unconfirmed'}
                 or not isinstance(references,list) or len(references)>100
                 or any(not isinstance(v,str) or not v.strip() or len(v)>4096 for v in references)
@@ -173,7 +173,7 @@ class DispatchRegistry:
                 self.store._incident(db,task,run['id'],'held')
             self.store.audit(db,self.controller,run['id'],'run_os_observed',
                 {'run_id':run['id'],'observation_id':identity,'restore_epoch':epoch,
-                 'registration_seq':current['seq'],'sha256':digest})
+                 'registration_seq':current['seq'],'sha256':digest,'proof':proof})
             return self.store.row(db,'runs',run['id'])
 
     def release(self, run_id):

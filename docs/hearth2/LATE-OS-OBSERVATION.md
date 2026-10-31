@@ -63,3 +63,28 @@ source.tar.gz retained; SHA256
 b199a11035ff2d51d0bd5e2e34c9c3c71605632bc8f5f048227e796bd80e1d26.
 Only documentation/ledger changed afterwards. This library does not alter or
 require rerunning the already verified native/OS fixture primitives.
+
+## OS proof history follow-up
+
+Every newly accepted OS observation now writes its complete bounded proof into
+the immutable run_os_observed audit event, with the event actor/time and its
+epoch/generation/registration digest. The run row remains the latest view, so a
+later unconfirmed observation can conservatively replace current containment
+without losing earlier proof references/provenance. Exact retries append nothing.
+The same credential screening and payload bounds apply to journaled proof. This
+is forward preservation; a digest-only older event cannot reconstruct already
+discarded historical evidence. No active runtime was deployed with that version.
+
+Exit status accepts the SQLite signed64 storage range, -2^63 through2^63-1, plus
+unknown. Larger positive/negative integers raise RecordError before binding. This
+is a storage/type guarantee, not a claim that every such value is a meaningful
+Docker/OS exit. The future actual collector must enforce its process contract.
+Four follow-up tests observed missing-proof/OverflowError failures RED then GREEN;
+fifteen focused tests pass. Independent new-component reviewer ran all fifteen,
+found no Important findings and verified the two-line diff/serialization safety.
+No real collector or external authority was exercised.
+
+Final follow-up verification: full offline Python500PASS89.933s, private immutable
+source/log hearth2-os-proof-history-20261031-a32389a7, original source.tar.gz
+SHA256 a32389a7231ff50d26e218d6b8bd3c58dbeadbd8f84b44d224c01a921382388d.
+Only documentation changed after this check.

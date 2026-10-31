@@ -457,3 +457,19 @@ Rad's merge gate remain open.
   credential/settings/account collection, fixed egress and composed acceptance.
 - Piece2STARTED/PR36draft/unmerged. Fullrunlease remainsINACTIVE/900sdefault
   unchanged. No production/account/pin/realcredential/provider/purchase change.
+
+31 October - preserve complete OS evidence and typed storage bounds:
+- Claude exact0c6 componentPASS and CI106SUCCESS verified. Addressed two small
+  source-review notes: immutable run_os_observed events retain each full bounded
+  proof with actor/time/digest; latest containment remains a separate view.
+  verified_empty->unconfirmed preserves both proofs through export/restore,
+  never releases work or loses prior references.
+- Signed64 SQLite storage bounds checked before binding; bool/oversized integers
+  typed-refused, not OverflowError. Both boundary values tested. This does not
+  assert those extremes are meaningful OS exits; collector contract is separate.
+- Four new tests reproduced missing proof plus four OverflowErrors RED then
+  GREEN. Fifteen focused tests independentlyPASS/no Important review findings.
+- Full offline Python500PASS89.933s, immutable source/log a32389a7; docs-only
+  refinements afterwards. Current component needs exact Claude review/CI.
+  No real collector/native activation/production/account/pin/purchase/merge.
+  Piece2 remainsSTARTED; remaining runtime/reconciliation gates unchanged.

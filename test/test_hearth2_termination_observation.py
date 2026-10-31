@@ -140,6 +140,38 @@ class TerminationObservationTests(unittest.TestCase):
         with self.assertRaises(RecordError):self.observe(observation_id='second-container',container_id='c'*64)
         self.assertEqual(self.store.snapshot(),before)
 
+    def test_each_os_proof_survives_when_latest_containment_becomes_unconfirmed(self):
+        self.observe()
+        self.observe(observation_id='second-proof',containment_state='unconfirmed',
+                     termination_evidence=['root-observer:uncertain-new-check'])
+        snapshot=self.store.snapshot()
+        events=[json.loads(e['data']) for e in snapshot['audit_events'] if e['action']=='run_os_observed']
+        self.assertEqual(len(events),2)
+        self.assertEqual(events[0]['proof']['termination_evidence'],['root-observer:actual-empty'])
+        self.assertEqual(events[0]['proof']['containment_state'],'verified_empty')
+        self.assertEqual(events[1]['proof']['termination_evidence'],['root-observer:uncertain-new-check'])
+        self.assertEqual(events[1]['proof']['containment_state'],'unconfirmed')
+        self.assertEqual(snapshot['runs'][0]['containment_state'],'unconfirmed')
+        self.assertEqual(snapshot['tasks'][0]['state'],'held')
+        self.assertEqual(len(snapshot['incidents']),1);self.assertEqual(len(self.registry.pending()),1)
+        bundle,target=Path(self.tmp.name)/'history.json',Path(self.tmp.name)/'history-restored.db'
+        export_record(self.path,bundle);restore_record(bundle,target,controller_stopped=True)
+        restored=Store(target,clock=lambda:self.time).snapshot()
+        retained=[json.loads(e['data']) for e in restored['audit_events'] if e['action']=='run_os_observed']
+        self.assertEqual(retained,events)
+
+    def test_exit_status_minimum_sqlite_integer_is_supported(self):
+        self.assertEqual(self.observe(exit_status=-(1<<63))['exit_status'],-(1<<63))
+
+    def test_exit_status_maximum_sqlite_integer_is_supported(self):
+        self.assertEqual(self.observe(exit_status=(1<<63)-1)['exit_status'],(1<<63)-1)
+
+    def test_out_of_storage_range_exit_status_is_typed_refusal_without_mutation(self):
+        before=self.store.snapshot()
+        for value in [-(1<<63)-1,1<<63,-(1<<100),1<<100]:
+            with self.subTest(value=value),self.assertRaises(RecordError):self.observe(exit_status=value)
+        self.assertEqual(self.store.snapshot(),before)
+
     def test_journal_failure_rolls_back_os_receipt_task_claim_and_incident_together(self):
         before=self.store.snapshot()
         with patch.object(self.store,'audit',side_effect=RuntimeError('simulated journal failure')):
