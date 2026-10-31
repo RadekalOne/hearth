@@ -179,5 +179,19 @@ class NativeSettlementTests(unittest.TestCase):
         self.assertEqual(finished['run']['exit_status'],0)
         self.assertEqual(self.store.snapshot()['tasks'][0]['state'],'ready')
 
+    def test_poison_exception_path_still_settles_unknown_and_atomic_role_pause(self):
+        from hearth2.native_output import NativeStream
+        stream=NativeStream('codex',thread_id='thread-one',turn_id='turn-one')
+        event={'method':'error','params':{'threadId':'thread-one','turnId':'turn-one',
+               'error':{'codexErrorInfo':'usageLimitExceeded'},'willRetry':True}}
+        try:stream.feed(json.dumps(event).encode()+b'\nnot json\n')
+        except RecordError:result=stream.outcome()
+        else:self.fail('malformed stream did not raise')
+        finished=self.settle(result,exit_status=137)
+        self.assertEqual(finished['run']['exit_status'],137)
+        self.assertEqual(self.store.snapshot()['tasks'][0]['state'],'held')
+        self.assertEqual(self.store.snapshot()['role_grants'][0]['state'],'paused')
+        self.assertEqual(len(self.registry.pending()),1)
+
 
 if __name__=='__main__':unittest.main()

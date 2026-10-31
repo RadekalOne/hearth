@@ -79,3 +79,29 @@ class BrokerHTTPTests(unittest.IsolatedAsyncioTestCase):
                         result=await session.call_tool('memory_get',arguments={'drawer_id':'drawer_fixture'})
                         self.assertFalse(result.is_error)
                         self.assertEqual(json.loads(result.content[0].text)['content'],'existing answer')
+
+    async def test_standard_mcp_progress_metadata_does_not_change_tool_or_memory_scope(self):
+        listed=await self.rpc('tools/list',{'_meta':{'progressToken':0}})
+        self.assertIn('result',listed.json())
+        self.assertEqual({tool['name'] for tool in listed.json()['result']['tools']},
+                         {'memory_search','memory_get'})
+        read=await self.rpc('tools/call',{'name':'memory_search','arguments':{'query':'answer'},
+            '_meta':{'progressToken':'native-request','wing':'other','room':'secret'}})
+        self.assertFalse(read.json()['result'].get('isError',False))
+        self.assertEqual(self.calls[0][1]['wing'],'trial')
+        self.assertEqual(self.calls[0][1]['room'],'project')
+        self.assertNotIn('_meta',self.calls[0][1])
+        snapshot=json.dumps(self.store.snapshot())
+        self.assertNotIn('_meta',snapshot)
+        self.assertNotIn('native-request',snapshot)
+        denied=await self.rpc('tools/call',{'name':'memory_search',
+            'arguments':{'query':'answer','wing':'other'},'_meta':{'progressToken':1}})
+        self.assertTrue(denied.json()['result']['isError'])
+        self.assertEqual(len(self.calls),1)
+
+    async def test_invalid_progress_metadata_is_rejected_without_upstream_access(self):
+        for metadata in [[],None,{'progressToken':False},{'progressToken':{}}]:
+            with self.subTest(metadata=metadata):
+                response=await self.rpc('tools/list',{'_meta':metadata})
+                self.assertEqual(response.status_code,400)
+        self.assertEqual(self.calls,[])

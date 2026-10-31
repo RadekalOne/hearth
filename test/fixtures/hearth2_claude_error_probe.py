@@ -25,7 +25,8 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json,os,subprocess,threading,time,uuid,sys,selectors,tempfile
 sys.path.insert(0,'/opt/hearth')
 from hearth2.native_output import NativeStream
-status=int(sys.argv[1])
+from hearth2.store import RecordError
+status=int(sys.argv[1]);inject_poison=sys.argv[2]=='1'
 calls=[]
 class FakeAPI(BaseHTTPRequestHandler):
     def log_message(self,*args):pass
@@ -63,7 +64,7 @@ errors=tempfile.TemporaryFile()
 client=subprocess.Popen(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
     stderr=errors,env=env,cwd='/scratch')
 selector=selectors.DefaultSelector();selector.register(client.stdout,selectors.EVENT_READ)
-timeout=False;stopped=False;chunks=[];size=0;end=time.monotonic()+20
+timeout=False;stopped=False;poisoned=False;chunks=[];size=0;end=time.monotonic()+20
 try:
     while time.monotonic()<end:
         if not selector.select(0.1):continue
@@ -72,13 +73,21 @@ try:
         size+=len(chunk)
         if size>2_000_000:raise RuntimeError('oversized fixture output')
         chunks.append(chunk)
-        outcome=stream.feed(chunk)
-        if outcome['pause_role']:
+        try:
+            outcome=stream.feed(chunk)
+            if inject_poison and outcome['pause_role']:
+                stream.feed(b'not JSON\n')
+        except RecordError:
+            poisoned=True;outcome=stream.outcome()
+        if outcome['pause_role'] or poisoned:
             stopped=True;client.kill();break
     else:timeout=True;client.kill()
     tail,_=client.communicate(timeout=3)
-    if tail:chunks.append(tail);stream.feed(tail)
-    outcome=stream.finish()
+    try:
+        if tail:chunks.append(tail);stream.feed(tail)
+        outcome=stream.finish()
+    except RecordError:
+        poisoned=True;outcome=stream.outcome()
     out=b''.join(chunks);errors.seek(0);err=errors.read(2_000_001)
 finally:
     if client.poll() is None:client.kill();client.wait(timeout=3)
@@ -86,7 +95,7 @@ finally:
 if len(out)>2_000_000 or len(err)>2_000_000:raise RuntimeError('oversized fixture output')
 print(json.dumps({'session_id':session,'exit_status':client.returncode,'timed_out':timeout,
     'version':version,
-    'stopped_by_adapter':stopped,'native_outcome':outcome,
+    'stopped_by_adapter':stopped,'native_outcome':outcome,'poisoned_output':poisoned,
     'local_api_request_count':len(calls),'local_api_paths':sorted(set(calls)),
     'stdout':out.decode('utf-8'),'stderr':err.decode('utf-8')}))
 '''
@@ -102,6 +111,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute-trial-fixture',action='store_true')
     parser.add_argument('--status',type=int,choices=[401,429],default=401)
+    parser.add_argument('--poison-tail',action='store_true')
     args=parser.parse_args()
     if not args.execute_trial_fixture or os.geteuid()!=0 or socket.gethostname()!='srv2065995':
         parser.error('explicit opt-in, root and exact isolated trial host required')
@@ -125,7 +135,7 @@ def main():
             '--mount','type=bind,src='+str(policy)+',dst=/etc/claude-code/managed-settings.json,readonly',
             '--mount','type=bind,src='+str(payload)+',dst=/opt/probe.py,readonly',
             '--mount','type=bind,src='+str(Path(__file__).resolve().parents[2]/'mcp/memory')+',dst=/opt/hearth,readonly',
-            image,'python','/opt/probe.py',str(args.status))
+            image,'python','/opt/probe.py',str(args.status),'1' if args.poison_tail else '0')
         raw=run('docker','start','--attach',container,timeout=35)
         observed=json.loads(raw)
         private=directory/'native-output.json';private.write_text(json.dumps(observed,indent=2)+'\n');private.chmod(0o600)
@@ -135,6 +145,8 @@ def main():
             'fake_api_status':args.status,'output_observation_only':True,
             'stopped_by_adapter':observed['stopped_by_adapter'],
             'native_state':observed['native_outcome']['state'],
+            'poisoned_output':observed['poisoned_output'],
+            'stop_reason':observed['native_outcome']['stop_reason'],
             'timed_out':observed['timed_out'],'local_api_request_count':observed['local_api_request_count'],
             'event_types':sorted({str(event.get('type')) for event in events}),
             'rate_limit_events':[event.get('rate_limit_info') for event in events if event.get('type')=='rate_limit_event'],
@@ -146,7 +158,10 @@ def main():
         assert not observed['timed_out'],'adapter failed to stop the native retry'
         assert observed['stopped_by_adapter'],'no typed native stop observed'
         assert observed['local_api_request_count']==1,'native client retried before containment stop'
-        assert observed['native_outcome']['state']==('authentication_stop' if args.status==401 else 'rate_limit_stop')
+        expected='authentication_stop' if args.status==401 else 'rate_limit_stop'
+        assert observed['native_outcome']['state']==('unknown' if args.poison_tail else expected)
+        assert observed['native_outcome']['stop_reason']==expected
+        assert observed['poisoned_output']==args.poison_tail
     finally:
         if container is not None:
             current=json.loads(run('docker','inspect',container))[0]

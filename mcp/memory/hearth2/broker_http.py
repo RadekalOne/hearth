@@ -56,6 +56,14 @@ def create_app(broker):
                 raise ValueError()
             params=data.get('params',{})
             if not isinstance(params,dict):raise ValueError()
+            if '_meta' in params:
+                metadata=params['_meta']
+                if not isinstance(metadata,dict):raise ValueError()
+                if 'progressToken' in metadata and type(metadata['progressToken']) not in {str,int}:
+                    raise ValueError()
+                # MCP progress/correlation metadata is transport-only. Never
+                # forward it as tool arguments or memory/broker authority.
+                params={key:value for key,value in params.items() if key!='_meta'}
         except (ValueError,TypeError,UnicodeError,RecursionError):
             return reply({'error':'invalid request'},400)
         method=data['method'];identity=data.get('id')

@@ -25,6 +25,8 @@
 
 - 31 October continuation: bounded native stdout reducers and atomic native-result settlement are implemented as inactive components (`DIRECT-NATIVE-OUTPUT.md`). Unknown output preserves known exit but holds; native auth/quota stops atomically pause the role without automatic reactivation. Installed Claude fake401/429 controls exposed ten-retry behavior; adapter stops the first typed retry after one local fake request. No real credentials/inference/provider connection. Ruling: native state, actual exit and OS emptiness are separate authority dimensions; retain all activation gates. Older controller binaries do not enforce new native metadata: pin matched code and verify pre-change-backup rollback before activation.
 
+- Further 31 October: direct native profile builders and actual broker compatibility fixtures implemented (`DIRECT-NATIVE-PROFILES.md`). Native MCP progress metadata is transport-only. Conditional ruling: an explicitly full-run initial lease/grant may avoid mid-run bearer renewal only after absolute deadline/delayed-start/restart proof; current defaults are unchanged. Native expiry checks do not substitute for authoritative late-exit settlement. Actual auth/quota stops consume launches; no attempt refunds.
+
 ## Review focus
 
 Old claim/restore/role/plan/lease; worker tool/argument spoofing; scope leakage from search/get; revocation during an upstream read; token leakage and restart; adapter permission/delegation bypass; surviving descendants at deadline; measured usage versus unknown.

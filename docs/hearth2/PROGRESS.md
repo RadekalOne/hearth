@@ -340,3 +340,35 @@ Rad's merge gate remain open.
   account/config/credential collection, fixed egress, absolute claim deadline
   and lease/restart/revocation integration remain before composed acceptance.
   No real login, provider inference, production/pin/account change or purchase.
+
+31 October - direct native profiles and actual broker interoperability:
+- Added inactive fixed native profiles, no raw secrets/provider/helper override.
+  Four profile tests observed RED then GREEN. Actual Codex initialization against
+  the real broker exposed tools/list transport _meta.progressToken rejection.
+  Two new HTTP regressions reproduced the gap; validated transport metadata is
+  removed before tools/args/scope, never promoted to authority. Seven HTTP tests
+  PASS, including the original SDK interoperability case.
+- Installed Codex0.154.0 and Claude2.1.280 connect to actual scoped broker code
+  with synthetic SQLite/upstream data in disposable network-none containers.
+  Codex read forwards; Claude fake-local-SSE tool loop forwards one read and
+  refuses requested memory_add/Bash. Both clients visibly refuse expired grants,
+  zero upstream reads and one MCP call/no silent retry. Synthetic input/fake key
+  only; no real login, provider call or billing inference.
+- Poisoned-output fixtures catch feed AND finish RecordError, preserve auth/rate
+  stop, terminate after exactly one fake request and verify own cleanup. Added
+  actual-record regression for exception -> held task/paused role/retained slot.
+- Final trial offline Python484PASS91.675s, source/log
+  hearth2-native-mcp-final-20261031-42b941a8. Actual native final-source positive/
+  expiry and401/429 poison-tail fixtures PASS. Independent component review33
+  focusedPASS/no Important findings; privileged/HTTP evidence limits disclosed in
+  DIRECT-NATIVE-PROFILES.md. Fixture header/doc refinements only after full run.
+- Conditional design ruling: single bounded-run lease and fixed grant ending AT
+  sealed deadline, no margin, only AFTER absolute deadline/delayed-start/restart
+  proof. Existing900s defaults/live settings unchanged; no automatic grant
+  extension. Every call still fences ownership/epoch/revocation. Actual auth/quota
+  stops consume approved attempts, no refunds or limit change.
+- Previous4ca51f3 has separate Claude componentPASS/source only and verified
+  CI102SUCCESS. New component needs its own exact-head external review/CI.
+  Piece2 STARTED, PR36 draft/unmerged; no activation, real credential/provider,
+  account/pin/production change. Next absolute deadline/trusted late termination,
+  real credential/settings collection, fixed egress and composed acceptance.

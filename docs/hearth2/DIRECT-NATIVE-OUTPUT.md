@@ -102,6 +102,18 @@ settings projection; direct Hearth MCP configuration and scoped broker route;
 fixed provider/broker egress and actual forbidden-tool tests; one host workload,
 absolute claim deadline/lease/revocation handling and outside empty proof; root
 controller scheduling, restart reconciliation and alarms; composed native tests.
+Each actual launch, including an auth/quota stop, consumes one of the approved
+THREE attempts. There is no refund: doing so could authorize more native launches
+than Rad approved. The incident and native stop reason preserve the distinction
+between an infrastructure stop and failed project work. Three such stops can
+exhaust the launch cap; further action then requires a human decision.
+
+A first native429 deliberately pauses even if it was transient. `rate_limit_stop`
+means observed HTTP429, not proven included-allowance exhaustion. The launcher
+must catch RecordError from BOTH feed and finish, stop the workload and verify
+containment, then obtain outcome() and settle it. Poison still preserves a typed
+stop and requires the atomic role pause; exceptions must not bypass teardown.
+
 A native completed message alone is never a Hearth success receipt. Current
 libraries are not an installed runner or a substitute for those gates.
 

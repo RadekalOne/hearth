@@ -299,7 +299,9 @@ class ClaudeTurn:
 
 
 class NativeStream:
-    """The controller's bounded entry point for untrusted native stdout bytes."""
+    """Bounded native stdout. Catch RecordError from feed AND finish, tear down
+    and observe the workload, then settle outcome(); typed stop flags survive.
+    """
     def __init__(self,provider,**identity):
         self.decoder=JsonLines()
         try:
