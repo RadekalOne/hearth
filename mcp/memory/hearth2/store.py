@@ -18,6 +18,25 @@ class RecordError(ValueError):
     pass
 
 
+NATIVE_STOPS = {'allowance_stop', 'authentication_stop', 'rate_limit_stop', 'budget_stop'}
+NATIVE_STATES = {'observed', 'completed', 'failed', 'interrupted', 'unknown'} | NATIVE_STOPS
+NATIVE_USAGE_SCOPES = {'unknown', 'native_thread_total', 'query_model_totals',
+                       'main_loop_only', 'main_loop_partial'}
+
+
+def native_receipt_metadata(receipt):
+    state = receipt.get('native_state', 'observed')
+    stop = receipt.get('native_stop_reason')
+    scope = receipt.get('native_usage_scope', 'unknown')
+    if (not isinstance(state, str) or state not in NATIVE_STATES
+            or not isinstance(scope, str) or scope not in NATIVE_USAGE_SCOPES
+            or stop is not None and (not isinstance(stop, str) or stop not in NATIVE_STOPS)
+            or state in NATIVE_STOPS and stop != state
+            or stop is not None and state not in {stop, 'unknown'}):
+        raise RecordError('invalid native receipt metadata')
+    return state, stop, scope
+
+
 @dataclass(frozen=True)
 class Principal:
     id: str
@@ -419,7 +438,7 @@ class Store:
             return 'invalid'
         if closeout['task'] != task['id'] or closeout['attempt'] != run['attempt']:
             return 'invalid'
-        if closeout['status'] not in {'done', 'partial', 'failed', 'invalid-task', 'needs-decision'}:
+        if not isinstance(closeout['status'], str) or closeout['status'] not in {'done', 'partial', 'failed', 'invalid-task', 'needs-decision'}:
             return 'invalid'
         checks = closeout['checks-run']
         if not isinstance(checks, list) or any(not isinstance(c, dict) or
@@ -445,6 +464,7 @@ class Store:
         required = {'ended_at', 'exit_status', 'closeout', 'containment_state', 'termination_evidence', 'usage'}
         if not isinstance(receipt, dict) or not required.issubset(receipt):
             raise RecordError('incomplete run receipt')
+        native_state, native_stop, native_scope = native_receipt_metadata(receipt)
         ended = timestamp(receipt['ended_at'])
         exit_status = receipt['exit_status']
         if exit_status is not None and type(exit_status) is not int:
@@ -477,6 +497,9 @@ class Store:
         validation = self._closeout_validation(receipt['closeout'], task, run)
         data = json.loads(run['data'])
         data['receipt_controller'] = runner.id
+        if 'native_state' in receipt:
+            data.update(native_state=native_state, native_stop_reason=native_stop,
+                        native_usage_scope=native_scope)
         db.execute("""UPDATE runs SET ended_at=?,exit_status=?,closeout=?,closeout_validation=?,
             containment_state=?,termination_evidence=?,usage_state=?,usage=?,estimated_cost=?,actual_charge=?,data=? WHERE id=?""",
             (ended.isoformat(), exit_status, safe_payload(receipt['closeout']), validation,
@@ -486,12 +509,14 @@ class Store:
              safe_payload(usage['actual_charge']) if usage.get('actual_charge') is not None else None,
              safe_payload(data), run['id']))
         success = (validation == 'valid' and receipt['closeout']['status'] == 'done'
-                   and exit_status == 0 and containment == 'verified_empty')
-        if containment != 'verified_empty' or exit_status is None:
+                   and exit_status == 0 and containment == 'verified_empty'
+                   and native_state in {'observed', 'completed'})
+        if containment != 'verified_empty' or exit_status is None or native_state == 'unknown':
             # A verified-empty process group does not prove a successful exit.
             state, claim_state = 'held', 'held'
             self._incident(db, task, run['id'], 'held')
-        elif validation == 'valid' and receipt['closeout']['status'] == 'needs-decision':
+        elif (validation == 'valid' and receipt['closeout']['status'] == 'needs-decision'
+              and native_state in {'observed', 'completed'}):
             # Preserve this run as history, but do not turn a human wait into
             # a failure/retry. The controller must not claim it again.
             state, claim_state = 'needs_decision', 'closed'
@@ -506,6 +531,13 @@ class Store:
         db.execute('UPDATE claims SET state=? WHERE id=?', (claim_state, current['id']))
         db.execute('UPDATE tasks SET state=?,revision=revision+1 WHERE id=?', (state, task['id']))
         self.audit(db, runner, task['id'], 'run_receipt', {'run_id': run['id'], 'validation': validation, 'state': state})
+        if native_stop is not None:
+            role = self.row(db, 'role_grants', task['assignee'], column='agent')
+            revision = role['revision'] + 1
+            db.execute("UPDATE role_grants SET state='paused',revision=? WHERE agent=?",
+                       (revision, task['assignee']))
+            self.audit(db, runner, task['assignee'], 'native_role_paused',
+                       {'run_id':run['id'], 'reason':native_stop, 'revision':revision})
         return self.row(db, 'runs', run['id'])
 
     def append_notice(self, actor, payload, *, claim):
@@ -614,14 +646,17 @@ class Store:
                 raise RecordError('run is not the current reconciliation target')
             closeout = json.loads(run['closeout']) if run['closeout'] else None
             valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
+            native_state, native_stop, native_scope = native_receipt_metadata(json.loads(run['data']))
             human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
-                          and run['exit_status'] is not None)
+                          and run['exit_status'] is not None
+                          and native_state in {'observed', 'completed'})
             if outcome == 'unknown':
                 db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
                 db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
             else:
                 if outcome == 'completed':
-                    if (run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
+                    if (native_state not in {'observed', 'completed'}
+                            or run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
                             or closeout['status'] not in {'done', 'needs-decision'}):
                         raise RecordError('completed reconciliation requires an existing successful receipt')
                     state = 'needs_decision' if human_wait else 'review'

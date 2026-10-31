@@ -305,3 +305,38 @@ Rad's merge gate remain open.
   reviewed75monthlycap. Added source comment; no setting changed. Direct native
   broker config still must configure Hearth tools explicitly before acceptance.
 - No native launch/activation/production change or merge. Piece2STARTED.
+
+31 October - native output to authoritative receipts:
+- Rad explicitly resumed. Clean basef344ad4, prior exactClaudecomponentPASS and
+  CI101SUCCESS. Added bounded NativeStream with Codex/Claude root identity
+  filters, nonfinite/duplicate/Unicode/depth/byte/record limits and explicit
+  unknown usage. Claude query-model totals preferred; missing cache counts
+  stay absent; native cost is estimated, never an actual seat charge.
+- New record_native_result binds provider to claimed role and settles through
+  the atomic receipt/release path. Unknown native output preserves actual exit
+  and OS observations while holding task/claim. Typed auth/quota/budget stops
+  atomically pause the role and journal its reason. Verified-empty known-exit
+  stopped runs release the slot, but that role cannot consume another attempt.
+  Recovery and logical restore both reject unknown-native success promotion.
+- Test-first output/settlement tests plus independent component review. Review
+  reproduced two important edge cases: malformed/coalesced tails dropped a stop;
+  deeply nested JSON inside result text crashed receipt settlement. Four RED
+  regressions cover both plus output-budget tails and related malformed-status
+  validator error. Fixed in one pass;79focusedPASS. No repeat internal review.
+- Final trial Python3.12 offline477PASS87.413s. Source/log:
+  /root/hearth-runner-trial/hearth2-native-settlement-final-20261031-db2ca692.
+- Actual Claude2.1.280 against fake loopback401/429 APIs in disposable network-none
+  containers: initial no-intervention controls retried5/6times until20s timeout.
+  Adapter now stops first typed native api_retry, exactlyONE local request for
+  each status, exit-9 observed, no timeout, own cleanupverified. Final receipts
+  claude-error-olqpnaiv andclaude-error-32vw5q_h; fake key only, no provider/model.
+  Typed subscription rate_limit_event rejected mapping remains contract-tested
+  only; no real-seat depletion, numeric allowance or actual charge is inferred.
+- No schema DDL/bundle-format change. New native metadata requires matched
+  controller/restore code; old binaries lack these semantics. Activation must
+  pin code and verify stopped-controller/pre-change-backup rollback rather than
+  assume binary-only downgrade safety. No active deployment in this change.
+- Piece2STARTED/PR36draft/unmerged. Next direct native profiles/MCP wiring,
+  account/config/credential collection, fixed egress, absolute claim deadline
+  and lease/restart/revocation integration remain before composed acceptance.
+  No real login, provider inference, production/pin/account change or purchase.

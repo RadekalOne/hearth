@@ -8,7 +8,7 @@ than a retry. No credential, executable, host path or worker command is stored.
 import json
 import hashlib
 import re
-from .store import RecordError, require, safe_payload
+from .store import RecordError, require, safe_payload, native_receipt_metadata
 
 
 class DispatchRegistry:
@@ -185,3 +185,44 @@ class DispatchRegistry:
             if current['state'] == 'closed':
                 registration = self._release(db, run['id'], receipt_sha256=digest)
             return {'run':run, 'registration':registration}
+
+    def record_native_result(self, claim, result, *, ended_at, exit_status,
+                             containment_state, termination_evidence):
+        """Settle sanitized native data with independently collected OS evidence.
+
+        This method cannot observe a process or authenticate native output. Only
+        the trusted controller may call it after durable consume and OS cleanup.
+        An output stop pauses the role; missing output preserves the real exit
+        but holds the task. Native estimates never become actual seat charges.
+        """
+        from .native_output import decode_object
+        if not isinstance(result, dict) or not isinstance(claim, dict):
+            raise RecordError('native output and claim required')
+        metadata = {'native_state':result.get('state'),
+                    'native_stop_reason':result.get('stop_reason'),
+                    'native_usage_scope':result.get('usage_scope')}
+        state, stop, scope = native_receipt_metadata(metadata)
+        usage = result.get('usage')
+        if (state == 'observed' or type(result.get('pause_role')) is not bool
+                or result['pause_role'] != (stop is not None)
+                or not isinstance(usage, dict) or usage.get('actual_charge') is not None):
+            raise RecordError('invalid native output provenance or charge')
+        with self.store.transaction() as db:
+            run = self.store.row(db, 'runs', claim.get('run_id'))
+            if result.get('provider') != json.loads(run['data'])['family']:
+                raise RecordError('native output provider does not match claimed role')
+        closeout = None
+        if state == 'completed':
+            try:
+                candidate = decode_object(result.get('text'))
+                if isinstance(candidate, dict):
+                    safe_payload(candidate)
+                    closeout = candidate
+            except RecordError:
+                # Keep failed closeout validation without persisting native
+                # diagnostics, prose or possible credentials as a task result.
+                pass
+        receipt = {'ended_at':ended_at, 'exit_status':exit_status, 'closeout':closeout,
+                   'containment_state':containment_state,
+                   'termination_evidence':termination_evidence, 'usage':usage, **metadata}
+        return self.record_and_release(claim, receipt)

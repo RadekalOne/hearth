@@ -23,6 +23,8 @@
 
 - Fallback ruling (30 October): installed Claude rejects the pinned core's required bootstrap request with both hardened and original arguments. Short declared-version check found no established compatible version. Under Rad's 15 October explicit fallback, reviewed with Claude, Hearth will launch BOTH native CLIs directly. Preserve all account/model/receipt/containment controls; remove core Command Guard/transcript coupling from this path. No new purchase, account or pin change. Direct adapters and their acceptance remain unimplemented. Independent systemd/Docker deadline fixture now passes after the submitter exits; not yet absolute claim-deadline or native acceptance.
 
+- 31 October continuation: bounded native stdout reducers and atomic native-result settlement are implemented as inactive components (`DIRECT-NATIVE-OUTPUT.md`). Unknown output preserves known exit but holds; native auth/quota stops atomically pause the role without automatic reactivation. Installed Claude fake401/429 controls exposed ten-retry behavior; adapter stops the first typed retry after one local fake request. No real credentials/inference/provider connection. Ruling: native state, actual exit and OS emptiness are separate authority dimensions; retain all activation gates. Older controller binaries do not enforce new native metadata: pin matched code and verify pre-change-backup rollback before activation.
+
 ## Review focus
 
 Old claim/restore/role/plan/lease; worker tool/argument spoofing; scope leakage from search/get; revocation during an upstream read; token leakage and restart; adapter permission/delegation bypass; surviving descendants at deadline; measured usage versus unknown.
