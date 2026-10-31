@@ -139,3 +139,61 @@ HTTP tests; native fixture evidence is the implementer's recorded execution.
 Prior native-output commit4ca51f3 separately received Claude component PASS
 (source inspection only) and CI102/run41207042538 SUCCESS. Neither is a PASS
 on this subsequent component or the complete piece2.
+
+## Installed Codex shell/capability follow-up
+
+Claude's component PASS on2d5afc9 was source-only (no tests/CI/probe/docs read).
+CI103/run41211179958 independently completed SUCCESS. His prelaunch note asked
+for proof that a shell cannot disclose the environment capability. Root-managed
+requirements already pin shell_tool=false, and Claude managed permissions already
+allow exactly the two read tools. The profile now repeats shell_tool=false and
+shell_snapshot=false, uses inherit=none plus explicit HEARTH_* exclusion, and
+Claude argv explicitly lists the two allowedTools. Empty child environments alone
+do not prevent a same-UID shell from reading its parent's /proc environment; the
+primary memory-only boundary is refusing the shell tool entirely.
+
+The new --exercise-codex-tools fixture uses the actual installed0.154.0 and the
+same read-only root requirements. It uses a FIXTURE-ONLY custom Responses provider
+and fake API-key auth pointing to container loopback, preserving all tool policy.
+Built-in openai provider overrides are refused by this installed client; the
+normal ChatGPT profile remains unchanged. This fixture proves tool enforcement
+with synthetic input, not real ChatGPT account/model routing. The fallback model
+METADATA warning is retained; no real model or alternative model was called.
+
+Two fake Responses results deliberately inject shell_command, exec_command and
+shell calls attempting both direct environment and parent /proc environment reads,
+plus an allowed namespaced memory_get and forbidden memory_add. The fixture checks
+the shell names are not advertised, all three explicitly return unsupported call,
+write is refused, permitted model-issued read reaches our actual scoped broker,
+no scratch marker exists, and the synthetic grant value appears in neither native
+stdout nor captured fake-model requests. It does NOT claim /proc is unreadable to
+an arbitrary same-UID executable; the attempted reading tool is refused. Only
+the root-side protocol can issue native control RPCs, never the worker/model.
+
+This stronger tool-loop check initially found that allowed model reads failed:
+our earlier control-RPC read bypassed model approval. The actual native error was
+'MCP tool call requires approval, but approval policy is never'. Both broker tools
+now advertise readOnlyHint=true, destructiveHint=false, idempotentHint=true; the
+existing broker still enforces read-only tool/scope/lease checks. No general auto
+approval or request-policy bypass was introduced. The actual model read now works.
+HTTP regression checks the annotations. Intermediate passing actual native receipt
+direct-mcp-qmvw19pz includes two fake responses, shell/write refusal, no capability
+output and verified cleanup. Final-source receipts follow in the progress record.
+
+Primary references: [Codex config](https://learn.chatgpt.com/docs/config-file/config-reference),
+[MCP ToolAnnotations](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations).
+
+Final follow-up verification: offline Python484PASS88.893s at private
+hearth2-native-tools-final-20261031-bc74f692/verification.log. After that source
+archive was created, only the opt-in fixture assertions were strengthened (exact
+namespace tools, permitted read reaching model input, stderr capability absence);
+no product/tested-library behavior changed. The strengthened fixture SHA256 is
+c031fb3895330920f5cabc5c2b75e4beef2e42a044becf24a27a47704713fa12.
+Its final actual-client receipts are direct-mcp-6gux0nbx (Codex synthetic tool
+loop), 37uy7nfa (normal ChatGPT-profile discovery/read, no provider prompt),
+_jd2jijc (normal Codex expiry), er7zuic_ (Claude tool loop), velcnmzx (Claude
+expiry). All PASS/cleanup verified. Do not use the original bc74 archive hash
+as the later fixture-file hash; the private extracted fixture was updated.
+Independent review found no remaining Important findings and inspected earlier
+qmvw19pz raw synthetic tool outputs itself. That reviewer did not run final
+privileged fixtures or broad tests.

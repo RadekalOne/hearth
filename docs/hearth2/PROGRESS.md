@@ -372,3 +372,30 @@ Rad's merge gate remain open.
   Piece2 STARTED, PR36 draft/unmerged; no activation, real credential/provider,
   account/pin/production change. Next absolute deadline/trusted late termination,
   real credential/settings collection, fixed egress and composed acceptance.
+
+31 October - installed-client tool-policy follow-up:
+- Claude2d5 componentPASS/source-only and CI103SUCCESS verified. Root-managed
+  settings already disable Codex shell and explicitly allow Claude's read tools;
+  profiles now repeat shell restrictions/empty HEARTH-filtered child env and
+  Claude allowedTools so the intention is visible. Two strengthened assertions
+  observed RED, all four profile tests GREEN. Shell refusal, not child env alone,
+  protects against same-UID parent /proc environment reads.
+- New Codex fake-local-Responses loop actually injects three shell variants plus
+  read/write calls. Shell names absent including nested namespaces; all three
+  unsupported, write refused, permitted read reaches synthetic model input, no
+  marker/capability in stdout/stderr/model requests. Uses FIXTURE-ONLY custom API
+  route/auth because installed native refuses overriding built-in openai. Normal
+  ChatGPT profile discovery/expiry also rerun; no real account/inference proof.
+- Stronger test exposed actual model memory read approval failure that control
+  RPC had bypassed. Added truthful readOnlyHint/destructiveHint/idempotentHint
+  to both broker tools; model read now works without broader approval policy.
+  HTTP regression covers hints. Auth/scope/tool/lease enforcement unchanged.
+- Full offline Python484PASS88.893s, source/log bc74f692. Later changes only
+  strengthen opt-in fixture assertions; five native final-file cases PASS with
+  SHA c031fb3895330920f5cabc5c2b75e4beef2e42a044becf24a27a47704713fa12.
+  Receipts6gux0nbx/37uy7nfa/_jd2jijc/er7zuic_/velcnmzx; all cleanupverified.
+  Independent review no remainingImportant; independently read prior synthetic
+  tool outputs, not broad/final-rootfixture execution. Evidence precision and
+  fake-auth/provider limitations detailed in DIRECT-NATIVE-PROFILES.md.
+- No installed launcher, realcredential/provider, production/account/pin changes
+  or merge. Piece2STARTED; absolute deadline/trustedlate recovery continues.

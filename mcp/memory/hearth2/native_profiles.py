@@ -27,6 +27,9 @@ def codex_config(*,model):
         'approval_policy = "never"\n'
         'sandbox_mode = "read-only"\n'
         'web_search = "disabled"\n'
+        '[features]\nshell_tool = false\nshell_snapshot = false\n'
+        '[shell_environment_policy]\ninherit = "none"\nignore_default_excludes = false\n'
+        'experimental_use_profile = false\n[shell_environment_policy.filters]\n"HEARTH_*" = "exclude"\n'
         '[history]\npersistence = "none"\n'
         '[mcp_servers.hearth]\n'
         'url = "'+BROKER_URL+'"\n'
@@ -49,7 +52,8 @@ def claude_arguments(*,model,session_id,context):
     return ['-p','--input-format','stream-json','--output-format','stream-json',
         '--verbose','--include-partial-messages','--replay-user-messages',
         '--permission-prompts','none','--no-chrome','--permission-mode','dontAsk',
-        '--tools','','--strict-mcp-config','--mcp-config',json.dumps(servers,separators=(',',':')),
+        '--tools','','--allowedTools','mcp__hearth__memory_search,mcp__hearth__memory_get',
+        '--strict-mcp-config','--mcp-config',json.dumps(servers,separators=(',',':')),
         '--disable-slash-commands','--setting-sources','',
         '--settings','{"fastMode":false,"enableWorkflows":false}',
         '--model',model,'--session-id',canonical,

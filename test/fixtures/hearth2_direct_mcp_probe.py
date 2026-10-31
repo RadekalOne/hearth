@@ -1,7 +1,7 @@
 """Direct-profile HTTP MCP discovery against Hearth broker with synthetic data.
 
 No real login, HM service, provider connection or inference. Root and exact
-isolated trial host opt-in required. Optional Claude tool exercises use synthetic
+isolated trial host opt-in required. Optional native tool exercises use synthetic
 CLI input and fake loopback model responses. This is native compatibility and
 local policy evidence, not fixed-destination egress or full runner acceptance.
 """
@@ -27,7 +27,7 @@ import json,os,subprocess,threading,time,uuid,sys,selectors,tempfile,secrets
 sys.path.insert(0,'/opt/hearth')
 from hearth2.native_profiles import claude_arguments
 from hearth2.native_output import decode_object
-provider=sys.argv[1];exercise_tools=sys.argv[2]=='1';expire_before_read=sys.argv[3]=='1'
+provider=sys.argv[1];exercise_tools=sys.argv[2]=='1';expire_before_read=sys.argv[3]=='1';exercise_codex=sys.argv[4]=='1'
 from pathlib import Path
 from datetime import datetime,timedelta,timezone
 import uvicorn
@@ -74,14 +74,43 @@ while not server.started:
     if not server_thread.is_alive() or time.monotonic()>end:raise RuntimeError('fixture broker startup failed')
     time.sleep(0.01)
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-fake_requests=[]
+fake_requests=[];fake_codex_requests=[]
 class FakeModel(BaseHTTPRequestHandler):
     def log_message(self,*args):pass
     def do_POST(self):
         length=int(self.headers.get('Content-Length','0'))
         if not 0<=length<=2_000_000:raise RuntimeError('oversized fake model request')
         body=json.loads(self.rfile.read(length))
-        if 'count_tokens' in self.path:
+        if provider=='codex':
+            fake_codex_requests.append(body)
+            if len(fake_codex_requests)>4:raise RuntimeError('unexpected fake Codex loop')
+            rid='resp_fixture_'+str(len(fake_codex_requests))
+            response={'id':rid,'object':'response','created_at':int(time.time()),
+                      'status':'in_progress','model':body.get('model','gpt-6.1-sol'),'output':[]}
+            records=[('response.created',{'type':'response.created','response':response})]
+            if len(fake_codex_requests)==1:
+                # Deliberately request unadvertised shell names, not merely a
+                # cooperative answer based on a prompt. Real credentials absent.
+                shell="python -c \"import os,pathlib; print(os.environ.get('HEARTH_BROKER_CAPABILITY')); print(pathlib.Path('/proc/%s/environ'%os.getppid()).read_bytes()); pathlib.Path('/scratch/forbidden-marker').touch()\""
+                items=[{'type':'function_call','id':'fc_'+str(i),'call_id':'call_'+str(i),
+                        'name':name,'arguments':json.dumps({'command':shell} if name!='exec_command' else {'cmd':shell})}
+                       for i,name in enumerate(['shell_command','exec_command','shell'])]
+                items += [{'type':'function_call','id':'fc_read','call_id':'call_read','namespace':'mcp__hearth',
+                           'name':'memory_get','arguments':json.dumps({'drawer_id':'drawer_fixture'})},
+                          {'type':'function_call','id':'fc_write','call_id':'call_write','namespace':'mcp__hearth',
+                           'name':'memory_add','arguments':json.dumps({'content':'must be denied'})}]
+            else:
+                items=[{'type':'message','id':'msg_done','role':'assistant','status':'completed',
+                        'content':[{'type':'output_text','text':'Synthetic fixture complete.','annotations':[]}]}]
+            for index,item in enumerate(items):
+                records.append(('response.output_item.added',{'type':'response.output_item.added','output_index':index,'item':item}))
+                records.append(('response.output_item.done',{'type':'response.output_item.done','output_index':index,'item':item}))
+            response={**response,'status':'completed','output':items,
+                      'usage':{'input_tokens':10,'output_tokens':5,'total_tokens':15}}
+            records.append(('response.completed',{'type':'response.completed','response':response}))
+            data=''.join('event: '+kind+'\ndata: '+json.dumps(value)+'\n\n' for kind,value in records).encode()
+            content_type='text/event-stream'
+        elif 'count_tokens' in self.path:
             data=json.dumps({'input_tokens':10}).encode();content_type='application/json'
         else:
             fake_requests.append(True)
@@ -119,6 +148,9 @@ env={'PATH':'/usr/local/bin:/usr/bin:/bin','HOME':'/scratch','LANG':'C.UTF-8',
      'HEARTH_BROKER_CAPABILITY':cap}
 if provider=='codex':
     env['CODEX_HOME']='/scratch';args=['app-server','--listen','stdio://']
+    if exercise_codex:env['HEARTH_FIXTURE_API_KEY']='fixture-not-a-real-key'
+    if exercise_codex:
+        Path('/scratch/auth.json').write_text(json.dumps({'auth_mode':'apikey','OPENAI_API_KEY':'fixture-not-a-real-key'}))
 else:
     env.update(CLAUDE_CONFIG_DIR='/scratch/claude',DISABLE_AUTOUPDATER='1',
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1',ANTHROPIC_API_KEY='fixture-not-a-real-key',
@@ -183,6 +215,31 @@ try:
         result={'server':'hearth','tools':names,'native_mcp_read_forwarded':not expire_before_read,
                 'expired_capability_typed_error':expire_before_read,
                 'effective_sandbox':started['result'].get('sandbox')}
+        if exercise_codex:
+            send({'id':5,'method':'turn/start','params':{'threadId':thread,
+                'input':[{'type':'text','text':'Synthetic tool-policy check only.'}]}})
+            ack=receive(lambda x:x.get('id')==5);assert 'error' not in ack
+            completed=receive(lambda x:x.get('method')=='turn/completed')
+            assert len(fake_codex_requests)==2,'native loop did not finish in two fake responses'
+            assert completed['params']['turn']['status']=='completed'
+            assert calls==['memory_get','memory_get'],'native tool loop did not perform its permitted read'
+            offered=fake_codex_requests[0]['tools']
+            assert {x.get('name') for x in offered}=={'list_mcp_resources','list_mcp_resource_templates',
+                'read_mcp_resource','request_user_input','mcp__hearth'},'unexpected native tool declaration'
+            namespaces=[x for x in offered if x.get('type')=='namespace']
+            assert len(namespaces)==1 and namespaces[0]['name']=='mcp__hearth'
+            assert {x.get('name') for x in namespaces[0]['tools']}=={'memory_get','memory_search'},'unexpected namespaced tool'
+            outputs={x.get('call_id'):x.get('output') for x in fake_codex_requests[1].get('input',[]) if x.get('type')=='function_call_output'}
+            assert all(outputs.get('call_'+str(i))=='unsupported call: '+name for i,name in enumerate(['shell_command','exec_command','shell'])),'shell not explicitly refused'
+            assert 'unsupported' in outputs.get('call_write',''),'forbidden memory write not refused'
+            assert 'Synthetic task-scoped memory only.' in json.dumps(outputs.get('call_read')),'permitted read did not reach model input'
+            assert not Path('/scratch/forbidden-marker').exists(),'disabled shell executed'
+            assert cap not in json.dumps(seen) and cap not in json.dumps(fake_codex_requests),'synthetic capability leaked'
+            result.update(synthetic_cli_user_input=True,fake_model_responses=len(fake_codex_requests),
+                          forbidden_shell_refused=True,forbidden_write_refused=True,
+                          shell_not_advertised=True,parent_environment_read_refused=True,
+                          capability_not_in_output=True,fixture_provider_override=True)
+
     else:
         send({'type':'control_request','request_id':'1','request':{'subtype':'initialize','hooks':{},'sdkMcpServers':[]}})
         response=receive(lambda x:x.get('type')=='control_response' and x.get('response',{}).get('request_id')=='1')
@@ -235,8 +292,9 @@ finally:
     if server_thread.is_alive():raise RuntimeError('fixture broker shutdown unconfirmed')
     errors.seek(0);stderr=errors.read(1_000_001).decode('utf-8')
     errors.close()
+    if cap in stderr:failure='SyntheticCapabilityInNativeStderr'
 private={'provider':provider,'version':version,'result':result,'failure':failure,'native_messages':seen,
-         'native_stderr':stderr,'mcp_methods':methods,'mcp_rpc_shapes':rpc_shapes,'mcp_auth_failures':len(auth_failures)}
+         'native_stderr':stderr,'mcp_methods':methods,'mcp_rpc_shapes':rpc_shapes,'mcp_auth_failures':len(auth_failures),'fake_codex_requests':fake_codex_requests}
 print(json.dumps(private))
 """
 
@@ -253,16 +311,22 @@ def main():
     parser.add_argument('--provider',choices=['codex','claude'],required=True)
     parser.add_argument('--exercise-claude-tools',action='store_true')
     parser.add_argument('--expire-before-read',action='store_true')
+    parser.add_argument('--exercise-codex-tools',action='store_true')
     args=parser.parse_args()
     if not args.execute_trial_fixture or os.geteuid()!=0 or socket.gethostname()!='srv2065995':
         parser.error('explicit opt-in, root and exact isolated trial host required')
     if args.exercise_claude_tools and args.provider!='claude':parser.error('synthetic tool loop is Claude-only')
     if args.expire_before_read and args.provider=='claude' and not args.exercise_claude_tools:parser.error('Claude expiry requires the synthetic tool loop')
+    if args.exercise_codex_tools and (args.provider!='codex' or args.expire_before_read):parser.error('synthetic Codex loop is positive Codex-only')
     provider=args.provider;name='hearth2-direct-mcp-'+uuid.uuid4().hex
     directory=Path(tempfile.mkdtemp(prefix='direct-mcp-',dir='/root/hearth-runner-trial'));directory.chmod(0o755)
     payload=directory/'probe.py';payload.write_text(PAYLOAD);payload.chmod(0o444)
     policy=directory/'policy';policy.write_text(codex_requirements() if provider=='codex' else json.dumps(claude_managed_settings()));policy.chmod(0o444)
-    config=directory/'config.toml';config.write_text(codex_config(model='gpt-6.1-sol'));config.chmod(0o444)
+    config=directory/'config.toml';native_config=codex_config(model='gpt-6.1-sol')
+    if args.exercise_codex_tools:
+        native_config=native_config.replace('forced_login_method = "chatgpt"','forced_login_method = "api"').replace('model_provider = "openai"','model_provider = "hearth-fixture"')
+        native_config+='\n[model_providers.hearth-fixture]\nname = "OpenAI synthetic fixture only"\nbase_url = "http://127.0.0.1:8099/v1"\nwire_api = "responses"\nenv_key = "HEARTH_FIXTURE_API_KEY"\nrequires_openai_auth = false\n'
+    config.write_text(native_config);config.chmod(0o444)
     container=None
     try:
         image=command('docker','image','inspect','--format','{{.Id}}','hearth2-verify:20261028')
@@ -278,7 +342,7 @@ def main():
             '--mount','type=bind,src='+(CODEX if provider=='codex' else CLAUDE)+',dst=/usr/local/bin/native,readonly',
             '--mount','type=bind,src='+str(payload)+',dst=/opt/probe.py,readonly',
             '--mount','type=bind,src='+str(Path(__file__).resolve().parents[2]/'mcp/memory')+',dst=/opt/hearth,readonly',
-            *mounts,image,'python','/opt/probe.py',provider,'1' if args.exercise_claude_tools else '0','1' if args.expire_before_read else '0')
+            *mounts,image,'python','/opt/probe.py',provider,'1' if args.exercise_claude_tools else '0','1' if args.expire_before_read else '0','1' if args.exercise_codex_tools else '0')
         raw=command('docker','start','--attach',container,timeout=65)
         private=directory/'native-observation.json';private.write_text(raw+'\n');private.chmod(0o600)
         observed=json.loads(raw)

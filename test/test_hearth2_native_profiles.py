@@ -27,6 +27,10 @@ class NativeProfileTests(unittest.TestCase):
         self.assertEqual(server['enabled_tools'],['memory_search','memory_get'])
         self.assertTrue(server['required'])
         self.assertNotIn('model_providers',config)
+        self.assertFalse(config['features']['shell_tool'])
+        self.assertFalse(config['features']['shell_snapshot'])
+        self.assertEqual(config['shell_environment_policy']['inherit'],'none')
+        self.assertEqual(config['shell_environment_policy']['filters'],{'HEARTH_*':'exclude'})
 
     def test_direct_models_cannot_inject_flags_config_or_provider_routes(self):
         for model in ['--dangerously-skip-permissions','gpt\n[model_providers.evil]',
@@ -48,6 +52,8 @@ class NativeProfileTests(unittest.TestCase):
         self.assertEqual(args[args.index('--model')+1],'claude-opus-fixture')
         self.assertNotIn('--dangerously-skip-permissions',args)
         self.assertNotIn('--fallback-model',args)
+        self.assertEqual(args[args.index('--allowedTools')+1],
+                         'mcp__hearth__memory_search,mcp__hearth__memory_get')
 
     def test_invalid_session_or_context_is_rejected_before_native_start(self):
         fields={'model':'sonnet','session_id':'11111111-1111-4111-8111-111111111111','context':'rules'}

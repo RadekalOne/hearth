@@ -24,6 +24,9 @@ class BrokerHTTPTests(unittest.IsolatedAsyncioTestCase):
         listed=await self.rpc('tools/list')
         names={t['name'] for t in listed.json()['result']['tools']}
         self.assertEqual(names,{'memory_search','memory_get'})
+        for tool in listed.json()['result']['tools']:
+            self.assertEqual(tool['annotations'],{'readOnlyHint':True,
+                'destructiveHint':False,'idempotentHint':True})
         read=await self.rpc('tools/call',{'name':'memory_search','arguments':{'query':'answer'}})
         self.assertEqual(read.status_code,200,read.text)
         self.assertFalse(read.json()['result'].get('isError',False))
