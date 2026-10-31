@@ -42,3 +42,26 @@ Old claim/restore/role/plan/lease; worker tool/argument spoofing; scope leakage 
 - [ ] Containment: cap before prompt, deadline kill, independent empty proof, recovery/late closeout fencing, one incident/three attempts, unknown outcomes held.
 - [ ] Native adapter/broker wiring and receipt fields; fixture tests first, no model fallback. Live exact-model acceptance waits for current usage evidence and preceding gates.
 - [ ] A4/A6/A7/A8/A9/N2/N3 reproducible trial evidence, source regression suite, independent whole-branch review and Claude exact-commit review; human merge gate.
+
+## Current continuation: trusted late OS observation
+
+- Add a controller-only DispatchRegistry observation path, distinct from native
+  worker closeout. Require the exact durable registration, fresh current restore
+  epoch, current run/claim/generation/owner, and bounded fresh OS evidence.
+- Preserve actual known exit and prior end/closeout/usage/role history. Missing
+  protocol remains unknown; an OS observation cannot assert task success, accept
+  a late closeout, resume a role, consume another attempt or release a slot.
+- Hold active/held work after observation. Exact logical observation retries are
+  idempotent, conflicting IDs/proofs refused. Restore requires a NEW current-epoch
+  observation, never stale pre-restore proof. Current generic reconciliation and
+  closed/quarantined slot recovery remain separate integration work.
+- Tests first: expired ordinary receipt refusal, actual late exit retention,
+  unknown exit, freshness/identity/epoch/generation/authority negatives, replay,
+  export/restore preservation and no successful promotion. Single fresh review
+  and full appropriate checks before commit. No HTTP worker authority is added.
+
+Production root-guard follow-up must include Claude's c689 notes: derive durable
+guard identity from run+epoch, never disarm before verified emptiness/removal,
+and attempt kernel kill again on post-kill failure while retaining frozen parent
+until immutable-ID removal is independently proved. Current standalone fixture
+UUID collision is intentionally not a controller-restart proof.

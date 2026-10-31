@@ -429,3 +429,31 @@ Rad's merge gate remain open.
   settlement, native credential/egress composition, installed service or piece2
   acceptance. Fullrunlease policy INACTIVE/900sdefault unchanged; no production,
   account, pin, credential, model call, purchase or merge. Continue integration.
+
+31 October - trusted late OS-only observations:
+- Added inactive controller-owned observe_termination, separate from ordinary
+  live-claim native receipt. Exact durable registration/current epoch/current
+  generation captured before inspection, current owned attempt, typed fresh
+  <=60s OS fields only. Actual known exit retained after expiry without accepting
+  late worker closeout, usage, role or success fields. Missing protocol unknown.
+- Active/held work remains held; no slot release, retry authority, attempt or role
+  change. Closed historical claims refused; prior known end/exit/history preserved.
+  Once observed, immutable container ID cannot be replaced. Exact fresh replay
+  acknowledges without mutation; conflicting observation ID refuses.
+- Eleven focused tests PASS: missing API RED/GREEN; own-found closed-history
+  overwrite and container replacement each RED/GREEN, restore current-epoch/gen
+  fencing, unknown exit, freshness/identity/worker-field negatives, receipt replay,
+  historical preservation and atomic journal rollback. Independent reviewer
+  separately ran11PASS/no Important findings. >60s exact retry conservatively
+  refuses rather than refreshing old evidence.
+- Full offline Python496PASS85.247s, immutable source/log b199a110. Only docs
+  changed afterwards. No real OS collector or HTTP authority installed; first
+  actual container binding/evidence remain trusted collector inputs. See
+  LATE-OS-OBSERVATION.md for limits.
+- Prior c689f76 separately Claude source-only componentPASS and verified
+  CI105/run41213322812SUCCESS. New component needs exact externalreview/CI.
+  Generic reconciliation freshness/current-proof release and closed-restored
+  slot recovery remain separate work, as do actual DB-bound launcher/guard,
+  credential/settings/account collection, fixed egress and composed acceptance.
+- Piece2STARTED/PR36draft/unmerged. Fullrunlease remainsINACTIVE/900sdefault
+  unchanged. No production/account/pin/realcredential/provider/purchase change.
