@@ -11,6 +11,29 @@ import re
 from .store import RecordError, require, safe_payload, native_receipt_metadata, timestamp
 
 
+def validate_os_observation(observation):
+    fields={'observation_id','workload_id','container_id','observed_at','ended_at',
+            'exit_status','containment_state','termination_evidence'}
+    if not isinstance(observation,dict) or set(observation)!=fields:
+        raise RecordError('OS observation fields differ from the trusted contract')
+    identity=observation['observation_id'];container=observation['container_id']
+    if (not isinstance(identity,str) or re.fullmatch(r'[A-Za-z0-9_-]{1,128}',identity) is None
+            or not isinstance(container,str) or re.fullmatch(r'[a-f0-9]{64}',container) is None):
+        raise RecordError('OS observation identity invalid')
+    observed=timestamp(observation['observed_at'])
+    ended=timestamp(observation['ended_at']) if observation['ended_at'] is not None else None
+    exit_status=observation['exit_status'];containment=observation['containment_state']
+    references=observation['termination_evidence']
+    if (exit_status is not None and (type(exit_status) is not int or not -(1<<63)<=exit_status<(1<<63))
+            or not isinstance(containment,str) or containment not in {'verified_empty','unconfirmed'}
+            or not isinstance(references,list) or len(references)>100
+            or any(not isinstance(v,str) or not v.strip() or len(v)>4096 for v in references)
+            or containment=='verified_empty' and not references
+            or exit_status is not None and ended is None):
+        raise RecordError('OS exit and containment evidence invalid')
+    return observed, ended
+
+
 class DispatchRegistry:
     def __init__(self, store, controller):
         require(controller, {'controller'})
@@ -98,89 +121,79 @@ class DispatchRegistry:
         Fresh proof is bounded to 60 seconds. A never-started/unknown exit remains
         unknown; Docker's zero exit field while running is not an observed exit.
         """
-        fields={'observation_id','workload_id','container_id','observed_at','ended_at',
-                'exit_status','containment_state','termination_evidence'}
-        if not isinstance(observation,dict) or set(observation)!=fields:
-            raise RecordError('OS observation fields differ from the trusted contract')
+        validate_os_observation(observation)
+        with self.store.transaction() as db:
+            return self._observe_termination(db, registration, expected_epoch=expected_epoch,
+                expected_generation=expected_generation, observation=observation)
+
+    def _observe_termination(self, db, registration, *, expected_epoch, expected_generation, observation):
+        observed,ended=validate_os_observation(observation)
         identity=observation['observation_id'];container=observation['container_id']
-        if (not isinstance(identity,str) or re.fullmatch(r'[A-Za-z0-9_-]{1,128}',identity) is None
-                or not isinstance(container,str) or re.fullmatch(r'[a-f0-9]{64}',container) is None):
-            raise RecordError('OS observation identity invalid')
-        observed=timestamp(observation['observed_at'])
-        ended=timestamp(observation['ended_at']) if observation['ended_at'] is not None else None
         exit_status=observation['exit_status'];containment=observation['containment_state']
         references=observation['termination_evidence']
-        if (exit_status is not None and (type(exit_status) is not int or not -(1<<63)<=exit_status<(1<<63))
-                or not isinstance(containment,str) or containment not in {'verified_empty','unconfirmed'}
-                or not isinstance(references,list) or len(references)>100
-                or any(not isinstance(v,str) or not v.strip() or len(v)>4096 for v in references)
-                or containment=='verified_empty' and not references
-                or exit_status is not None and ended is None):
-            raise RecordError('OS exit and containment evidence invalid')
         if (not isinstance(registration,dict) or not isinstance(registration.get('run_id'),str)
                 or any(type(value) not in {str,int,type(None)} for value in registration.values())):
             raise RecordError('exact dispatch snapshot required before OS inspection')
-        with self.store.transaction() as db:
-            epoch=db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-            current=self._owned(self._latest(db),registration['run_id'])
-            if (not isinstance(expected_epoch,str) or expected_epoch!=epoch
-                    or safe_payload(current)!=safe_payload(registration)
-                    or current['phase'] not in {'reserved','launching'}
-                    or observation['workload_id']!=current['workload_id']):
-                raise RecordError('OS observation is fenced by epoch or registration')
-            run=self.store.row(db,'runs',current['run_id'])
-            claim=self.store.row(db,'claims',run['claim_id'])
-            task=self.store.row(db,'tasks',run['task_id'])
-            if (claim['state'] not in {'active','held'}
-                    or claim['id']!=current['claim_id'] or claim['runner']!=self.controller.id
-                    or type(expected_generation) is not int or claim['generation']!=expected_generation
-                    or claim['generation']<current['generation'] or claim['restore_epoch']!=current['restore_epoch']
-                    or claim['attempt']!=current['attempt'] or task['attempts']!=claim['attempt']
-                    or task['generation']!=claim['generation']):
-                raise RecordError('OS observation does not target the current owned attempt')
-            now=self.store.now()
-            if (observed>now or (now-observed).total_seconds()>60
-                    or observed<timestamp(run['started_at'])
-                    or ended is not None and not timestamp(run['started_at'])<=ended<=observed):
-                raise RecordError('OS observation time is stale or impossible')
-            proof={**observation,'restore_epoch':epoch,'generation':expected_generation,'registration_seq':current['seq']}
-            digest=hashlib.sha256(safe_payload(proof).encode()).hexdigest()
-            for row in db.execute("SELECT data FROM audit_events WHERE action='run_os_observed' AND entity_id=? ORDER BY seq DESC",(run['id'],)):
-                previous=json.loads(row['data'])
-                if previous.get('observation_id')==identity:
-                    if previous.get('sha256')!=digest:
-                        raise RecordError('OS observation identifier conflicts with recorded proof')
-                    return run
-            if run['exit_status'] is not None and exit_status is not None and run['exit_status']!=exit_status:
-                raise RecordError('OS observation conflicts with known exit')
-            data=json.loads(run['data'])
-            prior=data.get('os_observation')
-            if prior is not None and (not isinstance(prior,dict) or prior.get('container_id')!=container):
-                raise RecordError('OS observation cannot replace immutable container identity')
-            data['os_observation']=proof
-            if 'native_state' not in data:
-                data.update(native_state='unknown',native_stop_reason=None,native_usage_scope='unknown')
-            evidence={'controller':self.controller.id,'references':references,
-                      'observed_at':observed.isoformat(),'restore_epoch':epoch,
-                      'observation_id':identity,'workload_id':current['workload_id'],'container_id':container}
-            db.execute('UPDATE runs SET ended_at=COALESCE(ended_at,?),exit_status=COALESCE(exit_status,?),containment_state=?,termination_evidence=?,data=? WHERE id=?',
-                (ended.isoformat() if ended is not None else None,exit_status,containment,
-                 safe_payload(evidence),safe_payload(data),run['id']))
-            if claim['state'] in {'active','held'}:
-                db.execute("UPDATE claims SET state='held' WHERE id=?",(claim['id'],))
-                if task['state']!='held':
-                    db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?",(task['id'],))
-                self.store._incident(db,task,run['id'],'held')
-            self.store.audit(db,self.controller,run['id'],'run_os_observed',
-                {'run_id':run['id'],'observation_id':identity,'restore_epoch':epoch,
-                 'registration_seq':current['seq'],'sha256':digest,'proof':proof})
-            return self.store.row(db,'runs',run['id'])
+        epoch=db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+        current=self._owned(self._latest(db),registration['run_id'])
+        if (not isinstance(expected_epoch,str) or expected_epoch!=epoch
+                or safe_payload(current)!=safe_payload(registration)
+                or current['phase'] not in {'reserved','launching'}
+                or observation['workload_id']!=current['workload_id']):
+            raise RecordError('OS observation is fenced by epoch or registration')
+        run=self.store.row(db,'runs',current['run_id'])
+        claim=self.store.row(db,'claims',run['claim_id'])
+        task=self.store.row(db,'tasks',run['task_id'])
+        if (claim['state'] not in {'active','held'}
+                or claim['id']!=current['claim_id'] or claim['runner']!=self.controller.id
+                or type(expected_generation) is not int or claim['generation']!=expected_generation
+                or claim['generation']<current['generation'] or claim['restore_epoch']!=current['restore_epoch']
+                or claim['attempt']!=current['attempt'] or task['attempts']!=claim['attempt']
+                or task['generation']!=claim['generation']):
+            raise RecordError('OS observation does not target the current owned attempt')
+        now=self.store.now()
+        if (observed>now or (now-observed).total_seconds()>60
+                or observed<timestamp(run['started_at'])
+                or ended is not None and not timestamp(run['started_at'])<=ended<=observed):
+            raise RecordError('OS observation time is stale or impossible')
+        proof={**observation,'restore_epoch':epoch,'generation':expected_generation,'registration_seq':current['seq']}
+        digest=hashlib.sha256(safe_payload(proof).encode()).hexdigest()
+        for row in db.execute("SELECT data FROM audit_events WHERE action='run_os_observed' AND entity_id=? ORDER BY seq DESC",(run['id'],)):
+            previous=json.loads(row['data'])
+            if previous.get('observation_id')==identity:
+                if previous.get('sha256')!=digest:
+                    raise RecordError('OS observation identifier conflicts with recorded proof')
+                return run
+        if run['exit_status'] is not None and exit_status is not None and run['exit_status']!=exit_status:
+            raise RecordError('OS observation conflicts with known exit')
+        data=json.loads(run['data'])
+        prior=data.get('os_observation')
+        if prior is not None and (not isinstance(prior,dict) or prior.get('container_id')!=container):
+            raise RecordError('OS observation cannot replace immutable container identity')
+        data['os_observation']=proof
+        if 'native_state' not in data:
+            data.update(native_state='unknown',native_stop_reason=None,native_usage_scope='unknown')
+        evidence={'controller':self.controller.id,'references':references,
+                  'observed_at':observed.isoformat(),'restore_epoch':epoch,
+                  'observation_id':identity,'workload_id':current['workload_id'],'container_id':container}
+        db.execute('UPDATE runs SET ended_at=COALESCE(ended_at,?),exit_status=COALESCE(exit_status,?),containment_state=?,termination_evidence=?,data=? WHERE id=?',
+            (ended.isoformat() if ended is not None else None,exit_status,containment,
+             safe_payload(evidence),safe_payload(data),run['id']))
+        if claim['state'] in {'active','held'}:
+            db.execute("UPDATE claims SET state='held' WHERE id=?",(claim['id'],))
+            if task['state']!='held':
+                db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?",(task['id'],))
+            self.store._incident(db,task,run['id'],'held')
+        self.store.audit(db,self.controller,run['id'],'run_os_observed',
+            {'run_id':run['id'],'observation_id':identity,'restore_epoch':epoch,
+             'registration_seq':current['seq'],'sha256':digest,'proof':proof})
+        return self.store.row(db,'runs',run['id'])
 
     def release(self, run_id):
         with self.store.transaction() as db:
             return self._release(db, run_id)
 
-    def _release(self, db, run_id, *, receipt_sha256=None):
+    def _release(self, db, run_id, *, receipt_sha256=None, recovery_sha256=None):
         """Release only after the authoritative record has trusted empty proof.
 
         This reads evidence, not the OS. A caller cannot pass its own boolean
@@ -190,7 +203,15 @@ class DispatchRegistry:
         if registration['phase'] == 'released':
             return registration
         epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-        if registration['restore_epoch'] != epoch:
+        recovery_verified=False
+        if recovery_sha256 is not None:
+            row=db.execute("SELECT * FROM audit_events WHERE action='dispatch_recovery' AND entity_id=? ORDER BY seq DESC LIMIT 1",(run_id,)).fetchone()
+            event=json.loads(row['data']) if row else {}
+            if (not row or row['actor']!=self.controller.id or event.get('sha256')!=recovery_sha256
+                    or event.get('restore_epoch')!=epoch or event.get('registration_seq')!=registration['seq']):
+                raise RecordError('current recovery journal proof required')
+            recovery_verified=True
+        if registration['restore_epoch'] != epoch and not recovery_verified:
             restored = db.execute("SELECT seq FROM audit_events WHERE action='restored' ORDER BY seq DESC LIMIT 1").fetchone()
             fresh = any(
                 event.get('run_id') == run_id
@@ -211,6 +232,8 @@ class DispatchRegistry:
         finished = {**registration, 'phase':'released'}
         if receipt_sha256 is not None:
             finished['receipt_sha256'] = receipt_sha256
+        if recovery_sha256 is not None:
+            finished['recovery_sha256'] = recovery_sha256
         return self._append(db, finished)
 
     def pending(self):

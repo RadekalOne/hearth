@@ -631,6 +631,11 @@ class Store:
             return self.row(db, 'tasks', task_id)
 
     def reconcile(self, controller, run_id, *, termination_evidence, outcome):
+        with self.transaction() as db:
+            return self._reconcile(db, controller, run_id,
+                termination_evidence=termination_evidence, outcome=outcome)
+
+    def _reconcile(self, db, controller, run_id, *, termination_evidence, outcome):
         require(controller, {'controller'})
         if outcome not in {'failed', 'unknown', 'completed'}:
             raise RecordError('unknown reconciliation outcome')
@@ -638,46 +643,45 @@ class Store:
             raise RecordError('termination evidence must contain references')
         if outcome in {'failed', 'completed'} and not termination_evidence:
             raise RecordError('verified termination evidence is required before retry')
-        with self.transaction() as db:
-            run = self.row(db, 'runs', run_id)
-            task = self.row(db, 'tasks', run['task_id'])
-            claim = self.row(db, 'claims', run['claim_id'])
-            if task['generation'] != claim['generation'] or claim['state'] not in {'active', 'held'}:
-                raise RecordError('run is not the current reconciliation target')
-            closeout = json.loads(run['closeout']) if run['closeout'] else None
-            valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
-            native_state, native_stop, native_scope = native_receipt_metadata(json.loads(run['data']))
-            human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
-                          and run['exit_status'] is not None
-                          and native_state in {'observed', 'completed'})
-            if outcome == 'unknown':
-                db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
-                db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
+        run = self.row(db, 'runs', run_id)
+        task = self.row(db, 'tasks', run['task_id'])
+        claim = self.row(db, 'claims', run['claim_id'])
+        if task['generation'] != claim['generation'] or claim['state'] not in {'active', 'held'}:
+            raise RecordError('run is not the current reconciliation target')
+        closeout = json.loads(run['closeout']) if run['closeout'] else None
+        valid_closeout = self._closeout_validation(closeout, task, run) == 'valid'
+        native_state, native_stop, native_scope = native_receipt_metadata(json.loads(run['data']))
+        human_wait = (valid_closeout and closeout['status'] == 'needs-decision'
+                      and run['exit_status'] is not None
+                      and native_state in {'observed', 'completed'})
+        if outcome == 'unknown':
+            db.execute("UPDATE claims SET state='held' WHERE id=?", (claim['id'],))
+            db.execute("UPDATE tasks SET state='held',revision=revision+1 WHERE id=?", (task['id'],))
+        else:
+            if outcome == 'completed':
+                if (native_state not in {'observed', 'completed'}
+                        or run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
+                        or closeout['status'] not in {'done', 'needs-decision'}):
+                    raise RecordError('completed reconciliation requires an existing successful receipt')
+                state = 'needs_decision' if human_wait else 'review'
             else:
-                if outcome == 'completed':
-                    if (native_state not in {'observed', 'completed'}
-                            or run['ended_at'] is None or run['exit_status'] != 0 or not valid_closeout
-                            or closeout['status'] not in {'done', 'needs-decision'}):
-                        raise RecordError('completed reconciliation requires an existing successful receipt')
-                    state = 'needs_decision' if human_wait else 'review'
-                else:
-                    state = 'needs_decision' if human_wait else ('ready' if task['attempts'] < 3 else 'failed')
-                db.execute("UPDATE claims SET state='closed' WHERE id=?", (claim['id'],))
-                db.execute('UPDATE tasks SET state=?,revision=revision+1,generation=generation+1 WHERE id=?', (state, task['id']))
-                reconciled_at = self.now().isoformat()
-                db.execute("UPDATE runs SET ended_at=COALESCE(ended_at,?),containment_state='verified_empty',termination_evidence=? WHERE id=?",
-                           (reconciled_at, safe_payload({'controller': controller.id,
-                            'references': termination_evidence, 'reconciled_at': reconciled_at}), run_id))
-            incident = db.execute('SELECT id FROM incidents WHERE task_id=?', (task['id'],)).fetchone()
-            incident_id = incident[0] if incident else identifier('incident')
-            state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if human_wait or task['attempts'] >= 3 else 'open'))
-            if incident:
-                db.execute('UPDATE incidents SET state=? WHERE id=?', (state, incident_id))
-            else:
-                db.execute('INSERT INTO incidents VALUES(?,?,?,?)', (incident_id, task['id'], state, '{}'))
-            db.execute('INSERT OR IGNORE INTO incident_attempts VALUES(?,?)', (incident_id, run_id))
-            self.audit(db, controller, task['id'], 'run_reconciled', {'run_id': run_id, 'outcome': outcome})
-            return self.row(db, 'tasks', task['id'])
+                state = 'needs_decision' if human_wait else ('ready' if task['attempts'] < 3 else 'failed')
+            db.execute("UPDATE claims SET state='closed' WHERE id=?", (claim['id'],))
+            db.execute('UPDATE tasks SET state=?,revision=revision+1,generation=generation+1 WHERE id=?', (state, task['id']))
+            reconciled_at = self.now().isoformat()
+            db.execute("UPDATE runs SET ended_at=COALESCE(ended_at,?),containment_state='verified_empty',termination_evidence=? WHERE id=?",
+                       (reconciled_at, safe_payload({'controller': controller.id,
+                        'references': termination_evidence, 'reconciled_at': reconciled_at}), run_id))
+        incident = db.execute('SELECT id FROM incidents WHERE task_id=?', (task['id'],)).fetchone()
+        incident_id = incident[0] if incident else identifier('incident')
+        state = 'recovered' if outcome == 'completed' else ('held' if outcome == 'unknown' else ('escalated' if human_wait or task['attempts'] >= 3 else 'open'))
+        if incident:
+            db.execute('UPDATE incidents SET state=? WHERE id=?', (state, incident_id))
+        else:
+            db.execute('INSERT INTO incidents VALUES(?,?,?,?)', (incident_id, task['id'], state, '{}'))
+        db.execute('INSERT OR IGNORE INTO incident_attempts VALUES(?,?)', (incident_id, run_id))
+        self.audit(db, controller, task['id'], 'run_reconciled', {'run_id': run_id, 'outcome': outcome})
+        return self.row(db, 'tasks', task['id'])
 
 
     def revise_task(self, controller, task_id, expected_revision, revision_note):

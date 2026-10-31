@@ -473,3 +473,33 @@ Rad's merge gate remain open.
   refinements afterwards. Current component needs exact Claude review/CI.
   No real collector/native activation/production/account/pin/purchase/merge.
   Piece2 remainsSTARTED; remaining runtime/reconciliation gates unchanged.
+
+31 October - atomic strict recovery and restored closed slots:
+- Claude exact196PASS and existing approvals suffice; no new handoff/decision
+  blocker. Continued actual implementation in the isolated linked worktree.
+- Added inactive root RecoveryCoordinator: exact owner/registration/current
+  epoch/generation, fresh typed OS proof PLUS matching immutable container absence
+  and explicit classification. Process-group empty alone cannot release.
+- Active/held path records observed exit, reconciles and releases atomically in
+  one SQLite transaction; private Store/Dispatch helpers avoid an unlock gap.
+  Unknown exits refuse; unknown protocol with zero exit stays uncertain; valid
+  native success reaches review and needs-decision remains a human wait. Roles,
+  three-attempt limit, incidents and prior known history remain intact.
+- Closed pre-restore unresolved slots accept only preserve. Fresh current recovery
+  journal proof releases the slot while task/run/claim/role/incident rows stay
+  unchanged. Exact replay read-only/currentepochfenced, no new launch authority.
+- Nine missing-API tests RED/GREEN;18 recovery cases pass including both restore
+  modes, context/absence/freshness negatives, replay, two journal fault rollbacks,
+  role pause/three-attempt escalation and human wait. Fresh reviewer independently
+ 90 focusedPASS/no Important; review coverage limits in RECOVERY-COORDINATOR.md.
+  Root then found unknown-protocol/zero-exit retry edge, new RED/GREEN regression
+  and one fix pass. No repeated internal review claimed.
+- Final offline518PASS80.154s immutable0d1a284a source/log; docs-onlyafter. No
+  actual OS collector, native credentials/provider, root launcher or HTTP worker
+  authority installed. Generic legacy root APIs remain earlier contracts; actual
+  native controller must be wired to strict recovery before activation.
+- Piece2STARTED/PR36draft/unmerged, fullrunlease policyINACTIVE/default900s
+  unchanged. Next durable immutable container/guard/run/deadline creation binding,
+  safe arm/consume/start/restart, actual account/settings/credential projection
+  and provider/broker egress, scheduling/supervision/alarms/composed acceptance.
+  No production/account/pin/purchase/merge. Exact new-head review/CI next.

@@ -65,3 +65,24 @@ guard identity from run+epoch, never disarm before verified emptiness/removal,
 and attempt kernel kill again on post-kill failure while retaining frozen parent
 until immutable-ID removal is independently proved. Current standalone fixture
 UUID collision is intentionally not a controller-restart proof.
+
+## Current continuation: atomic recovery with removal proof
+
+Ruling: implement a root-only in-process RecoveryCoordinator over existing
+SQLite transactions. It accepts fresh exact-context OS proof PLUS separately
+matching immutable-container absence proof and classification references. Empty
+cgroup alone cannot release a launch slot. No HTTP route, OS collector or native
+activation is added. Cost if wrong: conservative refusal/held slot, never infer
+a successful task or retry authority from an uncertain process.
+
+- Active/held recovery records trusted OS evidence, explicitly classifies failed
+  or completed using existing rules, and releases atomically; unknown exit stays
+  held. No late worker closeout/usage is accepted.
+- Closed pre-restore unresolved slots get a fresh current-epoch OS/removal audit
+  and release while preserving task/run history; classification must be preserve.
+- Exact replay is read-only and current-epoch fenced. Wrong owner/context, stale
+  proof, container mismatch, missing absence, missing classification, journal
+  failure and restore-old proof refuse without partial state changes.
+- Ordinary legacy reconciliation remains available to old unregistered paths;
+  actual native launcher must use the strict composed coordinator. No claim that
+  trusted root database access itself is constrained by these APIs.
