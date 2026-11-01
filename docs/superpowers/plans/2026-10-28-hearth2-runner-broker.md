@@ -158,3 +158,14 @@ collection time with query-begin stamps, wall ordering and monotonic duration;
 refuse unknown/conflicting/foreign/stale data (`TERMINATION-COLLECTOR.md`). TDD,
 one final fresh review/full offline verification/local commit; actual host/OS/
 observer/native acceptance gates remain open and900s/full-run policy inactive.
+
+## Current continuation: original timer-only readback
+
+Use upstream-verified typed systemd D-Bus contracts, not human timestamp parsing.
+Bounded local GetUnit/property-only reads verify the exact original future UTC
+calendar/deadline, transient waiting timer/inactive linked service, invocation
+identity and twice-stable snapshots (`TIMER-READBACK.md`). Refuse extra triggers,
+delay, alias, changed identity/time/host and malformed types. The timer-only result
+must NOT substitute for full guarded container/policy attestation or authorize
+start. Actual CLI/version/service/host/layout/OS acceptance stays open. TDD,
+one final fresh review/full offline suite/local commit,900s/full-run inactive.
