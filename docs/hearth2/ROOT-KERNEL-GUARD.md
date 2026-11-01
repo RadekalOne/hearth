@@ -17,7 +17,11 @@ and reads empty/frozen parent state. A return records termination observations,
 never task success or a database slot release. Running Docker's zero ExitCode or
 an exited-but-never-started state cannot invent an actual process exit; an exit is
 known only with exited/stopped/PID0 state and real start/end within the bound
-creation time and current observation. Unknown exits remain unknown.
+creation time and current observation. Unknown exits remain unknown. The guard
+now requires a durable original-binding/exit receipt BEFORE immutable-ID removal
+and a second removal/empty receipt before returning (`GUARD-EVIDENCE.md`). Without
+a store or acknowledgment it repeats kernel stop and refuses removal/success;
+the parent and guard remain retained.
 
 Any failure or catchable interruption after kernel quiescence causes another
 freeze request and another kernel-kill attempt. Kill is attempted even if the

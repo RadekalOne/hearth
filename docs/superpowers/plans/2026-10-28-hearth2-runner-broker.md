@@ -135,3 +135,15 @@ Tests execute ONLY private fake helpers/daemons; no service activation. Actual
 CLI/version/timer/deadline/host/layout support and durable root guard receipts
 remain subsequent acceptance layers. TDD, one final fresh review, full offline
 verification and local commit;900s/full-run policy unchanged/inactive.
+
+## Current continuation: durable root guard evidence
+
+Before immutable-ID removal, durably publish a credential-free original-binding/
+actual-exit observation outside the restorable DB. After independent local
+removal/empty queries, durably publish the second observation before success.
+Use immutable content-addressed private files, file/directory fsync, no-replace
+publication, bounded history and nonblocking writer/read fencing; refuse corrupt
+or conflicting facts (`GUARD-EVIDENCE.md`). Missing/failed evidence still permits
+kernel stop but never removal/positive guard return. Historical receipts never
+substitute for fresh independent original-host proof or strict DB recovery. TDD,
+one final fresh review/full offline suite/local commit, no actual OS activation.

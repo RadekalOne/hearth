@@ -63,8 +63,11 @@ class RootGuardTests(unittest.TestCase):
         self.module=importlib.import_module('hearth2.root_guard')
         self.kernel=KernelInventory();self.daemon=DaemonInventory(self.binding,self.kernel)
         self.host='1'*64
+        from hearth2.guard_evidence import GuardEvidenceStore
+        evidence_root=Path(self.tmp.name)/'guard-evidence';evidence_root.mkdir(mode=0o700)
+        self.evidence_store=GuardEvidenceStore(evidence_root,clock=lambda:self.time)
         self.guard=self.module.RootKernelGuard(self.kernel,self.daemon,
-            host_identity=lambda:self.host,clock=lambda:self.time)
+            host_identity=lambda:self.host,clock=lambda:self.time,evidence=self.evidence_store)
         self.observer=self.module.IndependentGuardRelease(self.kernel,self.daemon,
             host_identity=lambda:self.host,clock=lambda:self.time)
 

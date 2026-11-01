@@ -83,9 +83,10 @@ def _empty_frozen(state):
 
 
 class RootKernelGuard:
-    def __init__(self,files,commands,*,host_identity,clock):
+    def __init__(self,files,commands,*,host_identity,clock,evidence=None):
         self.files,self.commands=files,commands
         self.host_identity,self.clock=host_identity,clock
+        self.evidence=evidence
 
     def enforce(self,binding):
         """Kernel quiescence FIRST; no error path disarms or deletes the parent."""
@@ -109,15 +110,20 @@ class RootKernelGuard:
                 started=timestamp(state.get('StartedAt'));finished=timestamp(state.get('FinishedAt'))
                 if timestamp(binding['at'])<=started<=finished<=self.clock():
                     exit_status=state['ExitCode'];ended=finished.isoformat()
+            if self.evidence is None:raise RecordError('durable root evidence required before immutable-ID removal')
+            before=self.evidence.append(binding,'observed',{'observed_at':self.clock().isoformat(),
+                'exit_status':exit_status,'ended_at':ended})
             self.commands.remove(container)
             if self.commands.absent(container) is not True:
                 raise RecordError('successful exact immutable-ID absence query required')
             if not _empty_frozen(self.files.state(parent)):
                 raise RecordError('independent empty frozen retained parent required')
+            after=self.evidence.append(binding,'removed',{'observed_at':self.clock().isoformat(),
+                'verified_empty':True,'immutable_absent':True})
             return {'host_id':binding['host_id'],'container_id':container,'guard_id':binding['guard_id'],
                 'parent_cgroup':parent,'deadline_at':binding['deadline_at'],
                 'observed_at':self.clock().isoformat(),'exit_status':exit_status,'ended_at':ended,
-                'verified_empty':True,'immutable_absent':True}
+                'verified_empty':True,'immutable_absent':True,'evidence':[before,after]}
         except BaseException as exc:
             # A daemon failure may race a late child into the frozen parent.
             # Try kernel kill AGAIN even if the renewed freeze request fails.
