@@ -189,3 +189,13 @@ commands; stable twice-read artifacts/properties/current original host/deadline.
 Service-only evidence never authorizes consumption/start. Actual runtime UID,
 namespace/dependency closure/native policy application/container/OS gates remain.
 TDD, one fresh final review/single fix pass/full offline suite; no activation.
+
+## Offline stopped-container configuration continuation
+
+Validate original-layout-pinned memory-only native container policy and selected
+stopped immutable-ID/resource/security configuration (`STOPPED-CONTAINER-READBACK.md`).
+Narrow network-none/no-extra-mounts version1 only; explicit future assembly policy
+needed for mounted profiles/broker egress. Read twice under originalhost/deadline
+and immutable context. Partial config evidence cannot satisfy full created/armed
+proof. Actual native application/OS/driver acceptance stays gated; TDD/fresh review/
+full offline suite/local commit, default900s/full-run inactive/no activation.
