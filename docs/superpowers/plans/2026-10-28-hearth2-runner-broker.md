@@ -251,3 +251,13 @@ regular-file facts. Default enrollment empty; no mounts/enrollment/driver wiring
 Use direct digest output within existing transport budgets, not file contents.
 Private filesystem fixtures with explicitly injected root/mount facts only.
 Complete credential inventory/runtime provenance/OS/native gates remain open.
+
+## Offline credential audit policy contract continuation
+
+Implement immutable `CredentialAuditRequirements`
+(`CREDENTIAL-AUDIT-REQUIREMENTS.md`): original image/assembly, independently audited
+complete-rootfs/consumer manifests, parser closure, authority reference and strict
+budgets. Fixed required coverage families before/after creation, no exclusions.
+Requirements only, not a scanner or inventory receipt. Complete physical producer,
+audited consumers/provenance and driver wiring remain absent. TDD/private artifacts,
+one final fresh review/full offline suite; stop new work at the existing cutoff.
