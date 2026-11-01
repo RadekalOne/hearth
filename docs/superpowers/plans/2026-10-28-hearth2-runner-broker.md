@@ -240,3 +240,14 @@ Refuse links/extensions/traversal/extra members/unsupported archive formats.
 No default authenticated source, layer resolver or driver wiring. This component
 does not establish physical source provenance or complete credential inventory.
 Private archive fixtures, TDD, one final fresh review and full isolated suite.
+
+## Offline enrolled rootfs file producer continuation
+
+Implement `RootfsFileMeasurements` (`ROOTFS-SOURCE.md`) using independently enrolled
+original image/CID/rootfs identity, a fixed isolated bounded stdlib helper and
+real descriptor-relative no-follow measurement. Require actual original
+root/boot/namespaces, read-only same-mount view, pinned root inode and stable
+regular-file facts. Default enrollment empty; no mounts/enrollment/driver wiring.
+Use direct digest output within existing transport budgets, not file contents.
+Private filesystem fixtures with explicitly injected root/mount facts only.
+Complete credential inventory/runtime provenance/OS/native gates remain open.
