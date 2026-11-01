@@ -124,3 +124,14 @@ private regular files and synthetic daemon inventory (`ROOT-KERNEL-GUARD.md`).
 Actual daemon/host-authentication/arming/start driver, OS and reboot/old-backup
 acceptance remain open; no service activation or lease/default change. TDD,
 one fresh final review and full offline verification before local commit.
+
+## Current continuation: bounded fixed daemon command port
+
+Implement POSIX bounded subprocess transport with stripped environment, no shell,
+bounded combined output/time and own-helper process-group cleanup before reaping.
+Add exact-ID Docker inspection/removal/inventory using a selected credential-free
+projection and guard-only systemctl stop/confirmation (`ROOT-COMMAND-PORT.md`).
+Tests execute ONLY private fake helpers/daemons; no service activation. Actual
+CLI/version/timer/deadline/host/layout support and durable root guard receipts
+remain subsequent acceptance layers. TDD, one final fresh review, full offline
+verification and local commit;900s/full-run policy unchanged/inactive.
