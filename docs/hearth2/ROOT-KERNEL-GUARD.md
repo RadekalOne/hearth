@@ -42,8 +42,8 @@ The concrete future daemon driver must use exactly the configured retained
 parent layout; there is no implicit conversion to a different systemd slice.
 
 `IndependentGuardRelease.release(binding)` accepts no cached guard receipt or
-caller boolean. It independently re-reads empty **and frozen** parent state and
-queries exact immutable-ID absence, verifies original host again, then invokes
+caller boolean. It queries exact immutable-ID absence FIRST, then independently
+re-reads empty **and frozen** parent state, verifies original host again, then invokes
 the trusted daemon port's disarm operation. Missing, populated, thawed, unknown
 or failed queries refuse. The observer does not remove/thaw the parent or release
 a DB slot. Production must run it independently/outside the workload; two Python

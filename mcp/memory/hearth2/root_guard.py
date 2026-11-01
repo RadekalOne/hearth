@@ -149,8 +149,8 @@ class IndependentGuardRelease:
         """
         _identity(binding,self.host_identity)
         try:
-            if (not _empty_frozen(self.files.state(binding['parent_cgroup']))
-                    or self.commands.absent(binding['container_id']) is not True):
+            if (self.commands.absent(binding['container_id']) is not True
+                    or not _empty_frozen(self.files.state(binding['parent_cgroup']))):
                 raise RecordError('original parent empty/frozen AND immutable-ID absence required')
             _identity(binding,self.host_identity)
             self.commands.disarm(binding['guard_id'])

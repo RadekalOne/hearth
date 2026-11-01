@@ -147,3 +147,14 @@ or conflicting facts (`GUARD-EVIDENCE.md`). Missing/failed evidence still permit
 kernel stop but never removal/positive guard return. Historical receipts never
 substitute for fresh independent original-host proof or strict DB recovery. TDD,
 one final fresh review/full offline suite/local commit, no actual OS activation.
+
+## Current continuation: outside termination collector
+
+Combine original-binding durable known-exit facts with NEW original-host empty/
+frozen and immutable-ID-absence queries, under the launcher's pre-inspection
+current epoch/generation snapshot and strict RecoveryCoordinator. Historical
+receipts never become fresh OS proof or automatic result classification. Bound
+collection time with query-begin stamps, wall ordering and monotonic duration;
+refuse unknown/conflicting/foreign/stale data (`TERMINATION-COLLECTOR.md`). TDD,
+one final fresh review/full offline verification/local commit; actual host/OS/
+observer/native acceptance gates remain open and900s/full-run policy inactive.

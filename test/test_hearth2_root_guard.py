@@ -3,6 +3,7 @@ from datetime import timedelta
 import importlib
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 import test_hearth2_creation_binding as fixtures
 from hearth2.store import RecordError
 
@@ -150,13 +151,25 @@ class RootGuardTests(unittest.TestCase):
     def test_separate_fresh_empty_and_absence_queries_allow_disarm_without_parent_deletion(self):
         self.guard.enforce(self.binding);self.kernel.steps=[]
         result=self.observer.release(self.binding)
-        self.assertEqual(self.kernel.steps,['state','absent','disarm'])
+        self.assertEqual(self.kernel.steps,['absent','state','disarm'])
         self.assertTrue(self.daemon.disarmed);self.assertTrue(self.kernel.frozen)
         self.assertTrue(result['guard_disarmed'])
 
     def test_release_query_failure_retains_guard(self):
         self.kernel.frozen=True;self.kernel.populated=False;self.daemon.fail='absent'
         with self.assertRaises(RecordError):self.observer.release(self.binding)
+        self.assertFalse(self.daemon.disarmed)
+
+    def test_parent_populated_during_absence_query_cannot_disarm_from_earlier_empty(self):
+        self.kernel.frozen=True;self.kernel.populated=False;self.daemon.present=False
+        absent=self.daemon.absent
+        def late_child(container):
+            value=absent(container);self.kernel.populated=True;return value
+        # The real low-level disarm command port does not inspect kernel state;
+        # the outside observer must enforce that gate before invoking it.
+        def disarm(guard):self.daemon.disarmed=True
+        with patch.object(self.daemon,'absent',side_effect=late_child),patch.object(self.daemon,'disarm',side_effect=disarm):
+            with self.assertRaises(RecordError):self.observer.release(self.binding)
         self.assertFalse(self.daemon.disarmed)
 
     def files(self):
