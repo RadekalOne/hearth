@@ -83,3 +83,9 @@ preloaded official Chroma cache; the test network namespace enabled only loopbac
 Archive, review, focused log and `guard-full-python-offline.log` remain in the
 private plan ledger. Earlier primitives received integration review, not another
 exhaustive audit. Actual OS/native/whole-piece acceptance remains open.
+
+Later inactive continuation: `ROOT-LAYOUT.md` adds an explicit immutable policy
+and `MappedCgroupFiles`; default `CgroupFiles` remains direct. Mapped guards compare
+the separate declared Docker parent, and mapped collector/release ports verify
+the exact sealed binding before observations. No implicit remapping or activation
+follows. Actual root host/mount/CLI/observer/service acceptance remains open.

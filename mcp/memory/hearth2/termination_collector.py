@@ -81,6 +81,7 @@ class RootTerminationCollector:
     def _inspect(self,binding):
         start=self.clock();started=self.monotonic()
         _identity(binding,self.host_identity)
+        if hasattr(self.files,'verify_binding'):self.files.verify_binding(binding)
         code,ended,evidence=self._known_exit(binding,self.evidence.read(binding))
         # Timestamp BEFORE each query: a delayed response cannot relabel an old
         # acquisition as fresh. Refuse an overlong/rolled-back collection window.

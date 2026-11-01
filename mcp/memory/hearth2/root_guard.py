@@ -17,15 +17,26 @@ class CgroupFiles:
     def __init__(self, root=Path('/sys/fs/cgroup')):
         self.root = Path(root).absolute()
 
-    @contextmanager
-    def _file(self, parent, name, *, write=False):
+    def _parent_name(self,parent):
         if not isinstance(parent,str) or re.fullmatch(r'hearth2-[a-f0-9]{64}',parent) is None:
             raise RecordError('exact retained cgroup parent required')
+        return parent
+
+    def daemon_parent(self,parent):return self._parent_name(parent)
+
+    def verify_binding(self,binding):self._parent_name(binding.get('parent_cgroup'))
+
+    @contextmanager
+    def _file(self, parent, name, *, write=False):
+        component=self._parent_name(parent)
+        if (not isinstance(component,str) or not component or component in {'.','..'}
+                or re.fullmatch(r'[a-zA-Z0-9_.-]{1,255}',component) is None):
+            raise RecordError('single retained cgroup path component required')
         descriptors=[]
         try:
             root=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             descriptors.append(root)
-            group=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=root)
+            group=os.open(component,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=root)
             descriptors.append(group)
             control=os.open(name,(os.O_WRONLY if write else os.O_RDONLY)|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=group)
             descriptors.append(control)
@@ -91,6 +102,7 @@ class RootKernelGuard:
     def enforce(self,binding):
         """Kernel quiescence FIRST; no error path disarms or deletes the parent."""
         _identity(binding,self.host_identity)
+        if hasattr(self.files,'verify_binding'):self.files.verify_binding(binding)
         parent=binding['parent_cgroup'];container=binding['container_id']
         try:
             self.files.freeze(parent)
@@ -101,7 +113,8 @@ class RootKernelGuard:
                       'hearth2.policy_sha256':binding['policy_sha256'],'hearth2.workload':binding['workload_id']}
             if (not isinstance(config,dict) or config.get('Id')!=container
                     or not isinstance(labels,dict) or any(labels.get(key)!=value for key,value in required.items())
-                    or config.get('HostConfig',{}).get('CgroupParent')!=parent):
+                    or config.get('HostConfig',{}).get('CgroupParent')!=(
+                        self.files.daemon_parent(parent) if hasattr(self.files,'daemon_parent') else parent)):
                 raise RecordError('daemon object does not match sealed workload')
             state=config.get('State',{});exit_status=ended=None
             if (isinstance(state,dict) and state.get('Running') is False
@@ -148,6 +161,7 @@ class IndependentGuardRelease:
         It neither releases a DB slot nor removes/thaws the retained parent.
         """
         _identity(binding,self.host_identity)
+        if hasattr(self.files,'verify_binding'):self.files.verify_binding(binding)
         try:
             if (self.commands.absent(binding['container_id']) is not True
                     or not _empty_frozen(self.files.state(binding['parent_cgroup']))):

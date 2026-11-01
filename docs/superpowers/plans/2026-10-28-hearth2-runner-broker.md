@@ -169,3 +169,13 @@ delay, alias, changed identity/time/host and malformed types. The timer-only res
 must NOT substitute for full guarded container/policy attestation or authorize
 start. Actual CLI/version/service/host/layout/OS acceptance stays open. TDD,
 one final fresh review/full offline suite/local commit,900s/full-run inactive.
+
+# Offline root layout continuation (1 November 2026)
+
+Implement immutable original-host layout policy and mapped cgroup boundary as
+specified in `docs/hearth2/ROOT-LAYOUT.md`. Keep the original logical parent and
+creation epoch; select layout before creation, pin it with `policy_sha256`, and
+refuse restore-host remapping. Tests use private files/injected ports only.
+Actual root authentication, service executable/UID/policy and stopped-container
+resource readback, then concrete create/arm/start composition remain required
+before any activation. Full-run/default900s policy remains inactive.
