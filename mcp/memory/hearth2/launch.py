@@ -49,6 +49,8 @@ class LaunchCoordinator:
         deadline/immutable ID: the final DB check cannot close an OS scheduling
         gap. A delayed start must be blocked by the root guard/ID removal.
         """
+        preflight=getattr(self.driver,'preflight',None)
+        if preflight is not None:preflight(registration,claim,host_id=host_id)
         intent = self.creations.begin(registration,claim,host_id=host_id)
         container_id = self.driver.create_stopped(dict(intent))
         if not _digest(container_id):

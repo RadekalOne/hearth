@@ -25,11 +25,15 @@ class BoundedCommand:
             raise RecordError('fixed executable and bounded command limits required')
         self.executable=str(executable);self.timeout_seconds=timeout_seconds;self.max_output=max_output
 
-    def run(self,args):
+    @staticmethod
+    def validate_arguments(args):
         if (not isinstance(args,list) or len(args)>40
                 or any(not isinstance(v,str) or '\0' in v or len(v)>8192 for v in args)
                 or sum(len(v.encode('utf-8')) for v in args)>32768):
             raise RecordError('bounded root command arguments required')
+
+    def run(self,args):
+        self.validate_arguments(args)
         environment={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','HOME':'/nonexistent',
                      'LANG':'C.UTF-8','LC_ALL':'C.UTF-8','TZ':'UTC'}
         selector=selectors.DefaultSelector();process=None;output=bytearray();used=0

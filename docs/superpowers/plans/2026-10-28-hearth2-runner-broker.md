@@ -209,3 +209,14 @@ execution, existing kernel-first termination at originaldeadline. DefaultCLI has
 no runtime; no installedwrapper or activation. Policyrepo loss after sealing must
 not prevent termination. Rootdriver/hostauth/OS/nativeassembly acceptance remains
 open; no partialproof promotion. TDD/fresh review/full suite/local commit only.
+
+## Offline concrete root lifecycle continuation
+
+Implement fixed create/absolute-arm/immutable-ID-start ports plus RootLifecycleDriver
+and durable one-use root attempts/created-ID receipts (`ROOT-LIFECYCLE.md`). Require
+explicit independently verified assembly/bootstrap/root/namespace/credential/mount/
+egress contract; missing observer refuses before mutation. Root execution seal
+before arming; strict service literal-JSON flag, timer/config/assembly reinspection
+before consumption/start. Never turn partial receipts into full authority alone.
+Default driver unconfigured/no OS activation; actual installed collector/wrapper/
+native/OS/orphan/restore acceptance remains open. TDD/freshreview/full offline gate.

@@ -121,7 +121,7 @@ class RootGuardServiceReadback:
         expected={'User':'0','Group':'0','DynamicUser':False,'Type':'oneshot','Restart':'no',
             'RemainAfterExit':False,'RootDirectory':'','RootImage':'','WorkingDirectory':'/',
             'MainPID':0,'Result':'success','Slice':'system.slice',
-            'ExecStartEx':[[executable,argv,[],0,0,0,0,0,0,0]],**{k:[] for k in _OTHER}}
+            'ExecStartEx':[[executable,argv,['no-env-expand'],0,0,0,0,0,0,0]],**{k:[] for k in _OTHER}}
         if service!=expected:raise RecordError('sealed service executable/root configuration differs')
 
     def inspect(self,binding):

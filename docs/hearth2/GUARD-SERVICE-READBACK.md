@@ -25,7 +25,8 @@ mapping, absence of later replacement, or actual execution by PID1.
 It issues only `GetUnit` (existing units) and selected typed property reads, never
 `LoadUnit`, start/stop or arming. It never queries Environment or credentials.
 ExecStartEx is `a(sasasttttuii)`: path, argv, flags, four execution timestamps,
-PID, code and status. Requiring no flags catches executable-prefix overrides.
+PID, code and status. Only the no-env-expand flag is permitted, preserving literal binding JSON;
+privilege/ignore-failure and other executable-prefix flags refuse.
 Extra condition/pre/post/reload/stop commands are refused. The expected command
 must have no execution history. The unit must be loaded/transient/inactive/dead,
 with no invocation identity or main PID and a successful untouched result.
@@ -81,3 +82,8 @@ RED/focused and `service-final-full-python-offline.log` evidence remain in the p
 ledger. Historical680 runs (412bd9eb...272.560s; b5024cea...157.968s) preceded the
 final test-coverage corrections and are not the final gate. No actual daemon,
 service, cgroup, worker/provider, global account/configuration or credential changes.
+
+Later root lifecycle continuation requires literal systemd argument handling:
+`ROOT-LIFECYCLE.md` tightens ExecStartEx to exactly no-env-expand and constructs
+arming with --expand-environment=no. Previous empty-flag configuration is now
+refused; no installed service was changed.

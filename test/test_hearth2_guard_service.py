@@ -39,7 +39,7 @@ class GuardServiceTests(unittest.TestCase):
             'service':{'User':'0','Group':'0','DynamicUser':False,'Type':'oneshot','Restart':'no',
                 'RemainAfterExit':False,'RootDirectory':'','RootImage':'','WorkingDirectory':'/',
                 'MainPID':0,'Result':'success','Slice':'system.slice',
-                'ExecStartEx':[[str(self.executable),self.argv,[],0,0,0,0,0,0,0]],
+                'ExecStartEx':[[str(self.executable),self.argv,['no-env-expand'],0,0,0,0,0,0,0]],
                 **{k:[] for k in ['ExecConditionEx','ExecStartPreEx','ExecStartPostEx','ExecReloadEx','ExecStopEx','ExecStopPostEx']}}}
         self.snapshots=0
         def snapshot(guard):self.snapshots+=1;return copy.deepcopy(self.state)
@@ -59,6 +59,10 @@ class GuardServiceTests(unittest.TestCase):
         self.assertEqual(proof['native_policy_sha256'],self.policy.native_policy_sha256)
         with self.assertRaises(RecordError):CreationRegistry(self.registry).consume_armed(self.claim,self.binding,proof=proof)
 
+    def test_missing_literal_argument_flag_refuses(self):
+        self.state['service']['ExecStartEx'][0][2]=[]
+        with self.assertRaises(RecordError):self.read()
+
     def test_wrong_binding_arguments_or_shell_wrapper_refuses(self):
         for command in [['/bin/sh',['/bin/sh','-c','true'],[],0,0,0,0,0,0,0],
                 [str(self.executable),self.argv+['--other'],[],0,0,0,0,0,0,0]]:
@@ -67,7 +71,7 @@ class GuardServiceTests(unittest.TestCase):
 
     def test_exec_prefix_flags_and_alternate_commands_refuse(self):
         for changes in [{'ExecStartEx':[[str(self.executable),self.argv,['ignore-failure'],0,0,0,0,0,0,0]]},
-                {'ExecStartPreEx':[[str(self.executable),self.argv,[],0,0,0,0,0,0,0]]}]:
+                {'ExecStartPreEx':[[str(self.executable),self.argv,['no-env-expand'],0,0,0,0,0,0,0]]}]:
             original=copy.deepcopy(self.state['service']);self.state['service'].update(changes)
             with self.assertRaises(RecordError):self.read()
             self.state['service']=original
@@ -87,7 +91,7 @@ class GuardServiceTests(unittest.TestCase):
 
     def test_prior_execution_or_running_guard_refuses(self):
         for section,key,value in [('unit','ActiveState','active'),('unit','InvocationID',[1]*16),('service','MainPID',1),
-                ('service','ExecStartEx',[[str(self.executable),self.argv,[],1,0,0,0,0,0,0]])]:
+                ('service','ExecStartEx',[[str(self.executable),self.argv,['no-env-expand'],1,0,0,0,0,0,0]])]:
             original=self.state[section][key];self.state[section][key]=value
             with self.assertRaises(RecordError):self.read()
             self.state[section][key]=original
