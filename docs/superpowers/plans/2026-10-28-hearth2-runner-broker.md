@@ -86,3 +86,16 @@ a successful task or retry authority from an uncertain process.
 - Ordinary legacy reconciliation remains available to old unregistered paths;
   actual native launcher must use the strict composed coordinator. No claim that
   trusted root database access itself is constrained by these APIs.
+
+## Current continuation: immutable original-host creation binding
+
+Implement the next offline controller boundary (`CREATION-BINDING.md`): seal a
+reserved live registration to original host, immutable container, deterministic
+run/original-epoch guard and parent, policy and fixed deadline in the existing
+journal. Refuse replacement on restart/restore. Require the original host and
+container in bound OS observations and both strict recovery proofs. A fresh exact
+armed-guard/stopped-container attestation and one-use dispatch consumption commit
+atomically; ordinary public consume cannot bypass this for bound runs. All OS
+operations and actual native activation remain separate gates. No disarm is
+introduced;900s defaults/full-run policy remain unchanged/inactive. Tests first,
+one fresh final review, then appropriate full regression; preserve private ledger.

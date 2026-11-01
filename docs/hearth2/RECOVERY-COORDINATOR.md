@@ -12,13 +12,15 @@ is insufficient: the container ID/workload and successful absence references mus
 match. OS proof must show verified empty and a known actual exit/end; unknown
 exits cannot silently become retryable failures. No late worker closeout/usage
 fields are accepted. First actual container identity and proof remain TRUSTED
-COLLECTOR inputs; creation binding/OS validation still need implementation.
+COLLECTOR inputs. Bound runs now enforce their immutable original-host creation
+journal (`CREATION-BINDING.md`); independent OS validation still needs wiring.
 
 For active/held claims, one SQLite writer transaction records the trusted OS
 observation, explicitly classifies failed/completed under the existing record
 rules and releases the slot. Unknown native protocol cannot become completed.
 A zero exit can be classified failed only with recorded native_state=failed.
-Completed/observed/interrupted/unknown alone are not positive failure evidence;
+Completed/observed/interrupted/unknown and allowance/authentication/rate-limit/
+budget stops alone are not positive failure evidence;
 a valid success cannot be turned into an automatic retry. Use OS-only observation to retain that
 proof while held. A known nonzero process failure can be explicitly classified.
 A previously valid native success can reach review; needs-decision stays a human

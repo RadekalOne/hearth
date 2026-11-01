@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 from .dispatch import validate_os_observation
+from .creation import validate_bound_identity
 from .store import RecordError,safe_payload,timestamp,native_receipt_metadata
 
 
@@ -28,8 +29,12 @@ class RecoveryCoordinator:
             raise RecordError('exact root recovery contract required')
         observed,ended=validate_os_observation(proof['observation'])
         osproof=proof['observation'];removal=proof['removal']
-        if not isinstance(removal,dict) or set(removal)!={'container_id','workload_id','observed_at','references'}:
+        removal_fields={'container_id','workload_id','observed_at','references'}
+        if not isinstance(removal,dict) or set(removal) not in (removal_fields,removal_fields|{'host_id'}):
             raise RecordError('separate immutable-container absence proof required')
+        if 'host_id' in removal and (not isinstance(removal['host_id'],str)
+                or re.fullmatch(r'[a-f0-9]{64}',removal['host_id']) is None):
+            raise RecordError('removal host identity invalid')
         removed=timestamp(removal['observed_at'])
         _references(removal['references']);_references(proof['classification_evidence'])
         digest=hashlib.sha256(safe_payload({'registration':registration,'restore_epoch':expected_epoch,
@@ -37,6 +42,8 @@ class RecoveryCoordinator:
         with self.store.transaction() as db:
             epoch=db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
             current=self.registry._owned(self.registry._latest(db),registration['run_id'])
+            validate_bound_identity(db, current['run_id'], osproof)
+            validate_bound_identity(db, current['run_id'], removal)
             if not isinstance(expected_epoch,str) or epoch!=expected_epoch:
                 raise RecordError('recovery epoch changed since inspection')
             run=self.store.row(db,'runs',current['run_id'])

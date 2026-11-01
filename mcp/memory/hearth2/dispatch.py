@@ -9,13 +9,17 @@ import json
 import hashlib
 import re
 from .store import RecordError, require, safe_payload, native_receipt_metadata, timestamp
+from .creation import read_binding, validate_bound_identity
 
 
 def validate_os_observation(observation):
     fields={'observation_id','workload_id','container_id','observed_at','ended_at',
             'exit_status','containment_state','termination_evidence'}
-    if not isinstance(observation,dict) or set(observation)!=fields:
+    if not isinstance(observation,dict) or set(observation) not in (fields, fields|{'host_id'}):
         raise RecordError('OS observation fields differ from the trusted contract')
+    if 'host_id' in observation and (not isinstance(observation['host_id'],str)
+            or re.fullmatch(r'[a-f0-9]{64}',observation['host_id']) is None):
+        raise RecordError('OS observation host identity invalid')
     identity=observation['observation_id'];container=observation['container_id']
     if (not isinstance(identity,str) or re.fullmatch(r'[A-Za-z0-9_-]{1,128}',identity) is None
             or not isinstance(container,str) or re.fullmatch(r'[a-f0-9]{64}',container) is None):
@@ -103,14 +107,21 @@ class DispatchRegistry:
         policy, account/allowance, limits and deadline before a native prompt.
         """
         with self.store.transaction() as db:
-            current, task, run = self.store._live_claim(db, self.controller, claim)
-            registration = self._owned(self._latest(db), run['id'])
-            if (registration['phase'] != 'reserved'
-                    or registration['claim_id'] != current['id']
-                    or registration['restore_epoch'] != current['restore_epoch']
-                    or registration['generation'] != current['generation']):
-                raise RecordError('launch registration already consumed or fenced')
-            return self._append(db, {**registration, 'phase':'launching'})
+            if not isinstance(claim,dict):
+                raise RecordError('registered launch claim required')
+            if read_binding(db,claim.get('run_id')) is not None:
+                raise RecordError('bound launch requires atomic guard attestation and consume')
+            return self._consume(db,claim)
+
+    def _consume(self, db, claim):
+        current, task, run = self.store._live_claim(db, self.controller, claim)
+        registration = self._owned(self._latest(db), run['id'])
+        if (registration['phase'] != 'reserved'
+                or registration['claim_id'] != current['id']
+                or registration['restore_epoch'] != current['restore_epoch']
+                or registration['generation'] != current['generation']):
+            raise RecordError('launch registration already consumed or fenced')
+        return self._append(db, {**registration, 'phase':'launching'})
 
     def observe_termination(self, registration, *, expected_epoch, expected_generation, observation):
         """Record trusted OS evidence after expiry without accepting worker output.
@@ -136,6 +147,7 @@ class DispatchRegistry:
             raise RecordError('exact dispatch snapshot required before OS inspection')
         epoch=db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
         current=self._owned(self._latest(db),registration['run_id'])
+        validate_bound_identity(db, current['run_id'], observation)
         if (not isinstance(expected_epoch,str) or expected_epoch!=epoch
                 or safe_payload(current)!=safe_payload(registration)
                 or current['phase'] not in {'reserved','launching'}
