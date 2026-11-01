@@ -14,6 +14,12 @@ def _digest(value):
     return isinstance(value, str) and re.fullmatch(r'[a-f0-9]{64}', value) is not None
 
 
+def _names(registration):
+    identity = hashlib.sha256(safe_payload({'run_id':registration['run_id'],
+        'creation_epoch':registration['restore_epoch']}).encode()).hexdigest()
+    return {'guard_id':'hearth2-deadline-' + identity, 'parent_cgroup':'hearth2-' + identity}
+
+
 def read_binding(db, run_id):
     row = db.execute("SELECT * FROM audit_events WHERE action='creation_bound' AND entity_id=? ORDER BY seq LIMIT 1",
                      (run_id,)).fetchone()
@@ -42,6 +48,34 @@ class CreationRegistry:
             self.registry._owned(self.registry._latest(db), run_id)
             return read_binding(db, run_id)
 
+    def begin(self, registration, claim, *, host_id):
+        """Commit one-use intent BEFORE an external create may be attempted.
+
+        A lost acknowledgment is deliberately not replayable as create authority.
+        Independent inventory/recovery is required even if no container is found.
+        """
+        if (not _digest(host_id) or not isinstance(registration,dict)
+                or not isinstance(claim,dict)):
+            raise RecordError('exact creation intent and original host required')
+        with self.store.transaction() as db:
+            current, _, run = self.store._live_claim(db,self.controller,claim)
+            latest = self.registry._owned(self.registry._latest(db),run['id'])
+            prior = db.execute("SELECT seq FROM audit_events WHERE action='creation_intent' AND entity_id=?",
+                               (run['id'],)).fetchone()
+            if (safe_payload(latest)!=safe_payload(registration) or latest['phase']!='reserved'
+                    or latest['claim_id']!=current['id'] or latest['generation']!=current['generation']
+                    or latest['restore_epoch']!=current['restore_epoch']
+                    or prior is not None or read_binding(db,run['id']) is not None):
+                raise RecordError('creation intent already attempted, bound or fenced')
+            intent = {key:latest[key] for key in ['run_id','claim_id','generation',
+                'workload_id','deadline_at','policy_sha256']}
+            intent.update(creation_epoch=latest['restore_epoch'],registration_seq=latest['seq'],
+                          host_id=host_id,**_names(latest))
+            self.store.audit(db,self.controller,run['id'],'creation_intent',intent)
+            row = db.execute("SELECT seq,at FROM audit_events WHERE action='creation_intent' AND entity_id=?",
+                             (run['id'],)).fetchone()
+            return {**intent,'seq':row['seq'],'at':row['at'],'controller':self.controller.id}
+
     def bind(self, registration, claim, *, host_id, container_id):
         """Seal a root-observed STOPPED container before any guard/consume/start.
 
@@ -63,18 +97,21 @@ class CreationRegistry:
                     or latest['restore_epoch'] != current['restore_epoch']
                     or latest['generation'] != current['generation']):
                 raise RecordError('creation requires exact reserved current registration')
-            # Original epoch, never current restore epoch or a fresh UUID.
-            identity = hashlib.sha256(safe_payload({
-                'run_id':run['id'], 'creation_epoch':latest['restore_epoch']}).encode()).hexdigest()
             binding = {
                 'run_id':run['id'], 'claim_id':current['id'],
                 'creation_epoch':latest['restore_epoch'], 'generation':current['generation'],
                 'registration_seq':latest['seq'], 'workload_id':latest['workload_id'],
                 'host_id':host_id, 'container_id':container_id,
-                'guard_id':'hearth2-deadline-' + identity,
-                'parent_cgroup':'hearth2-' + identity,
+                **_names(latest),
                 'deadline_at':latest['deadline_at'], 'policy_sha256':latest['policy_sha256'],
             }
+            intent_row = db.execute("SELECT * FROM audit_events WHERE action='creation_intent' AND entity_id=?",
+                                    (run['id'],)).fetchone()
+            if intent_row is not None:
+                intent = json.loads(intent_row['data'])
+                if (intent_row['actor']!=self.controller.id
+                        or any(binding.get(key)!=value for key,value in intent.items())):
+                    raise RecordError('binding must preserve the original pre-create intent')
             previous = read_binding(db, run['id'])
             if previous is not None:
                 recorded = {k:v for k,v in previous.items() if k not in {'seq','at','controller'}}

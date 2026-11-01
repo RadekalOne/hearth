@@ -99,3 +99,16 @@ atomically; ordinary public consume cannot bypass this for bound runs. All OS
 operations and actual native activation remain separate gates. No disarm is
 introduced;900s defaults/full-run policy remain unchanged/inactive. Tests first,
 one fresh final review, then appropriate full regression; preserve private ledger.
+
+## Current continuation: one-use root launch composition
+
+Before any external create, commit a one-use original-host creation intent.
+Compose the inactive injectable root driver through stopped create/independent
+inspect/bind/arm/independent inspect/atomic guarded consume/final live fence/start
+of only the sealed immutable ID (`LAUNCH-COMPOSITION.md`). Crash/lost-ack replay
+never creates/adopts/rearms/starts again; no cleanup/disarm fallback. Capture
+current recovery fencing before independent proof collection and call only the
+strict bound RecoveryCoordinator. Test all partial boundaries and a real process
+race offline. Concrete OS/driver/old-backup/orphan-intent inventory acceptance
+remains an activation gate; no full-run lease/default change. One final fresh
+review and full appropriate regression before local commit.
