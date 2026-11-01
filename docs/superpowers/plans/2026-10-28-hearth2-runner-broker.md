@@ -112,3 +112,15 @@ strict bound RecoveryCoordinator. Test all partial boundaries and a real process
 race offline. Concrete OS/driver/old-backup/orphan-intent inventory acceptance
 remains an activation gate; no full-run lease/default change. One final fresh
 review and full appropriate regression before local commit.
+
+## Current continuation: kernel guard and independent disarm
+
+Implement root-only termination with exact original binding, kernel freeze/kill
+before daemon calls and repeated kernel kill on post-kill failures/interruption.
+Retain frozen parent and never disarm in the guard. A separate outside observer
+must freshly read empty/frozen parent AND successful exact immutable-ID absence
+before disarm. Add directory-fenced real cgroup-file operations tested ONLY on
+private regular files and synthetic daemon inventory (`ROOT-KERNEL-GUARD.md`).
+Actual daemon/host-authentication/arming/start driver, OS and reboot/old-backup
+acceptance remain open; no service activation or lease/default change. TDD,
+one fresh final review and full offline verification before local commit.
