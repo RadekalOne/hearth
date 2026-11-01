@@ -62,7 +62,7 @@ class SystemdTimerProperties:
             raise RecordError('systemd existing unit path invalid')
         return value['data'][0]
 
-    def _properties(self,path,interface,fields):
+    def _properties(self,path,interface,fields,*,validator=_typed):
         raw=self._run(['get-property',_SERVICE,path,interface,*[name for name,_ in fields]])
         lines=raw.splitlines()
         if len(lines)!=len(fields):raise RecordError('systemd property count differs')
@@ -70,7 +70,7 @@ class SystemdTimerProperties:
         for line,(name,signature) in zip(lines,fields):
             value=_json(line)
             if (not isinstance(value,dict) or set(value)!={'type','data'}
-                    or value['type']!=signature or not _typed(signature,value['data'])):
+                    or value['type']!=signature or not validator(signature,value['data'])):
                 raise RecordError('systemd property type or shape differs')
             result[name]=value['data']
         return result

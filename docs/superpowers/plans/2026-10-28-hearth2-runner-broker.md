@@ -179,3 +179,13 @@ refuse restore-host remapping. Tests use private files/injected ports only.
 Actual root authentication, service executable/UID/policy and stopped-container
 resource readback, then concrete create/arm/start composition remain required
 before any activation. Full-run/default900s policy remains inactive.
+
+## Offline service-only readback continuation
+
+Read original guard/native artifacts pinned by layout and bounded typed service
+configuration (`GUARD-SERVICE-READBACK.md`). Exact sealed binding argv, explicit
+numeric root settings, unused transient inactive unit and no alternate lifecycle
+commands; stable twice-read artifacts/properties/current original host/deadline.
+Service-only evidence never authorizes consumption/start. Actual runtime UID,
+namespace/dependency closure/native policy application/container/OS gates remain.
+TDD, one fresh final review/single fix pass/full offline suite; no activation.
