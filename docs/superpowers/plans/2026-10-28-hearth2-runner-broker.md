@@ -199,3 +199,13 @@ needed for mounted profiles/broker egress. Read twice under originalhost/deadlin
 and immutable context. Partial config evidence cannot satisfy full created/armed
 proof. Actual native application/OS/driver acceptance stays gated; TDD/fresh review/
 full offline suite/local commit, default900s/full-run inactive/no activation.
+
+## Offline sealed root guard ABI continuation
+
+Implement root execution seals/callable guard entrypoint (`GUARD-ENTRYPOINT.md`):
+canonical exact binding, embedded original layout/evidence path, durable immutable
+private no-replace seal before arming, UID/originalhost enforcement, no early
+execution, existing kernel-first termination at originaldeadline. DefaultCLI has
+no runtime; no installedwrapper or activation. Policyrepo loss after sealing must
+not prevent termination. Rootdriver/hostauth/OS/nativeassembly acceptance remains
+open; no partialproof promotion. TDD/fresh review/full suite/local commit only.
