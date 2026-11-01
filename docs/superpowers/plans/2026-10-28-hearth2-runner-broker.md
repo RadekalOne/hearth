@@ -220,3 +220,13 @@ before arming; strict service literal-JSON flag, timer/config/assembly reinspect
 before consumption/start. Never turn partial receipts into full authority alone.
 Default driver unconfigured/no OS activation; actual installed collector/wrapper/
 native/OS/orphan/restore acceptance remains open. TDD/freshreview/full offline gate.
+
+## Offline independent assembly collector continuation
+
+Implement RootAssemblyCollector/immutable independent root enrollment and bounded
+Docker metadata comparison ports (`ASSEMBLY-COLLECTOR.md`). Require separate fresh
+image/container file-stat-digest and root-runtime/installation facts; never turn
+caller states or hashes alone into physical attestation. No default enrollment/
+file/runtime backend or driver wiring. Two copied stable rounds under original
+host/boot/namespaces/context/deadline. Actual file/runtime/backend provenance,
+CLI/OS/native acceptance remains gated. TDD/freshreview/full isolated suite only.
