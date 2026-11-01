@@ -230,3 +230,13 @@ caller states or hashes alone into physical attestation. No default enrollment/
 file/runtime backend or driver wiring. Two copied stable rounds under original
 host/boot/namespaces/context/deadline. Actual file/runtime/backend provenance,
 CLI/OS/native acceptance remains gated. TDD/freshreview/full isolated suite only.
+
+## Offline selected-file archive measurement continuation
+
+Implement bounded non-extracting selected-file USTAR measurement port
+(`FILE-MEASUREMENTS.md`) with exact immutable source linkage, independently
+acquired no-follow ancestor measurements and fresh time/provenance checks.
+Refuse links/extensions/traversal/extra members/unsupported archive formats.
+No default authenticated source, layer resolver or driver wiring. This component
+does not establish physical source provenance or complete credential inventory.
+Private archive fixtures, TDD, one final fresh review and full isolated suite.
