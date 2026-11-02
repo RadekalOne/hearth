@@ -261,3 +261,15 @@ budgets. Fixed required coverage families before/after creation, no exclusions.
 Requirements only, not a scanner or inventory receipt. Complete physical producer,
 audited consumers/provenance and driver wiring remain absent. TDD/private artifacts,
 one final fresh review/full offline suite; stop new work at the existing cutoff.
+
+## Resumed offline whole-rootfs inventory acquisition
+
+Rad resumed this laptop chat on 2 November; the expired daytime automation stays
+paused. Implement `RootfsInventorySource` (`ROOTFS-INVENTORY.md`) with separate
+whole-view authority, exact requirements binding and exhaustive bounded no-follow
+two-pass filesystem acquisition. Include hidden files; refuse unknown types,
+links/mount crossings/unreadable paths/races/budget exhaustion. Summary digests and
+counts ONLY, no credential absence or automatic policy/consumer interpretation.
+Native/environment/configuration/mount inventory and audited consumer semantics
+remain separate work. Private fixtures/TDD/immutable full-suite source/one fresh
+final review; all existing offline/activation/credential/provider limits remain.
