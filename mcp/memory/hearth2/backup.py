@@ -13,7 +13,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from .schema import Schema, TABLES, open_existing
-from .store import RecordError, Store, safe_payload, timestamp, text, action_manifest, manifest_hash
+from .store import native_receipt_metadata, RecordError, Store, safe_payload, timestamp, text, action_manifest, manifest_hash
 
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ROWS = 100000
@@ -92,6 +92,7 @@ def validate_domain(tables):
             closeout = json.loads(last['closeout']) if last['closeout'] else None
             if (isinstance(closeout, dict) and closeout.get('status') == 'needs-decision'
                     and last['exit_status'] is not None
+                    and native_receipt_metadata(json.loads(last['data']))[0] in {'observed', 'completed'}
                     and Store._closeout_validation(closeout, task, last) == 'valid'):
                 answers = payload.get('human_answers', [])
                 if not any(a.get('run_id') == last['id'] and a.get('evidence') and a.get('answer')
@@ -105,8 +106,9 @@ def validate_domain(tables):
             run = history[-1]
             closeout = json.loads(run['closeout']) if run['closeout'] is not None else None
             valid = Store._closeout_validation(closeout, task, run) == 'valid'
-            success = valid and closeout['status'] == 'done' and run['exit_status'] == 0
-            human_wait = (valid and task['state'] == 'needs_decision'
+            native_state, _, _ = native_receipt_metadata(json.loads(run['data']))
+            success = native_state in {'observed', 'completed'} and valid and closeout['status'] == 'done' and run['exit_status'] == 0
+            human_wait = (native_state in {'observed', 'completed'} and valid and task['state'] == 'needs_decision'
                           and closeout['status'] == 'needs-decision' and run['exit_status'] is not None)
             if run['ended_at'] is None or run['containment_state'] != 'verified_empty' or not (success or human_wait):
                 raise RecordError('completed state lacks a validated result or human decision request')
@@ -126,6 +128,7 @@ def validate_domain(tables):
             raise RecordError('claim/run identity mismatch')
         timestamp(claim['lease_until'])
     for run in runs.values():
+        native_receipt_metadata(json.loads(run['data']))
         if run['claim_id'] not in claims or run['task_id'] not in tasks:
             raise RecordError('run has no claim/task')
         if timestamp(run['deadline_at']) <= timestamp(run['started_at']) or run['ended_at'] is not None and timestamp(run['ended_at']) < timestamp(run['started_at']):
