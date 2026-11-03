@@ -12,6 +12,7 @@ from .store import RecordError
 
 _VERSION = '0.4.1'
 _CORE = 'ab278b848d10c3b8721fc00f76512994f39db9eba6691492b74c2135afa2703b'
+_MCODE_RESOLVER = '7f91af66b8692739662669da6a04ba294d9da871bb667b19ce6ff98cddd42e73'
 _IDENTIFIER = re.compile(r'[A-Za-z_][A-Za-z0-9_]*', re.ASCII)
 _HEADER = re.compile(r"[!#$%&'*+\-.^_`|~A-Za-z0-9]+", re.ASCII)
 
@@ -158,7 +159,7 @@ class MiniMaxConsumerParser:
                 type(self.core_bundle_sha256) is not str or self.core_bundle_sha256 != _CORE:
             _refuse()
 
-    def auth_json(self, raw):
+    def pi_auth_json(self, raw):
         values = []
         unknown = 0
         for record in _load(raw).values():
@@ -167,13 +168,18 @@ class MiniMaxConsumerParser:
                 values.append(record['key'])
             else:
                 unknown += 1
-        return _summary('auth-json', values, expressions=True, unknown=unknown)
+        return _summary('pi-auth-json', values, expressions=True, unknown=unknown)
 
-    def headers_json(self, raw):
-        return self._string_map(raw, 'headers-json', expressions=True, names=_HEADER)
+    def pi_headers_json(self, raw):
+        return self._string_map(raw, 'pi-headers-json', expressions=True, names=_HEADER)
 
-    def runtime_overrides_json(self, raw):
-        return self._string_map(raw, 'runtime-overrides-json', expressions=False)
+    def pi_runtime_overrides_json(self, raw):
+        return self._string_map(raw, 'pi-runtime-overrides-json', expressions=False)
+
+    def mcode_headers_json(self, raw, *, resolver_bundle_sha256):
+        if type(resolver_bundle_sha256) is not str or resolver_bundle_sha256 != _MCODE_RESOLVER:
+            _refuse()
+        return self._string_map(raw, 'mcode-headers-json', expressions=False, names=_HEADER)
 
     def environment_json(self, raw):
         return self._string_map(raw, 'environment-json', expressions=False, names=_IDENTIFIER)
