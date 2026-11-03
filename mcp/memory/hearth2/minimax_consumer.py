@@ -15,6 +15,9 @@ _CORE = 'ab278b848d10c3b8721fc00f76512994f39db9eba6691492b74c2135afa2703b'
 _MCODE_RESOLVER = '7f91af66b8692739662669da6a04ba294d9da871bb667b19ce6ff98cddd42e73'
 _IDENTIFIER = re.compile(r'[A-Za-z_][A-Za-z0-9_]*', re.ASCII)
 _HEADER = re.compile(r"[!#$%&'*+\-.^_`|~A-Za-z0-9]+", re.ASCII)
+_OAUTH_RECORD_KEY = re.compile(
+    r'com\.minimax\.mcode\.oauth\.(?:dev|test|staging|prod)\.(?:cn|en)\x00[A-Za-z0-9_-]{43}',
+    re.ASCII)
 
 
 def _refuse():
@@ -38,8 +41,11 @@ def _number(_):
     raise _InvalidJSON()
 
 
-def _load(raw):
+def _load(raw, *, oauth_record_key=None):
     if type(raw) is not bytes or not 0 < len(raw) <= 65536:
+        _refuse()
+    if oauth_record_key is not None and (type(oauth_record_key) is not str or
+                                        not _OAUTH_RECORD_KEY.fullmatch(oauth_record_key)):
         _refuse()
     failed = False
     try:
@@ -77,7 +83,8 @@ def _load(raw):
                     raise _InvalidJSON()
             elif isinstance(item, dict):
                 for key, child in item.items():
-                    if not 0 < len(key) <= 256 or not key.isascii() or not key.isprintable():
+                    if not 0 < len(key) <= 256 or not key.isascii() or \
+                            (not key.isprintable() and key != oauth_record_key):
                         raise _InvalidJSON()
                     pending.extend((key, child))
             elif isinstance(item, list):
