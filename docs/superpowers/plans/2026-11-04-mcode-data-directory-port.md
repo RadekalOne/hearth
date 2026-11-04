@@ -112,3 +112,19 @@ Expected GREEN: actual test count and exit0; RED: the named new behavior fails b
 Coverage: Task1 binds authority/path semantics; Task2 covers hierarchical absence/status/material contracts; Task3 covers source acquisition/races; Task4 covers isolation/discovery/window/composition and final gates. Every Review Focus item has named owning tests. Types flow only in dependency order; root-only requests never consume UniverseSnapshot. No unresolved source mapping becomes mandatory actual coverage; runtime/MCP and unsupported native semantics remain explicit unknowns.
 
 The execution method is already supplied: inline/native implementation plus one fresh final reviewer. This plan creates no new implementation permission for live systems or enrollment. Review this concrete plan before execution under the writing-plans handoff requirement; preserve the selected method rather than asking for delegation again.
+
+## User-directed incremental execution update â€” 4 November
+
+Rad explicitly opted out of further plan-approval gates and chose small working
+increments with concrete examples and adjustments. This supersedes the preceding
+handoff pause and continuous whole-plan execution expectation. Retain every
+offline/privacy/activation boundary. First increment: the pure compact coverage
+core (`docs/hearth2/COMPACT-COVERAGE-CORE.md`), its typed conditional requirements,
+two-pass supplied-evidence checks, separate logical/work counts and empty-present
+contract. It is the lower layer of Task2, NOT completed Tasks1/2 or a production
+RootCredentialAccounting adapter. Task1 enrollment/native source map and Tasks3/4
+physical/process composition remain unfinished. Each completed increment gets
+tests, one fresh final review and a new immutable full-suite gate; no implementation
+delegation or repeated approval requests for routine technical decisions.
+
+Increment1 verification:32core tests and existing empty-source regression, one fresh final review/one Important global-witness correction,80credential checks green, final973offline tests PASS148.848s/exit0. Source snapshot eaaadd3e16a647ee6270f87028c0fca0206db5ff69d9eecc8047b4fd55608f17 byte-exact. Underlying compact core is implemented; full Tasks1–4 checkboxes remain unfinished, including independent native map/enrollment, root observation wrappers, physical producer/process coordinator. User-directed working-example handoff replaces another plan approval.

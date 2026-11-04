@@ -187,7 +187,7 @@ def _observations(observations,context,entries,begin,now,byte_limit):
         observed=_instant(o.observed_at)
         if not begin<=observed<=now or (now-observed).total_seconds()>60:_refuse()
         if o.status=='present':
-            if type(o.raw) is not bytes or not 0<len(o.raw)<65536:_refuse()
+            if type(o.raw) is not bytes or not len(o.raw)<65536:_refuse()
             size+=len(o.raw)
             if size>=byte_limit:_refuse()
         elif o.raw is not None:_refuse()

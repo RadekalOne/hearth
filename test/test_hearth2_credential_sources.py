@@ -260,8 +260,14 @@ class CredentialSourceTests(unittest.TestCase):
 
     def test_unknown_empty_and_bad_typed_present_data_cannot_be_absent(self):
         entry=next(e for e in self.manifest.entries if e.kind=='environment')
-        for data in [b'',None,bytearray(b'{}'),'{}']:
+        for data in [None,bytearray(b'{}'),'{}']:
             with self.assertRaises(RecordError):self.run_account((self.obs(entry,'present',data),))
+
+    def test_empty_existing_source_is_present_unsupported_not_absent(self):
+        result=self.run_account(self.sources(**{'environment':b''}))
+        self.assertEqual(result.unsupported_sources,1)
+        self.assertEqual(result.absent_sources,result.required_sources-1)
+        self.assertEqual(result.parsed_sources,0)
 
     def test_partial_unknown_pi_counts_not_erased_by_other_unsupported_sources(self):
         value={'x':{'type':'oauth','access':'FAKE-A','refresh':'FAKE-R','expires':True}}
