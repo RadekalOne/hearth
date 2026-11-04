@@ -16,12 +16,27 @@ runtime is selected implicitly from the conversation controller's default.
 Runtime-default hypotheses cannot enable requireCatalog or custom-prefix fallback,
 which the reviewed SVr source does not set. The preset default model is explicit;
 references must contain meaningful text.
+The reference is a free-text label with zero evidentiary weight. Every returned
+result carries resolver and hypothesis_fingerprint: SHA256 of canonical declared
+context fields plus pinned native source identities. Reference text, config bytes,
+ModelRef values and all tokens are excluded. This digest binds assumptions, not
+source bytes, code correctness, evidence, freshness or actual runtime identity.
+API and builtin preset catalog declarations must match native me=jt; effective
+user model overrides remain a separate map. MI is the controller default and OD
+an injectable alternative in the published source; neither is implicitly selected
+by this parser.
 
 `MCodeConfigParser.analyze(config_bytes, context, model_ref_json=None)` supports
 the credential-relevant provider/custom_provider/minimax_api/minimaxModelSource/
 defaultModel/beta fields, with strictly reviewed nested option/model fields.
-Unknown sections/fields, nonboolean enabled flags, legacy minimax-legacy provider
-remapping and unsupported URLs refuse. Config default selection and explicit host
+Bounded unknown sections and unparsed metadata branches are counted, including
+beta/model metadata and host ModelRef extras. Any unparsed_config_fields or
+unparsed_model_ref_fields force outcome/route unresolved, no computed headers and
+no fallback claim. unknown_sections separately counts top-level branches. Raw known
+credential fields are still counted; malformed known fields still refuse. Never
+strip unknown fields from original bytes to fabricate a successful subset scan.
+Nonboolean enabled flags, legacy minimax-legacy remapping and unsupported URLs
+refuse. Config default selection and explicit host
 ModelRef are separate sources; ModelRef may carry base_url/api_key overrides.
 This is a supported subset, not full native configuration compatibility.
 Under managed runtime, raw plain-provider entries with nonempty key/baseURL and
@@ -39,6 +54,15 @@ are 65536 bytes, depth8, 2048 nodes including keys, 8192 UTF-8 bytes per scalar,
 256 ASCII printable bytes per mapping name. JSON ModelRef shares existing limits.
 All errors are fixed and suppress parser exception contexts; no values/names,
 tokens, credential hashes, raw references, URLs or model/provider IDs are output.
+Parser refusal blocks Hearth analysis; it does not imply native abort, no route
+or credential absence. Native Gt catches YAML/read failures to {}, and fi cleans
+some wrong-typed fields to defaults; the CLI can consequently proceed on Token
+Plan. We deliberately do not turn parser refusal into an empty-success result.
+Null model entries and unquoted numeric ambiguities such as +5/1_000/0x10/1e3
+remain refused; native may ignore, parse or fall back. Digit-prefixed string names
+such as 3rd-party/01-ai are supported, including canonical quoted numeric keys.
+Fallback follows [JavaScript property order](https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ordinaryownpropertykeys):
+integer-index keys first, then other string keys in insertion order.
 
 Production managed rewriting follows Vr: managed runtime fixes minimax authMode
 and baseURL; user apiKey resets only for an originally non-managed baseURL and can
@@ -66,6 +90,8 @@ not establish physical HTTP precedence or credential absence; arbitrary custom
 header consumer closure remains outside this analysis.
 Selected Pi/OAuth getters remain unresolved. This module never executes helper/ENV lookup or refreshes credentials. A future
 activation gate must independently establish all effective account/auth behavior.
+Labels are managed-bearer-assumed, mixed-assumed and pi-auth-unparsed where
+appropriate; a declared bearer boolean never becomes an observed account.
 
 Canonical ASCII HTTPS URLs only: no userinfo/query/fragment/IDNA/IPv6/scheme-less
 forms or nondefault ports. Mixed ASCII host case and explicit443 are supported by
@@ -74,6 +100,10 @@ managed origins are the three reviewed agent hosts. Unknown authMode refuses
 rather than emulating the native warning/fallback.
 Non-ASCII URL margins also refuse instead of guessing WHATWG vs ECMAScript
 trimming differences. Source identities are exact full 64-character hashes.
+The config allowManagedBaseURLOverride key is accepted but inert in the reviewed
+production resolver path. Unknown minimaxModelSource and nondefault ports remain
+intentional refusals although native may select defaults or API-key routing.
+See the [complete review disposition and known-artifact table](CLAUDE-PARSER-REVIEW-2026-11-04.md).
 
 The pinned [PyYAML event API](https://github.com/yaml/pyyaml/blob/6.0.3/lib/yaml/__init__.py)
 is used for syntax events; construction/type semantics are intentionally narrower
@@ -85,7 +115,7 @@ unsupported cases remain refusals/unresolved outcomes. Eight runtime/host/HTTP
 questions remain open. There is no complete inventory schema, observe/scan port,
 filesystem discovery, environment read, controller/driver wiring or activation.
 
-Verification, 4 November 2026: 26 missing-feature tests first failed; 30 initial
+Historical verification at 5eaf9a9, before Claude's follow-up: 26 missing-feature tests first failed; 30 initial
 focused tests passed after source-derived refinements. One fresh final Codex
 review found five Important issues, no Critical/Minor: incorrect OD identity,
 missing-model remapping, raw whitespace reset semantics, competing auth headers,

@@ -141,11 +141,15 @@ class ConsumerSyntax:
     command_fields: int = 0
     environment_references: int = 0
     unknown_records: int = 0
+    oauth_records: int = 0
+    access_tokens: int = 0
+    refresh_tokens: int = 0
 
 
-def _summary(kind, values, *, expressions, unknown=0):
+def _summary(kind, values, *, expressions, unknown=0, oauth=0, access=0, refresh=0):
     counts = dict(literal_fields=0, empty_fields=0, environment_fields=0,
-                  command_fields=0, environment_references=0, unknown_records=unknown)
+                  command_fields=0, environment_references=0, unknown_records=unknown,
+                  oauth_records=oauth, access_tokens=access, refresh_tokens=refresh)
     for value in values:
         if expressions:
             field, refs = _expression(value)
@@ -168,14 +172,26 @@ class MiniMaxConsumerParser:
 
     def pi_auth_json(self, raw):
         values = []
-        unknown = 0
+        unknown = oauth = access = refresh = 0
         for record in _load(raw).values():
             if type(record) is dict and set(record) == {'type', 'key'} and \
                     record['type'] == 'api_key' and type(record['key']) is str:
                 values.append(record['key'])
+            elif type(record) is dict and record.get('type') == 'oauth':
+                oauth += 1
+                access += int(type(record.get('access')) is str and bool(record['access']))
+                refresh += int(type(record.get('refresh')) is str and bool(record['refresh']))
+                known = {'type','access','refresh','expires'}
+                supported = known <= record.keys() and not record.keys()-known-{'accountId'} and \
+                    type(record.get('access')) is str and bool(record['access']) and \
+                    type(record.get('refresh')) is str and bool(record['refresh']) and \
+                    type(record.get('expires')) is int and 0 <= record['expires'] <= 9007199254740991 and \
+                    ('accountId' not in record or type(record['accountId']) is str)
+                if not supported: unknown += 1
             else:
                 unknown += 1
-        return _summary('pi-auth-json', values, expressions=True, unknown=unknown)
+        return _summary('pi-auth-json', values, expressions=True, unknown=unknown,
+                        oauth=oauth, access=access, refresh=refresh)
 
     def pi_headers_json(self, raw):
         return self._string_map(raw, 'pi-headers-json', expressions=True, names=_HEADER)

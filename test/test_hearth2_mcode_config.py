@@ -46,7 +46,7 @@ class MCodeConfigTests(unittest.TestCase):
 
     def test_M1_empty_production_config_requires_managed_oauth(self):
         result=self.analyze({})
-        self.assertEqual((result.outcome,result.route,result.credential_source),('conditional','token_plan','managed-oauth'))
+        self.assertEqual((result.outcome,result.route,result.credential_source),('conditional','token_plan','managed-bearer-assumed'))
         self.assertFalse(result.fallback)
         self.assertEqual(result.configured_key_fields,0)
 
@@ -120,7 +120,7 @@ class MCodeConfigTests(unittest.TestCase):
 
     def test_B7_B8_pi_auth_getter_remains_unresolved(self):
         result=self.analyze(self.custom(kind='oauth',options={'baseURL':'https://acme.example.test/v1'}))
-        self.assertEqual((result.outcome,result.credential_source),('unresolved','pi-auth'))
+        self.assertEqual((result.outcome,result.credential_source),('unresolved','pi-auth-unparsed'))
         self.assertIsNone(result.effective_header_fields)
 
     def test_B9_values_are_literal_never_helpers_or_environment(self):
@@ -192,7 +192,7 @@ class MCodeConfigTests(unittest.TestCase):
             with self.subTest(data=data),self.assertRaises(RecordError):self.parser.analyze(data,self.context())
 
     def test_unknown_fields_and_unsupported_native_formats_refuse(self):
-        for value in [dict(unknown='FAKE'),self.custom(enabled='false'),dict(defaultModel='custom_provider:minimax-legacy/m'),
+        for value in [self.custom(enabled='false'),self.custom(enabled=0),dict(defaultModel='custom_provider:minimax-legacy/m'),
                       dict(provider={'foo':{'options':{'baseURL':'https://foo.example.test/v1?key=FAKE'}}})]:
             with self.assertRaises(RecordError):self.analyze(value)
 
@@ -208,7 +208,7 @@ class MCodeConfigTests(unittest.TestCase):
             self.assertNotIn(text,output)
         self.assertNotIn('fixture:context',repr(self.context()))
         self.assertFalse(hasattr(self.parser,'observe'));self.assertFalse(hasattr(self.parser,'scan'))
-        for data in [b'provider: [FAKE-SECRET',raw(dict(secret='FAKE-SECRET'))]:
+        for data in [b'provider: [FAKE-SECRET',raw(dict(provider='FAKE-SECRET'))]:
             with self.assertRaises(RecordError) as error:self.parser.analyze(data,self.context())
             self.assertEqual(str(error.exception),'unsupported MCode configuration input')
             self.assertIsNone(error.exception.__context__)
@@ -237,7 +237,7 @@ class MCodeConfigTests(unittest.TestCase):
             self.assertEqual((result.outcome,result.fallback),('error',False))
 
     def test_original_whitespace_base_url_resets_key_without_trimming_reset_condition(self):
-        for url,source in [(' ','managed-oauth'),('\t\n','managed-oauth'),('','mixed')]:
+        for url,source in [(' ','managed-bearer-assumed'),('\t\n','managed-bearer-assumed'),('','mixed-assumed')]:
             with self.subTest(url=url):
                 value={'provider':{'minimax':{'options':{'apiKey':'FAKE-USER','baseURL':url}}}}
                 result=self.analyze(value)
@@ -264,6 +264,76 @@ class MCodeConfigTests(unittest.TestCase):
     def test_non_ascii_url_margins_refuse_instead_of_guessing_whatwg_trimming(self):
         value={'provider':{'minimax':{'options':{'apiKey':'FAKE','baseURL':'\ufeffhttps://agent.minimax.io/v1\ufeff'}}}}
         with self.assertRaises(RecordError):self.analyze(value)
+
+    def test_selection_is_bound_to_resolver_and_non_secret_hypothesis(self):
+        first=self.analyze({});same=self.analyze({},reference='FAKE-SECRET-REFERENCE')
+        self.assertEqual(first.resolver,'OD')
+        self.assertRegex(first.hypothesis_fingerprint,r'^[0-9a-f]{64}$')
+        self.assertEqual(first.hypothesis_fingerprint,same.hypothesis_fingerprint)
+        self.assertNotEqual(first.hypothesis_fingerprint,self.analyze({},resolver='MI').hypothesis_fingerprint)
+        self.assertNotEqual(first.hypothesis_fingerprint,self.analyze({},check_availability=True).hypothesis_fingerprint)
+        self.assertNotIn('FAKE-SECRET-REFERENCE',repr(same))
+
+    def test_bearer_and_pi_source_labels_state_assumptions(self):
+        self.assertEqual(self.analyze({}).credential_source,'managed-bearer-assumed')
+        value={'provider':{'minimax':{'options':{'apiKey':'FAKE'}}}}
+        self.assertEqual(self.analyze(value).credential_source,'mixed-assumed')
+        value=self.custom(kind='oauth',options={'baseURL':'https://acme.example.test/v1'})
+        self.assertEqual(self.analyze(value).credential_source,'pi-auth-unparsed')
+
+    def test_API_catalog_cannot_disagree_with_native_preset_alias(self):
+        with self.assertRaises(RecordError):self.context(api_models=('MiniMax-M3',))
+
+    def test_native_digit_prefixed_provider_and_model_ids(self):
+        value=self.custom(models={'01-ai/yi-large':{}})
+        value['custom_provider']={'3rd-party':value['custom_provider']['acme']}
+        value['defaultModel']='custom_provider:3rd-party/01-ai/yi-large'
+        self.assertEqual(self.analyze(value).route,'custom_provider')
+        data=b'custom_provider:\n  3rd-party:\n    kind: custom\n    options: {apiKey: k, baseURL: https://x.example/v1}\n    models: {01-ai/yi-large: {}}\ndefaultModel: custom_provider:3rd-party/01-ai/yi-large\n'
+        self.assertEqual(self.parser.analyze(data,self.context()).route,'custom_provider')
+
+    def test_numeric_model_fallback_uses_JS_integer_index_order(self):
+        value=self.custom(enabled=False)
+        value['provider']={'minimax':{'models':{'10':{},'2':{'headers':{'x-api-key':'FAKE'}}}}}
+        result=self.analyze(value)
+        self.assertTrue(result.fallback)
+        self.assertTrue(result.unresolved_http_auth)
+
+    def test_numeric_provider_fallback_uses_JS_integer_index_order(self):
+        value=self.custom(enabled=False)
+        value['provider']={name:{'options':{'apiKey':'FAKE','baseURL':'https://foo.example/v1',
+            'headers':({'x-api-key':'FAKE'} if name=='2' else {})},'models':{'m':{}}} for name in ['10','2']}
+        result=self.analyze(value,managed_runtime=False)
+        self.assertTrue(result.fallback)
+        self.assertTrue(result.unresolved_http_auth)
+
+    def test_unparsed_real_file_sections_force_unresolved_without_projection(self):
+        value={'logLevel':'info','memory':{'secret':'FAKE-HIDDEN'},'beta':{'experimental':True},
+            'provider':{'minimax':{'options':{'apiKey':'FAKE-KNOWN'},'models':{'MiniMax-M3':{
+                'temperature':True,'limit':{'context':200000}}}}}}
+        result=self.analyze(value)
+        self.assertEqual((result.outcome,result.route),('unresolved','unresolved'))
+        self.assertEqual((result.unknown_sections,result.unparsed_config_fields),(2,5))
+        self.assertEqual(result.configured_key_fields,1)
+        self.assertIsNone(result.effective_header_fields)
+        self.assertFalse(result.fallback)
+        self.assertNotIn('FAKE-HIDDEN',repr(result))
+
+    def test_unparsed_native_ModelRef_fields_force_unresolved(self):
+        ctx=self.context(selection_source='host-model-ref')
+        ref=dict(provider='foo',model_id='m',api_key='FAKE-HOST',base_url='https://foo.example/v1',
+                 thinking_level='high',capabilities={'vision':False})
+        result=self.parser.analyze(b'{}',ctx,model_ref_json=raw(ref))
+        self.assertEqual((result.outcome,result.route,result.host_key_fields),('unresolved','unresolved',1))
+        self.assertEqual(result.unparsed_model_ref_fields,2)
+        self.assertNotIn('FAKE-HOST',repr(result))
+
+    def test_unparsed_metadata_cannot_hide_malformed_known_credential_fields(self):
+        with self.assertRaises(RecordError):
+            self.analyze({'logLevel':'info','provider':{'minimax':{'options':{'apiKey':None}}}})
+        ref=dict(provider='foo',model_id='m',api_key=None,thinking_level='high')
+        with self.assertRaises(RecordError):
+            self.parser.analyze(b'{}',self.context(selection_source='host-model-ref'),model_ref_json=raw(ref))
 
 
 if __name__=='__main__':unittest.main()

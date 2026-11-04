@@ -199,5 +199,19 @@ class MiniMaxConsumerTests(unittest.TestCase):
         self.assertEqual((result.literal_fields, result.command_fields,
                           result.environment_fields), (1, 0, 0))
 
+    def test_pi_oauth_material_is_explicit_even_when_expired(self):
+        result=self.parser.pi_auth_json(encoded({'openai-codex':dict(type='oauth',access='FAKE-ACCESS',refresh='FAKE-REFRESH',expires=1,accountId='FAKE-ID')}))
+        self.assertEqual((result.oauth_records,result.access_tokens,result.refresh_tokens,result.unknown_records),(1,1,1,0))
+        self.assertEqual((result.command_fields,result.environment_fields),(0,0))
+        for value in ['FAKE-ACCESS','FAKE-REFRESH','FAKE-ID']:
+            self.assertNotIn(value,repr(result))
+
+    def test_unknown_pi_oauth_extras_retain_material_and_unknown(self):
+        for changes in [dict(future='FAKE-EXTRA'),dict(expires=True),dict(access='')]:
+            record=dict(type='oauth',access='FAKE',refresh='FAKE-REFRESH',expires=1)
+            result=self.parser.pi_auth_json(encoded({'p':{**record,**changes}}))
+            self.assertEqual((result.oauth_records,result.refresh_tokens,result.unknown_records),(1,1,1))
+            self.assertEqual(result.access_tokens,0 if changes.get('access')=='' else 1)
+
 
 if __name__ == '__main__': unittest.main()

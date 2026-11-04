@@ -1,5 +1,7 @@
 """Bounded, conditional MCode source analysis. Never runtime or start authority."""
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+import hashlib
+import json
 import re
 
 import yaml
@@ -12,8 +14,8 @@ from .store import RecordError
 _SOURCES=('0.4.1','b79bf405b47654e4295b918bfc0bf5d84e4f73d3b05197c89c909dedef8f9b9f',
           '7f91af66b8692739662669da6a04ba294d9da871bb667b19ce6ff98cddd42e73',
           'fc77436612ef5b8d771252eb6f47772e2f4b19ee82e8a815b351f78540f4c9a0')
-_ID=re.compile(r'[A-Za-z_][A-Za-z0-9_.-]*',re.ASCII)
-_MODEL=re.compile(r'[A-Za-z_][A-Za-z0-9_.:/-]*',re.ASCII)
+_ID=re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]*',re.ASCII)
+_MODEL=re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]*',re.ASCII)
 _URL=re.compile(r'https://([A-Za-z0-9.-]+)(?::443)?(/[A-Za-z0-9._~!$&\'()*+,;=:@%/-]*)?',re.ASCII|re.IGNORECASE)
 _HOST_LABEL=re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?',re.ASCII)
 _MANAGED=frozenset(('agent.minimax.io','agent.minimax.cn','agent.minimaxi.com'))
@@ -28,12 +30,22 @@ def _text(value):
     if type(value) is not str:_refuse()
 def _fields(value,allowed):
     if type(value) is not dict or value.keys()-set(allowed):_refuse()
+def _unparsed(value,allowed):
+    if type(value) is not dict:_refuse()
+    return len(value.keys()-set(allowed))
 def _boolean(value):
     if type(value) is not bool:_refuse()
 def _name(value,model=False):
     pattern=_MODEL if model else _ID
     if type(value) is not str or len(value)>256 or value in _BAD_KEYS or not pattern.fullmatch(value):_refuse()
     if value.startswith('minimax-legacy'):_refuse()
+
+
+def _js_keys(mapping):
+    indices=[key for key in mapping if len(key)<=10 and re.fullmatch(r'(?:0|[1-9][0-9]*)',key)
+             and int(key)<4294967295]
+    indexed=set(indices)
+    return sorted(indices,key=int)+[key for key in mapping if key not in indexed]
 
 
 def _url(value):
@@ -60,7 +72,9 @@ def _scalar(event):
         value=int(text)
         if abs(value)>9007199254740991:raise ValueError()
         return value
-    if re.match(r'[-+]?(?:[0-9]|\.[0-9])',text) or text.lower() in ('.inf','+.inf','-.inf','.nan'):
+    numeric=r'[-+]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|\.[0-9_]+(?:[eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+|0[oObB][0-9_]+)'
+    if re.fullmatch(numeric,text) or re.match(r'[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt ])',text) or \
+            text.lower() in ('.inf','+.inf','-.inf','.nan'):
         raise ValueError()
     return text
 
@@ -118,7 +132,7 @@ def _headers(value,counts):
 
 
 def _options(value,counts):
-    _fields(value,('apiKey','baseURL','authMode','headers','allowManagedBaseURLOverride'))
+    counts[2]+=_unparsed(value,('apiKey','baseURL','authMode','headers','allowManagedBaseURLOverride'))
     if 'apiKey' in value:_text(value['apiKey']);counts[0]+=1
     if 'baseURL' in value:_url(value['baseURL'])
     if 'authMode' in value and value['authMode'] not in ('managed-login','api-key','oauth'):_refuse()
@@ -127,14 +141,14 @@ def _options(value,counts):
 
 
 def _schema(value):
-    _fields(value,('provider','custom_provider','minimax_api','minimaxModelSource','defaultModel','beta'))
-    counts=[0,0]
+    unknown_sections=_unparsed(value,('provider','custom_provider','minimax_api','minimaxModelSource','defaultModel','beta'))
+    counts=[0,0,unknown_sections]
     for family in ('provider','custom_provider'):
         entries=value.get(family,{})
         if type(entries) is not dict:_refuse()
         for name,provider in entries.items():
             _name(name)
-            _fields(provider,('name','npm','api','kind','enabled','options','models'))
+            counts[2]+=_unparsed(provider,('name','npm','api','kind','enabled','options','models'))
             for field in ('name','npm','api'):
                 if field in provider:_text(provider[field])
             if 'kind' in provider and provider['kind'] not in ('custom','oauth'):_refuse()
@@ -143,11 +157,11 @@ def _schema(value):
             models=provider.get('models',{})
             if type(models) is not dict:_refuse()
             for model,config in models.items():
-                _name(model,True);_fields(config,('enabled','headers'))
+                _name(model,True);counts[2]+=_unparsed(config,('enabled','headers'))
                 if 'enabled' in config:_boolean(config['enabled'])
                 if 'headers' in config:_headers(config['headers'],counts)
     if 'minimax_api' in value:
-        api=value['minimax_api'];_fields(api,('apiKey','baseURL','modelContextLimits'))
+        api=value['minimax_api'];counts[2]+=_unparsed(api,('apiKey','baseURL','modelContextLimits'))
         if 'apiKey' in api:_text(api['apiKey']);counts[0]+=1
         if 'baseURL' in api:_url(api['baseURL'])
         if 'modelContextLimits' in api:
@@ -159,9 +173,9 @@ def _schema(value):
     if value.get('minimaxModelSource','token_plan') not in ('token_plan','minimax_api_key'):_refuse()
     if 'defaultModel' in value:_text(value['defaultModel'])
     if 'beta' in value:
-        _fields(value['beta'],('codexOAuth',))
+        counts[2]+=_unparsed(value['beta'],('codexOAuth',))
         if 'codexOAuth' in value['beta']:_boolean(value['beta']['codexOAuth'])
-    return counts
+    return counts,unknown_sections
 
 
 @dataclass(frozen=True,slots=True,repr=False)
@@ -181,6 +195,7 @@ class SelectionHypothesis:
     build_env:str='prod'
 
     def __post_init__(self):
+        if any(type(value) is not str for value in (self.resolver,self.region,self.build_env,self.selection_source)):_refuse()
         if self.resolver not in ('OD','MI') or self.region not in ('en','cn') or self.build_env!='prod' or \
                 self.selection_source not in ('runtime-default','host-model-ref'):_refuse()
         for flag in (self.managed_runtime,self.managed_bearer_present,self.require_catalog,
@@ -190,6 +205,8 @@ class SelectionHypothesis:
             if type(names) is not tuple or len(names)>64:_refuse()
             for name in names:_name(name,True)
             if len(set(names))!=len(names):_refuse()
+            if tuple(_js_keys(dict.fromkeys(names)))!=names:_refuse()
+        if self.api_models!=self.preset_models:_refuse()
         _name(self.preset_default_model,True)
         if self.managed_runtime and self.preset_default_model not in self.preset_models:_refuse()
         if type(self.reference) is not str or not 0<len(self.reference)<=256 or not _trim(self.reference) or not self.reference.isascii() or not self.reference.isprintable():_refuse()
@@ -204,8 +221,19 @@ class ConditionalSelection:
     configured_key_fields:int
     stored_header_fields:int
     host_key_fields:int
+    resolver:str
+    hypothesis_fingerprint:str
     effective_header_fields:int|None=None
     unresolved_http_auth:bool=False
+    unknown_sections:int=0
+    unparsed_config_fields:int=0
+    unparsed_model_ref_fields:int=0
+
+
+def _hypothesis_fingerprint(context):
+    values=tuple((field.name,getattr(context,field.name)) for field in fields(context) if field.name!='reference')
+    encoded=json.dumps((_SOURCES,values),ensure_ascii=True,separators=(',',':')).encode('ascii')
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _identity(provider,model):
@@ -252,13 +280,15 @@ class MCodeConfigParser:
     def analyze(self,raw,context,model_ref_json=None):
         if type(context) is not SelectionHypothesis:_refuse()
         context.__post_init__()
-        config=_yaml(raw);counts=_schema(config);_migration_fence(config,context);ref={};host_keys=0
+        fingerprint=_hypothesis_fingerprint(context)
+        config=_yaml(raw);counts,unknown_sections=_schema(config);_migration_fence(config,context)
+        ref={};host_keys=0;unparsed_ref=0
         if context.selection_source=='host-model-ref':
             failed=False
             try:ref=_load(model_ref_json)
             except RecordError:failed=True
             if failed:_refuse()
-            _fields(ref,('provider','model_id','api_key','base_url'))
+            unparsed_ref=_unparsed(ref,('provider','model_id','api_key','base_url'))
             if 'provider' not in ref or 'model_id' not in ref:_refuse()
             if 'api_key' in ref:_text(ref['api_key']);host_keys=1
             if 'base_url' in ref:_url(ref['base_url'])
@@ -286,7 +316,14 @@ class MCodeConfigParser:
                 _model(config,'custom_provider:'+provider,model,context) is not None:
             provider='custom_provider:'+provider
         def result(outcome='error',route='none',source='none',fallback=False,headers=None,unresolved=False):
-            return ConditionalSelection(outcome,route,source,fallback,*counts,host_keys,headers,unresolved)
+            if counts[2] or unparsed_ref:
+                outcome='unresolved';route='unresolved';fallback=False;headers=None;unresolved=True
+                source='unparsed-input' if counts[2] and unparsed_ref else ('unparsed-config' if counts[2] else 'unparsed-model-ref')
+            return ConditionalSelection(outcome=outcome,route=route,credential_source=source,fallback=fallback,
+                configured_key_fields=counts[0],stored_header_fields=counts[1],host_key_fields=host_keys,
+                resolver=context.resolver,hypothesis_fingerprint=fingerprint,effective_header_fields=headers,
+                unresolved_http_auth=unresolved,unknown_sections=unknown_sections,
+                unparsed_config_fields=counts[2],unparsed_model_ref_fields=unparsed_ref)
         entry=_model(config,provider,model,context)
         if context.require_catalog and (entry is None or entry.get('enabled') is False):return result()
         if context.check_availability:
@@ -307,7 +344,7 @@ class MCodeConfigParser:
                     options=custom.get('options',{})
                     if not _trim(options.get('baseURL','')):return result()
                     if custom.get('kind')=='oauth' or options.get('authMode')=='oauth':
-                        return result('unresolved','oauth' if provider=='custom_provider:openai-codex' else 'custom_provider','pi-auth')
+                        return result('unresolved','oauth' if provider=='custom_provider:openai-codex' else 'custom_provider','pi-auth-unparsed')
                     if not _trim(options.get('apiKey','')):return result()
                     merged={}
                     for layer in (options.get('headers',{}),custom['models'][model].get('headers',{})):
@@ -315,7 +352,7 @@ class MCodeConfigParser:
                     return result('conditional','custom_provider','config-key',headers=len(merged),unresolved=_competing_auth(merged))
             if plan is not None:return plan
             if context.resolver=='MI':return result()
-            candidates=[(name,tuple(value.get('models',{}))) for name,value in providers.items()]
+            candidates=[(name,tuple(_js_keys(providers[name].get('models',{})))) for name in _js_keys(providers)]
             candidates.sort(key=lambda pair:pair[0]!='minimax')
             chosen=next(((name,models[0]) for name,models in candidates if models),None)
             if chosen is None:return result()
@@ -328,7 +365,7 @@ class MCodeConfigParser:
         url=_trim(ref.get('base_url','')) or _trim(options.get('baseURL',''))
         origin=_url(url)
         mode=options.get('authMode') or ('managed-login' if origin in _MANAGED else 'api-key')
-        if provider=='openai-codex':return result('unresolved','oauth','pi-auth',fallback)
+        if provider=='openai-codex':return result('unresolved','oauth','pi-auth-unparsed',fallback)
         host_key=_trim(ref.get('api_key',''));key=host_key or _trim(options.get('apiKey',''))
         if mode=='managed-login' and not key:key='sk-xxx'
         headers={**options.get('headers',{}),**providers.get(provider,{}).get('models',{}).get(model,{}).get('headers',{})}
@@ -340,7 +377,7 @@ class MCodeConfigParser:
         if not host_key and key=='sk-xxx' and provider=='minimax' and \
                 'apiKey' not in raw_providers.get(provider,{}).get('options',{}):source='preset-placeholder'
         if mode=='managed-login':
-            source='managed-oauth' if key=='sk-xxx' and context.managed_bearer_present else 'mixed'
+            source='managed-bearer-assumed' if key=='sk-xxx' and context.managed_bearer_present else 'mixed-assumed'
             unresolved=collision or key!='sk-xxx' or not context.managed_bearer_present or _competing_auth(headers)
             return result('conditional','token_plan',source,fallback,len(headers),unresolved)
         return result('conditional','oauth' if mode=='oauth' else 'provider_api_key',source,fallback,

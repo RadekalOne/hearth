@@ -13,9 +13,15 @@ Version/hash parameters express the parser contract, not physical attestation.
 
 `MiniMaxConsumerParser(version, core_bundle_sha256)` accepts exact reviewed
 identity. `pi_auth_json(bytes)` scans ALL provider entries, not just the selected
-provider. Exact `{type:api_key,key:string}` records classify key syntax; OAuth,
-unknown/missing types and extra fields count as unknown records. Their semantics
-remain unresolved, even if another key would override them at runtime.
+provider. Exact `{type:api_key,key:string}` records classify key syntax. Pi OAuth
+records with type/access/refresh/expires and optional accountId count
+oauth_records/access_tokens/refresh_tokens, including expired material. Nonempty
+known token fields are still counted when a record is malformed or has unfamiliar
+extras; unknown_records also remains nonzero. Safe-integer expiry and known field
+types delimit the supported shape. OAuth values are literal, never helpers.
+Unknown/missing types and unsupported fields remain unresolved even if another
+credential overrides them. No inventory may treat zero known counts as clean
+while unknown_records is nonzero.
 `pi_headers_json(bytes)` classifies a Pi ModelRegistry provider OR model header
 string map; this is bundled syntax, not a live MCode header route.
 `pi_runtime_overrides_json` and
@@ -46,6 +52,8 @@ credentials. No precedence is inferred from these syntax counts. Full BYOK YAML,
 OAuth, token projections, consumer closure and physical source acquisition remain
 unimplemented here. Bundled Pi capabilities must not be inferred to be reachable
 through the MCode CLI. See the source-map correction below.
+The shared [review disposition/artifact catalog](CLAUDE-PARSER-REVIEW-2026-11-04.md)
+lists every currently known acquisition gap and environment consumer obligation.
 
 Next work must bind independently acquired snapshots and full audited native
 consumer manifests/parser closure to the original image/CID/assembly/scan policy,

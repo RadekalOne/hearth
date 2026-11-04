@@ -62,8 +62,10 @@ def _text(value, *, nonempty=True):
 
 
 def _contract(value):
-    if value['clientId'] != 'mcode-public' or value['audience'] != 'agent-backend' or \
-            value['scopes'] != ['agent.default']:
+    if value['clientId'] != 'mcode-public' or value['audience'] != 'agent-backend':
+        _refuse()
+    scopes=value['scopes']
+    if type(scopes) is not list or len(scopes)>64 or any(type(scope) is not str for scope in scopes):
         _refuse()
 
 
@@ -103,6 +105,10 @@ class OAuthFileSummary:
     expiry_state: str
     state_status: str | None = None
     matches_primary: bool | None = None
+    expiry_mismatch: bool | None = None
+    record_missing_required_scope: bool | None = None
+    extra_scope_fields: int | None = None
+    state_scope_mismatch: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +142,8 @@ class MCodeOAuthParser:
         if record is None:
             if state['status'] in ('authenticated', 'refreshing', 'expired', 'scope_upgrade_required'):
                 _refuse()
-            return OAuthFileSummary('mcode-oauth-files', 0, 0, 0, material, 'absent', state['status']), None
+            return OAuthFileSummary('mcode-oauth-files', 0, 0, 0, material, 'absent', state['status'],
+                extra_scope_fields=sum(scope!='agent.default' for scope in state['scopes'])), None
         _fields(record, _RECORD_REQUIRED, _RECORD_OPTIONAL)
         if type(record['schemaVersion']) is not int or record['schemaVersion'] != 1 or \
                 record['tokenType'] != 'Bearer':
@@ -148,11 +155,15 @@ class MCodeOAuthParser:
             _text(record[name], nonempty=False)
         _integer(record['generation'])
         _integer(record['expiresAtMs'])
-        if record['generation'] != state['generation'] or record['expiresAtMs'] != state.get('expiresAtMs'):
+        if record['generation'] != state['generation']:
             _refuse()
         return OAuthFileSummary('mcode-oauth-files', 1, 1,
             len(_RECORD_OPTIONAL & record.keys()), material,
-            'expired' if record['expiresAtMs'] <= now_ms else 'future', state['status']), record
+            'expired' if record['expiresAtMs'] <= now_ms else 'future', state['status'],
+            expiry_mismatch=record['expiresAtMs']!=state.get('expiresAtMs'),
+            record_missing_required_scope='agent.default' not in record['scopes'],
+            extra_scope_fields=sum(scope!='agent.default' for scope in record['scopes']+state['scopes']),
+            state_scope_mismatch=set(record['scopes'])!=set(state['scopes'])), record
 
     def store_json(self, auth_raw, state_raw, *, build_env, region, account, now_ms):
         summary, _ = self._store(auth_raw, state_raw, build_env=build_env,
@@ -185,9 +196,12 @@ class MCodeOAuthParser:
 
     def compare_projection(self, auth_raw, state_raw, projection_raw, *, source_kind,
                            build_env, region, account, now_ms):
-        _, record = self._store(auth_raw, state_raw, build_env=build_env,
+        primary, record = self._store(auth_raw, state_raw, build_env=build_env,
             region=region, account=account, now_ms=now_ms)
         summary, token = self._projection(projection_raw, source_kind)
         matched = record is not None and hmac.compare_digest(
             record['accessToken'].encode('utf8'), token.encode('utf8'))
-        return replace(summary, matches_primary=matched)
+        return replace(summary, matches_primary=matched, state_status=primary.state_status,
+            expiry_mismatch=primary.expiry_mismatch,
+            record_missing_required_scope=primary.record_missing_required_scope,
+            extra_scope_fields=primary.extra_scope_fields,state_scope_mismatch=primary.state_scope_mismatch)

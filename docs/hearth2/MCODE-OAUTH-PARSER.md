@@ -20,16 +20,21 @@ none are skipped. The bounded decoder permits only this exact control-character
 key for this call; all other callers retain the original printable-key rule.
 
 Credential record schemaVersion1 requires accessToken/refreshToken, Bearer,
-mcode-public, agent-backend, exactly agent.default scope, a nonnegative safe-integer
+mcode-public, agent-backend, a bounded string scope list, a nonnegative safe-integer
 expiry/generation and optional string subject/accountId/loginEpoch. State supports
 schemaVersion2, file store, explicit matching buildEnv/region and the known native
 status enum; optional expiry and authorizing-only authorization lease/progress
 fields follow the published shape. Sensitive token fields/unknown fields refuse.
-Legacy state1/os-keyring, missing namespace, extra scopes, unknown shapes, floats,
+Legacy state1/os-keyring, missing namespace, invalid scopes, unknown shapes, floats,
 unsafe integers and unsupported schema versions refuse instead of partial success.
 These strict supported subsets intentionally reject some native-permitted data.
 
-With a credential, state generation and expiry must match. Without one, a state
+With a credential, state generation must match. Expiry differences or a missing
+state expiry are exposed as expiry_mismatch; record expiry drives expiry_state.
+Scope arrays have at most64 string entries: extra_scope_fields counts non-default
+entries across record/state, record_missing_required_scope reports a credential
+without agent.default, and state_scope_mismatch compares scope membership. These
+flags never establish a usable or adequately scoped provider login. Without a credential, a state
 claiming authenticated/refreshing/expired/scope_upgrade_required refuses. An
 anonymous/error/authorizing/logout state with a retained matching record still
 counts both tokens; it never becomes an absence report. Expiry at or before the
@@ -58,7 +63,15 @@ field counts and an optional matches_primary boolean. No token, account/subject,
 record key, token hash, identity value, lease/user code, URLs, generation or raw
 timestamp is retained/output. Authorization fields can themselves carry sensitive
 material and are counted separately; state is not blanket credentials:none.
+Projection comparison preserves primary-pair expiry/scope alerts. Standalone
+projection summaries leave primary metadata None, not a false clean assertion.
 All exceptions are fixed/redacted with no decoder exception context.
+
+Authorization fields outside authorizing status and unfamiliar projection keys
+still refuse. Native validation/filtering can accept or ignore them; these are
+intentional inventory-coverage limits, not proof the client makes no request.
+The [known-artifact catalog](CLAUDE-PARSER-REVIEW-2026-11-04.md) includes selectors,
+fingerprints, region preferences, IPC capabilities and encrypted legacy material.
 
 Each snapshot retains 65536-byte/depth8/2048-node/8192-string-byte/256-name limits.
 Comparison parses at most three such snapshots. Missing bytes always refuse;
@@ -71,7 +84,7 @@ account-identity metadata; legacy migrations/auth-lease IPC capability; plugin M
 credentials; full native consumer closure, OS/native/provider acceptance. No
 automatic discovery, enrollment, cleanup or credential changes are authorized.
 
-Verification, 3 November 2026: 19 missing-feature tests first failed. Initial
+Historical implementation verification before Claude's follow-up: 19 missing-feature tests first failed. Initial
 19 OAuth plus 23 existing parser tests passed. One fresh final Codex review
 passed 42 focused and 33 additional synthetic checks and found one Important
 Unicode trimming mismatch, no Critical or Minor findings. Three regression

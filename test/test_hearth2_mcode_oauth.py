@@ -59,8 +59,8 @@ class MCodeOAuthTests(unittest.TestCase):
         self.assertEqual(result.expiry_state, 'expired')
         self.assertEqual((result.access_tokens, result.refresh_tokens), (1, 1))
 
-    def test_generation_expiry_scope_and_namespace_mismatch_refuse(self):
-        for changes in [dict(generation=4), dict(expiresAtMs=2001), dict(scopes=[]),
+    def test_generation_and_namespace_mismatch_refuse(self):
+        for changes in [dict(generation=4),
                         dict(region='cn'), dict(buildEnv='test')]:
             with self.subTest(changes=changes), self.assertRaises(RecordError):
                 self.store(state={**self.state, **changes})
@@ -85,7 +85,7 @@ class MCodeOAuthTests(unittest.TestCase):
 
     def test_unknown_fields_and_schemas_refuse(self):
         for changes in [dict(schemaVersion=2), dict(accessToken=''), dict(tokenType='Basic'),
-                        dict(scopes=['agent.default','unknown']), dict(secret='FAKE-HIDDEN')]:
+                        dict(scopes=[True]), dict(secret='FAKE-HIDDEN')]:
             with self.assertRaises(RecordError):
                 self.store(auth=dict(schemaVersion=1,records={KEY:{**self.record, **changes}}))
         for changes in [dict(schemaVersion=1), dict(storeKind='os-keyring'), dict(unknown='FAKE'),
@@ -204,6 +204,51 @@ class MCodeOAuthTests(unittest.TestCase):
             result = self.parser.projection_json(
                 raw({**self.projection,'auth':{'accessToken':char}}),source_kind='shared')
             self.assertEqual(result.access_tokens,1)
+
+    def test_record_state_expiry_divergence_is_reported_not_dropped(self):
+        result=self.store(state={**self.state,'expiresAtMs':1000})
+        self.assertEqual((result.access_tokens,result.refresh_tokens,result.expiry_state),(1,1,'future'))
+        self.assertTrue(result.expiry_mismatch)
+        state={k:v for k,v in self.state.items() if k!='expiresAtMs'}
+        self.assertTrue(self.store(state=state).expiry_mismatch)
+
+    def test_missing_and_extra_scopes_are_visible_without_claiming_usable_login(self):
+        record={**self.record,'scopes':['other.scope']}
+        state={**self.state,'status':'scope_upgrade_required','scopes':['other.scope']}
+        result=self.store(auth=dict(schemaVersion=1,records={KEY:record}),state=state)
+        self.assertTrue(result.record_missing_required_scope)
+        self.assertEqual((result.extra_scope_fields,result.access_tokens,result.refresh_tokens),(2,1,1))
+        self.assertFalse(result.state_scope_mismatch)
+        result=self.store(state={**self.state,'scopes':[]})
+        self.assertTrue(result.state_scope_mismatch)
+        self.assertFalse(result.record_missing_required_scope)
+        record={**self.record,'scopes':['agent.default','FAKE-SCOPE-NAME']}
+        result=self.store(auth=dict(schemaVersion=1,records={KEY:record}))
+        self.assertEqual(result.extra_scope_fields,1)
+        self.assertNotIn('FAKE-SCOPE-NAME',repr(result))
+
+    def test_invalid_or_unbounded_scopes_still_refuse(self):
+        for scopes in ['agent.default',[1],['a']*65]:
+            with self.assertRaises(RecordError):self.store(state={**self.state,'scopes':scopes})
+
+    def test_comparison_retains_primary_expiry_and_scope_alerts(self):
+        record={**self.record,'scopes':['other.scope']}
+        state={**self.state,'expiresAtMs':1000}
+        result=self.parser.compare_projection(raw(dict(schemaVersion=1,records={KEY:record})),raw(state),
+            raw(self.projection),source_kind='shared',**self.context)
+        self.assertTrue(result.matches_primary)
+        self.assertTrue(result.expiry_mismatch)
+        self.assertTrue(result.record_missing_required_scope)
+        self.assertTrue(result.state_scope_mismatch)
+        self.assertEqual(result.extra_scope_fields,1)
+        self.assertEqual(result.expiry_state,'unknown')
+
+    def test_standalone_projection_does_not_assert_primary_scope_metadata(self):
+        result=self.parser.projection_json(raw(self.projection),source_kind='shared')
+        self.assertIsNone(result.expiry_mismatch)
+        self.assertIsNone(result.record_missing_required_scope)
+        self.assertIsNone(result.state_scope_mismatch)
+        self.assertIsNone(result.extra_scope_fields)
 
 
 if __name__=='__main__': unittest.main()
