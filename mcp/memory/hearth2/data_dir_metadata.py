@@ -87,6 +87,10 @@ class DirectoryMetadataCapture:
         self.view=view;self.clock=clock;self.monotonic=monotonic
         self.max_entries=max_entries;self.timeout_seconds=timeout_seconds
 
+    def _candidate(self,parent,name,expected,work):
+        """Metadata-only by default; private extension never changes this API."""
+        return 'present',None
+
     def _validate(self,requirements,begin):
         if os.name!='posix' or not hasattr(os,'O_PATH') or type(self.view) is not RootDirectoryView:_refuse()
         v=self.view;_scope(v.scope)
@@ -122,7 +126,7 @@ class DirectoryMetadataCapture:
             os.close(fd);raise
 
     def _pass(self,requirements,work):
-        root=self._root();fds={():root};directories={};stats={};facts={};unknown=set()
+        root=self._root();fds={():root};directories={};stats={};facts={};unknown=set();measurements={}
         scope=self.view.scope
 
         def directory(path):
@@ -198,17 +202,32 @@ class DirectoryMetadataCapture:
                 if state=='absent':facts[source.source_id]=('absent',path);continue
                 entry=next((e for e in value.entries if e.name==source.path[-1]),None)
                 if entry is None:facts[source.source_id]=('absent',path)
-                else:facts[source.source_id]=('present' if entry.kind=='regular' and entry.links==1 else 'unsupported',None)
+                elif entry.kind=='regular' and entry.links==1:
+                    state,measurement=self._candidate(fds[path],source.path[-1],stats[source.path],work)
+                    facts[source.source_id]=(state,None)
+                    measurements[source.source_id]=measurement
+                else:facts[source.source_id]=('unsupported',None)
             for path,fd in fds.items():
                 if path in stats and _signature(os.fstat(fd))!=stats[path]:raise _Failed('changed')
                 if path:
                     if _signature(os.stat(path[-1],dir_fd=fds[path[:-1]],follow_symlinks=False))!=_signature(os.fstat(fd)):
                         raise _Failed('changed')
+            for source in requirements.sources:
+                if measurements.get(source.source_id) is not None:
+                    work.tick(1)
+                    parent_fd=fds[source.path[:-1]]
+                    target=os.open(source.path[-1],os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=parent_fd)
+                    try:
+                        if (_signature(os.fstat(target))!=stats[source.path]
+                                or _mount_id(target)!=scope.root_mount_id
+                                or _signature(os.stat(source.path[-1],dir_fd=parent_fd,follow_symlinks=False))!=stats[source.path]):
+                            raise _Failed('changed')
+                    finally:os.close(target)
             check=self._root()
             try:
                 if _signature(os.fstat(check))!=_signature(os.fstat(root)):raise _Failed('changed')
             finally:os.close(check)
-            return directories,stats,facts
+            return directories,stats,facts,measurements
         finally:
             for fd in reversed(tuple(fds.values())):os.close(fd)
 
@@ -224,11 +243,11 @@ class DirectoryMetadataCapture:
         except RecordError:return False
 
     def _summarize(self,requirements,a,b,begin,work):
-        da,sa,fa=a;db,sb,fb=b
+        da,sa,fa,ma=a;db,sb,fb,mb=b
         def snapshot_key(d):
             return {p:(v.mount_id,v.device,v.inode,v.mode,v.uid,v.gid,v.links,v.mtime_ns,v.ctime_ns,v.entries)
                     for p,v in d.items()}
-        if sa!=sb or fa!=fb or snapshot_key(da)!=snapshot_key(db):raise _Failed('changed')
+        if sa!=sb or fa!=fb or ma!=mb or snapshot_key(da)!=snapshot_key(db):raise _Failed('changed')
         observed=_instant(self.clock());observations={};nodes=[];covered=set()
         for source in requirements.sources:
             state,parent=fa[source.source_id];evidence=None
