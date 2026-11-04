@@ -1,7 +1,8 @@
 # MCode data-directory acquisition port — draft for review
 
-Status: revised draft4November2026 after Claude's review of bfc2cff; NOT approved
-for implementation. The four requested design decisions are specified below.
+Status: revised design approved by Rad4November2026 at4ae68fb for implementation
+planning. The four requested design decisions are specified below. Approval does
+not establish production enrollment or authorize runtime/service activation.
 Baseline signed local4970e59, accounting code3b32ba2. Inputs: Claude's acquisition
 review (`drawer_55aad043013fce11cfe92f6ca7f2bb7a`), its repository disposition and
 Rad's relayed per-root/deadline/in-pass-read recommendations. No runtime port or
