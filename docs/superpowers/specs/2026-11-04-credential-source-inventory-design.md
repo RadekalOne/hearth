@@ -1,7 +1,7 @@
 # Credential source inventory design
 
-Status: proposed 4 November 2026, after local parser review fix `8b400cd`.
-This document proposes the next implementation; it describes no deployed scanner.
+Status: approved by Rad 4 November 2026, after local parser review fix `8b400cd`.
+The offline implementation below describes no deployed scanner.
 
 ## Goal and approach
 
@@ -132,3 +132,57 @@ credential reads, provider/client/helper probes, worker/service activation,
 push/merge, external posts or automation changes. The default 900-second/full-run
 policy remains inactive. Physical acquisition, consumer closure and full native/
 OS acceptance remain later explicit gates rather than claims of this build.
+
+## Implemented API and conservative interpretations
+
+`hearth2.credential_sources` provides frozen private-repr `SourceContext`,
+`SourceRequirement`, `OAuthSourceGroup`, `SelectionSourceGroup`, `SourceManifest`
+and `SourceObservation`, plus a frozen public `SourceAccountingSummary`.
+`CredentialSourceAccounting(clock=..., monotonic=...).account(manifest,
+observations, begin=...)` accepts exact typed immutable tuples and aware times.
+Times must use exact builtin `datetime` and fixed-offset `datetime.timezone`
+objects; custom timezone implementations (including ZoneInfo) are unsupported.
+This prevents executing caller timezone callbacks at the redaction boundary.
+The context must match the audit policy and every observation; time must fall
+within the current round and60seconds. No acquisition backend is provided.
+
+The full minimum17-kind source catalog is mandatory even for diagnostic input.
+Unknown source kinds, duplicate IDs/group roles and missing declaration groups
+refuse. An observation omitted from the tuple is unscanned. Nonpresent sources
+must have no bytes, and even absent assertions require fresh provenance metadata.
+The default parser adapters are pinned to the already reviewed MCode0.4.1 code.
+Unsupported kinds remain unknown; they are not passed through a generic parser.
+
+Conservative work accounting counts each manifest entry AND each declared group
+against the lower policy/64 consumer budget. Entries separately use the lower
+policy/256 source budget. Both reject equality. Source bytes must be below64KiB,
+and aggregate input below the lower policy/1MiB budget. Finite nondecreasing
+monotonic elapsed time must remain below the policy's seconds limit. End-of-work
+wall-clock rollback or loss of freshness refuses the entire result.
+
+OAuth pairs contribute primary material once; projection copies contribute their
+own retained material, not a distinct-account total. Standalone projections keep
+primary metadata unknown. Mismatched projections retain counts and unsupported
+status. Conditional config/host analysis retains raw key/header/unparsed counters,
+but stays unsupported for complete consumer accounting. Missing host selection
+partners never become an invented empty config. Parser refusal yields unsupported
+interpretation; it does not zero the unknown source or prove native termination.
+Raw config schema counters and bounded ModelRef material counters are acquired
+independently of conditional selection, so missing partners, unused host input
+or a native migration fence cannot erase syntactically known stored material.
+
+Public output contains source-status counts, a fixed material-counter tuple,
+unaccounted counts per required family and ALL unresolved physical families.
+Stored material/alert counters may overlap; they are not a credential total.
+`parsed_sources` means supplied syntax was interpreted, not complete consumer
+semantics or physical provenance. A partial unknown record can contribute known
+material while its source stays unsupported. No caller string or fingerprint is
+returned. These diagnostics do not satisfy RootAssemblyCollector's inventory API.
+
+## Verification on the laptop,4November2026
+
+Initial25missing-feature regressions failed, then35focused tests passed along with97existing parser tests. One fresh code review found3Important/noCritical/noMinor: raw config material loss with a missing host partner, nested string-subclass binding bypass, and caller timezone exception leakage. The single TDD fix pass reproduced4failures+1error across39tests before correction, then all39passed. No rereview.
+
+Final full Ubuntu-24.04/Python3.12 suite:940tests PASS142.301s, actual exit0, external network disabled with only loopback enabled. Immutable credential-sources-20261104-source.tar.gz SHA256 `5d4fe10a51cc05021f9ce838d121e0651622c06c6ad9b343d79113b964aa69d0`; all tracked Hearth2 code/test bytes match; documentation alone follows. No real credential, client, helper, provider, worker, daemon or OS acceptance was attempted.
+
+Retained rulings: the full17-kind minimum is mandatory, costing smaller synthetic catalogs compatibility; entries plus groups both consume the conservative consumer budget, costing some capacity; custom/ZoneInfo timezones must be normalized to builtin fixed-offset values by callers, costing timezone flexibility; physical acquisition/enrollment/native/account/OS proof remains separate work, so these diagnostic summaries cannot start workers or satisfy complete inventory. The reviewer deferred full-suite checking to the parent; the final940-test gate satisfies that check. No deferred minors.
