@@ -1,6 +1,7 @@
 # MCode data-directory acquisition port — draft for review
 
-Status: draft4November2026 for Claude/Rad review; NOT approved for implementation.
+Status: revised draft4November2026 after Claude's review of bfc2cff; NOT approved
+for implementation. The four requested design decisions are specified below.
 Baseline signed local4970e59, accounting code3b32ba2. Inputs: Claude's acquisition
 review (`drawer_55aad043013fce11cfe92f6ca7f2bb7a`), its repository disposition and
 Rad's relayed per-root/deadline/in-pass-read recommendations. No runtime port or
@@ -11,7 +12,7 @@ contract changes are installed by this document.
 Acquire bounded credential-shaped sources from independently enrolled Linux
 runner data directories, preserving each root's uncertainty and original context.
 Keep `RootfsInventorySource` unchanged as strict whole-frozen-view acquisition.
-Use a separate discovery round and independent two-pass data-directory rounds;
+Use discovery checkpoints before AND after independent two-pass data-directory rounds;
 each reads credential-shaped files during its pass, with no extraction phase or
 descriptor retained between commands. These are proposed offline components;
 implementation/tests use private trees and injected root/runtime facts only.
@@ -34,18 +35,29 @@ A versioned independently approved data-directory policy binds original host,
 boot/initial namespaces, immutable image/nullable stopped CID, assembly and audit
 policy, helper/interpreter dependency closure, supported source-map version,
 configured-environment consumers, approved homes/root patterns, allowed root
-identities/mounts and maximum roots. The cap is at most8; lower enrollment wins.
+identities/mounts, maximum roots and discovery_to_composition_seconds. The cap
+is at most8; lower enrollment wins. The batch window is an explicit positive
+integer policy value (no inferred default), enrolled and
+at most120seconds; it is separate from each10s round and the collector's60s gate.
 This is a NEW explicit scope artifact, not a reinterpretation of the old global
 audit budgets. Repeating the old requirements hash in eight calls cannot grant
 eight times its authority. No production enrollment source exists yet.
 
-Discovery lists the independently enrolled relevant home/configuration sources
+Each discovery checkpoint lists the independently enrolled relevant home/configuration sources
 without using the acquiring process's HOME or inherited environment. Public
 native source anchors must verify path resolution/profile/migration semantics
 before implementation. Configured env means exactly the enrolled consumers;
 unknown shell expansion, arbitrary launch scripts, unresolved paths, unreadable
 sources or incomplete home coverage make discovery incomplete. No native startup
 or helper command is run to resolve data directories.
+"Listing-only" means no credential-body acquisition: each checkpoint MUST still
+independently read the exact bounded configured-environment sources needed for
+root resolution and protected content-digest comparison. Metadata alone cannot
+prove those source bytes agreed. Do not reuse checkpoint1bytes/digests as fresh
+checkpoint2measurements.
+Each checkpoint performs one bounded listing/configured-source-read set; the
+before/after checkpoints are independent universe measurements. Each root's
+own two passes remain separately required inside its round.
 
 The discovery result binds a fresh round ID, original context/enrollment, exact
 root identity set and namespace declarations, status and protected evidence.
@@ -56,24 +68,46 @@ and unscanned results for the at-most8ENROLLED roots, not a purported successful
 list of the first8discoveries. Do not accumulate or publish all unexpected roots.
 At most one protected bounded overflow witness may be retained; public output
 contains only the refusal enum/count, and does not claim the actual root total.
-Stop discovery at this refusal; no root scans run from the partial universe.
+Stop discovery at this refusal; no root scans run from an initially partial universe.
+If the final checkpoint refuses, invalidate every root's batch acceptance.
 Missing/unreadable/unscanned discovery dependencies make ALL dependent root kinds
 unscanned; an observed subset cannot stand in for unknown roots. Failure to obtain
-stable namespace coverage inside one known root affects that root's dependent
-namespace kinds; it cannot clear another root's uncertainty.
+complete namespace enumeration AT A DISCOVERY CHECKPOINT is an incomplete
+universe and invalidates the batch. A root-round content/permission failure can
+remain root-local only when both discovery checkpoints independently establish
+the same complete universe. It cannot clear another root's uncertainty.
 
-Root absence requires clean two-pass home and configured-source discovery.
+An enrolled env-named root that is absent needs enumerated-parent evidence for
+its nearest existing ancestor on an enrolled mount, corroborated at both discovery
+checkpoints. A parent outside enrolled mounts is unscanned, not absent. Do not
+launch the native client to create the missing root. Root absence otherwise
+requires clean home and configured-source discovery at both checkpoints.
 Namespace absence requires the corresponding clean ancestor listings. The source
 universe is hierarchical: root-level, env-level, namespace-level and non-file
 sources have distinct multiplicity, not17literal files in each namespace.
 
 ## Independent root rounds and work limits
 
-One discovery round, then one round per discovered root. Each round performs two
+Fixed order: initial discovery checkpoint, one root round per enrolled root in
+sorted canonical enrolled-root-ID order, then final discovery checkpoint and
+composition. Absent/unavailable roots still receive explicit bounded outcomes.
+Root identity, namespace sets, configured-source digests and all original context
+must agree across both checkpoints; disagreement, incomplete discovery or batch
+window overrun yields unknown-universe(stale) and EVERY root becomes unscanned.
+Checkpoint causes (changed, unreadable, budget, unexpected-universe) remain fixed
+internal reason enums; no successful subset is returned.
+
+Each round performs its required stable listing/read checks and has a
+fresh helper process created with exec, stripped inherited env/FDs, and verified
+termination/reap BEFORE the next helper starts. No persistent multi-root helper
+or shared credential address space is allowed. Each root round performs two
 passes and has a fixed hard wall/monotonic/command deadline no greater than10s
 (lower policy deadline wins), fresh original host/runtime sampling, and bounded
 source/byte/output work. A root round's inputs are only its immutable enrollment,
-the immutable discovery evidence and its own context; no measurement/cache,
+its own discovery slice (this root identity, namespace declarations and the
+initial discovery digest/batch ID) and its own context; never the full root list
+or other root identities. The coordinator checks universe agreement separately.
+No measurement/cache,
 status, handles or token comparison state is shared between roots. Read-only
 helper code/policy constants are not shared measurement evidence.
 
@@ -86,25 +120,65 @@ is inclusive (exactly8may be allowed, a ninth refuses).
 Every directory entry and read attempt counts, including refused siblings and
 oversize probes. Reaching source/byte/time/work limits invalidates the WHOLE root
 round: no partial present/absent packet escapes, all its kinds become unscanned.
-Other roots retain their own results. Root-count/unexpected-universe refusal is
-batch-wide. Do not loop/retry a failed round or raise caps automatically.
+Ordinary root acquisition/accounting failure does not stop later root rounds or
+the final discovery checkpoint. Root-count/unexpected-universe refusal is decided
+at discovery checkpoints. Do not loop/retry a failed round or raise caps automatically.
+Safety exception: unverified reap/containment, host authentication loss or broken
+coordinator integrity halts further launches immediately; pending roots become
+unscanned(integrity), never a complete batch. Continuing after an unreaped helper
+would violate structural isolation. This is not an ordinary root-data failure.
 
 One root's accounting input separately stays below existing policy/256entries,
 1MiB input bytes,64KiB per file and64entries-plus-groups consumer work. The new
 scope policy explicitly authorizes independent per-root accounting; it does not
 remove these caps. Root acquisition budgets and accounting budgets are separate
 and both must be enforced. A root that cannot be represented within either budget
-is wholly unscanned(budget), not a truncated or split complete root.
+is wholly unscanned(budget-acquisition or budget-accounting), not a truncated or
+split complete root. Keep those reason enums distinct.
 
-Per-root scope does not guarantee every namespace-expanded root fits64consumer
+Hierarchical absence is the chosen accounting-contract extension: a structural
+coverage node, not an eighteenth artifact kind, represents PROVEN absent leaves
+under an enrolled root/namespace branch. It carries exact original context,
+root/env/region/branch, enumerated-parent/namespace/roots evidence and current
+round binding. Its covered leaf roles derive from the fixed audited path map,
+never arbitrary caller lists or a claim that an entire OAuth pair is absent.
+One node costs ONE accounting work unit, with no invented account/OAuth group
+for its absent leaves. It satisfies minimum-kind coverage only for those exact
+leaves; disjointness, no duplicate coverage and no present/unreadable/unknown
+descendant hidden beneath a node must be validated before counting.
+
+Auth and cli-auth branches need their OWN absence evidence. An absent auth
+namespace cannot conceal a present cli-auth projection. Root-level shared/legacy
+artifacts, configured environment, runtime host refs and unmapped MCP consumers
+are never covered merely because an OAuth namespace is absent. A namespace
+directory present but empty can compact only the mapped leaves individually
+proven absent by its clean enumeration; existence of a directory alone is not
+enough. A present state with a missing store retains store absent(enumerated-parent)
+plus state present. Pair interpretation is unknown/unsupported; do not erase the
+store evidence or manufacture a single absent/unsupported acquisition record.
+
+Two accounting changes are required: validate structural nodes as satisfying
+the fixed-kind/role obligations they prove, and charge each node once without
+expanding its absent roles/groups into consumer work. Keep logical required/
+absent leaf counts distinct from physical observation/work counts, with explicit
+coverage_nodes/covered_absent_sources/accounting_work_units counters. Logical
+leaves still obey the separately enrolled source cap; compaction does not make
+acquisition enumeration or metadata work free. Gate this extension with the new
+root-scope schema/policy version; do not reinterpret old flat manifests/hashes.
+
+Per-root scope and compact absence do not guarantee every populated root fits64consumer
 work: all source instances AND their groups count. Two roots with8OAuth
 namespaces each mean16OAuth groups and32store/state source entries, not32groups.
 Projection/selector/selection instances add work. A future larger per-root format
 needs explicit reviewed policy/implementation changes; this draft does not raise
 the old64cap. Test the fully populated namespace case as a supported-size or
-explicit unscanned(budget) outcome, never silently omit inactive namespaces.
+explicit unscanned(budget-accounting) outcome, never silently omit inactive
+namespaces. Claude's approximate69units for8present namespaces is a warning,
+not a pinned universal cost formula; derive exact costs from the audited map.
+One/two present namespaces plus absent branches must fit through compact nodes
+in the acceptance fixtures, rather than paying full per-file/group absence work.
 
-Enrollment bounds multiplication by at most9rounds (discovery plus8roots), with
+Enrollment bounds multiplication by at most10rounds (two discoveries plus8roots), with
 each round independently bounded. These are diagnostic execution limits, not a
 promise that all roots fit a collector round's existing global freshness window.
 
@@ -118,12 +192,21 @@ separate mount; an unexpected descendant mount stays unknown/unscanned for its
 dependent sources. Nothing here establishes mount/image/CID provenance by naming
 a directory. Strict whole-rootfs source acceptance is unchanged.
 
-List every entry in each visited directory, including hidden/transient entries,
+Visit ONLY mapped directories: root, auth/, auth/<env>/,
+auth/<env>/<region>/, auth/<env>/<region>/mcode-public/, cli-auth/,
+cli-auth/<env>/, cli-auth/<env>/<region>/, run/ and preferences/. Allowed env/region
+values come from the verified fixed map. List every entry in those visited
+directories, including hidden/transient entries,
 bounded and sorted. Credential-shaped paths come only from the audited fixed map;
 unknown consumers/path semantics remain unscanned. Other entries are typed and
 their stable metadata contributes to a protected listing fingerprint. **No read
 means no content hash** for those entries; metadata fingerprints never prove
 credential absence or content auditing. No whole data-directory walk is claimed.
+Never descend sessions/, logs/, skills/, plugins/ or other unmapped directories.
+Their directory entries count once at the mapped parent; their contents are not
+visited. Large top-level listings can still exhaust the root budget; do not skip
+entries to avoid that. This restriction is NOT MCP/plugin coverage or an exclusion
+from the separate complete consumer/rootfs audit.
 
 For each candidate, acquire O_PATH|O_NOFOLLOW, fstat/typecheck before read-open,
 verify regular/single-link/same authorized mount, reopen the pinned inode through
@@ -149,6 +232,13 @@ disagreement invalidates the root round; no repeated-until-stable retry. A norma
 lease socket is typed as unsupported, not opened: it prevents dependent sibling
 absence claims, but an independently stable regular cap may be present. Unsupported
 siblings never erase their effect on namespace/root discovery or broader coverage.
+Verified map-specific auth.lock and exact atomic-write temporary-name patterns
+are known-transient siblings. Stable regular or directory entries of those exact
+types are typed/fingerprinted without descending/reading and do not alone block
+other file absence; a new/disappearing/changed entry between passes still fails
+stability. Symlink/socket/FIFO/device/multi-link variants are NOT exempted because
+their names look transient. Verify native naming anchors before implementation;
+do not exempt a generic attacker-chosen *.tmp suffix.
 
 Hash comparisons against a frozen-view record are OPTIONAL and supported only if
 a separate authenticated port supplies the same original artifact/context binding.
@@ -177,6 +267,9 @@ accepts a declared single-account context; unsupported multiple-account selectio
 or missing enrolled account identity remains unknown. A typed acquisition packet
 must preserve such uncertainty even if it cannot instantiate the current
 SourceManifest; its accounting adaptation is unscanned(context), never fabricated.
+A digest derived from a discovered auth-home path may only check an independently
+enrolled account value. It cannot establish account truth; verify the exact native
+derivation/encoding from pinned source before implementing even that check.
 
 Host-model-ref and live process environment stay unscanned without a separate
 runtime port. Configured environment belongs to discovery and its original evidence
@@ -196,13 +289,20 @@ do not add them as distinct accounts/credentials. All physical coverage families
 remain unresolved; no collector observe/complete/credentials:none/start packet.
 
 Each root measurement must fall within its own current begin..finish and60s
-freshness window. At composition recheck discovery/root ages: stale roots become
-unscanned(stale) in current diagnostics, while immutable historical evidence keeps
-its original timestamp. Stale/incomplete discovery invalidates all dependent
-coverage. No restamping, caching round1absence into round2, or reuse of prior bytes.
-The collector's existing round-begin/global60s gate remains unchanged. Future
-complete integration must schedule all required fresh work within that gate or
-refuse; independent10s rounds across8roots can exceed it. No silent extension.
+window when that root helper accounts it. At root start verify that initial
+discovery belongs to this batch and is inside the enrolled batch window, not a
+new60s universe age test. The coordinator accepts diagnostic root results only
+after agreeing final discovery and composition inside
+discovery_to_composition_seconds (<=120s, measured wall+monotonic from initial
+discovery begin through final helper reap and composition). Unknown/stale universe
+invalidates ALL root absence claims, not just late roots. Original per-root
+timestamps are retained; earlier evidence is not relabelled globally fresh.
+No restamping, caching earlier-batch absence, or reuse of prior credential bytes.
+The collector's existing round-begin/global60s gate remains unchanged. This
+diagnostic batch window is not its start/complete authority. Later integration
+must schedule all REQUIRED enrolled-root evidence under that gate or refuse;
+choosing a genuinely smaller enrolled universe needs independent scope approval,
+not silently dropping roots to meet60s. No collector wiring is included here.
 
 ## Privacy, testing and acceptance
 
@@ -227,9 +327,25 @@ Plan must include Claude's V1–V12 and add: exactly65535/65536/65537bytes; empt
 file; unreadable injection despite root privilege; changed ctime/inode with same
 size/mtime; root timeout/budget with clean sibling root; source-only vsmetadata
 hash distinctions; fully populated namespaces exceeding accounting caps;
-8root schedule causing stale discovery/early root; mismatched frozen digest that
+8root schedule within enrolled120s with old early-root timestamps preserved;
+discovery disagreement/overrun invalidating ALL roots; mismatched frozen digest that
 increments conflict AND preserves unknown; absent/ambiguous account context;
-un-enrolled ninth root; both rounds using fresh source-specific absence evidence.
+un-enrolled ninth root; both root passes and discovery checkpoints using independent
+fresh source-specific evidence. Also: compact absent auth/cli-auth branches without
+hiding present projections; store absent/state present; 1–2present+6–7absent
+namespaces fitting work cap; fully populated root explicit budget-accounting;
+large sessions/ directory never descended; enrolled env-root absent outside mount
+unscanned; stable auth.lock vs new temporary file; root helper reap failure blocks
+next launch; no cross-root evidence in helper argv/FDs; no early exit on ordinary
+root failure; empty file→present unsupported with zero parsed/unparsed field
+counters (zero counters do not mean absence).
+
+Expired discovery fails root-round preflight without launching another helper.
+The coordinator still records outcomes for every remaining enrolled ID and
+reaches the final discovery decision (which can refuse immediately on the
+expired batch window without launching a new process). No helper starts after
+its authorization/window expires. This is batch preflight failure, not using a
+root's ordinary data failure to skip other roots.
 
 Physical host/root enrollment, MCP path mapping, complete consumer closure and
 collector integration remain unconfigured. Initial work is offline contracts,
@@ -249,3 +365,28 @@ resolved it with the bounded refusal representation above. No user-specific
 authority choice was inferred. This is a builder check, not Claude's substantive
 acquisition review or approval to implement. Source-mapping/provenance and all
 runtime gates remain explicitly open.
+
+## Disposition of Claude's review of bfc2cff
+
+Full review: attachment7627ad77/mcode-data-dir-port-review.md and
+HMdrawer_6950d1b84c6f34cd9a58afcdcfcf0df2. These are design revisions, not code
+fixes, runtime acceptance or a claim Claude approved this revised commit.
+
+| Finding | Decision recorded in this revision |
+|---|---|
+| F1 blocking | Adopt compact structural absent-coverage nodes, fixed-map leaf validation and one work charge; no fake account groups, no cross-branch masking. Fully populated oversized roots remain explicit budget-accounting. |
+| F2 important | Enumerate only the explicit mapped directory set; never descend sessions/logs/skills/plugins. |
+| F3 | Separate budget-acquisition and budget-accounting reasons. |
+| F4 blocking | Discovery before and after roots; require stable universe/configured-source binding. Changed, incomplete or stale universe invalidates ALL roots. |
+| F5 important | Explicit enrolled batch window <=120s, separate from local10s/60s checks and unchanged collector60s authority. |
+| F6 important | Absent enrolled env-root requires clean nearest existing parent on an enrolled mount; outside mount stays unscanned. |
+| F7 important | Preserve store absence independently when state is present; interpretation failure never erases original source evidence. |
+| F8 | Known native lock/tmp type/name patterns do not alone block sibling absence; races and unsafe types still do. Generic tmp exemptions forbidden pending verified naming map. |
+| F9 important | Fresh exec helper for every eligible checkpoint/root round; verified reap before next launch, no persistent cross-root credential process. |
+| F10 important | Root helper receives its own discovery slice only. Coordinator alone sees the bounded universe. |
+| F11 | Sorted enrolled-root order, no early exit for ordinary data failures; integrity/reap failure or expired authorization prevents unsafe further launches. |
+
+Small items: empty present bytes are explicitly supported by the proposed new
+observation contract and parse as unsupported; account digest derivation can only
+check enrolled identity; MCP source mapping remains open. Acceptance vectors pin
+all these changes. The original flat accounting code at3b32ba2 is unchanged.
