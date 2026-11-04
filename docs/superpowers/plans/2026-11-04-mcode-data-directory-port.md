@@ -127,4 +127,15 @@ physical/process composition remain unfinished. Each completed increment gets
 tests, one fresh final review and a new immutable full-suite gate; no implementation
 delegation or repeated approval requests for routine technical decisions.
 
-Increment1 verification:32core tests and existing empty-source regression, one fresh final review/one Important global-witness correction,80credential checks green, final973offline tests PASS148.848s/exit0. Source snapshot eaaadd3e16a647ee6270f87028c0fca0206db5ff69d9eecc8047b4fd55608f17 byte-exact. Underlying compact core is implemented; full Tasks1–4 checkboxes remain unfinished, including independent native map/enrollment, root observation wrappers, physical producer/process coordinator. User-directed working-example handoff replaces another plan approval.
+Increment1 verification:32core tests and existing empty-source regression, one fresh final review/one Important global-witness correction,80credential checks green, final973offline tests PASS148.848s/exit0. Source snapshot eaaadd3e16a647ee6270f87028c0fca0206db5ff69d9eecc8047b4fd55608f17 byte-exact. Underlying compact core is implemented; full Tasks1â€“4 checkboxes remain unfinished, including independent native map/enrollment, root observation wrappers, physical producer/process coordinator. User-directed working-example handoff replaces another plan approval.
+
+Increment2 implements the lower-level metadata acquisition part of Task3:
+DirectoryMetadataCapture/RootDirectoryView, documented in
+docs/hearth2/DATA-DIRECTORY-METADATA.md. Supplied bindings and private synthetic
+trees only; no credential bodies or physical enrollment proof. The intended full
+DataDirectoryCapture/root policy/host authentication/parser/helper/coordinator
+contracts are still unfinished and must not be inferred from this increment.
+User-facing previews will focus on assigning work/progress/results, not these
+internal diagnostics. No new internal-demo approval is requested.
+
+Final verification: 997 Ubuntu-24.04/Python3.12 tests PASS in 146.999s, actual exit 0, external networking disabled with loopback only. Immutable archive SHA256 2c84f2d8f8a0439308717db032168a0f9ed36961137345e90099df4a3245f951; all tracked Hearth2 Python/test bytes match. One fresh review completed and Important findings fixed; documented Minor canonical-component rejection remains deferred before production enrollment. Metadata-only conditional fixture component; no credential bodies read, complete acquisition or physical enrollment claimed. Full plan Tasks1-4 remain unfinished.
