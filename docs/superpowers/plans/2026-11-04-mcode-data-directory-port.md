@@ -142,4 +142,20 @@ Final verification: 997 Ubuntu-24.04/Python3.12 tests PASS in 146.999s, actual e
 
 Increment3 lower Task3: DirectoryFileCapture adds private two-pass bounded candidate reads/digest comparison to metadata capture. Details/evidence in docs/hearth2/DATA-DIRECTORY-FILES.md. No bytes retained/returned for parsers yet; complete capture/enrollment/rounds Tasks1-4 remain unfinished. User-authorized synthetic-only increment, no real credential/client/activation.
 
+Increment4 lower Task3: DirectorySourceCapture connects private in-call two-pass
+bytes to existing pinned CredentialSourceAccounting under an exact source/group/
+root/namespace binding. Narrow conditional Pi/config/OAuth store-state paths only;
+the full17-kind manifest remains required and all unmapped obligations remain
+unscanned. Documentation: docs/hearth2/DATA-DIRECTORY-ACCOUNTING.md. No root policy,
+source-map audit, discovery, enrolled helper or physical acceptance is inferred.
+This increment resumes the saved approved acquisition work; the separate Commons
+18-item review remains a future reconciliation list, not new driver authority.
+
+Increment4 verification:19new adapter tests;64data-directory and80credential
+tests PASS. Single fresh review clean, no new findings; full1037Ubuntu24.04/
+Python3.12 tests PASS174.288s, actualexit0, externaldisabled/loopbackonly.
+Immutable39051879696917165f86690deb500e24586b055ec269a59928c8771b6b1d96a6;
+all92trackedHearth2Python/testbytesEXACT. Narrow conditional adapter only;
+fullplanTasks1-4 remain unfinished. Historical canonicalroot Minor deferred.
+
 Final verification: full1018 Ubuntu-24.04/Python3.12 tests PASS175.451s, actual exit0, external network disabled/loopback only. Immutable archive e11e8592cc717ac2357dd0454a4138d51c23d45265971464164aa3cceb9d924f; all90trackedHearth2Python/test bytes match. One fresh final review found no new defects;45focused and80credential tests pass, plus six reviewer adversarial fixture checks. Historical '..' canonical-root Minor remains deferred; no new minors or declined findings. LowerTask3 synthetic conditional file-read component only; no native parser or physical enrollment/credential-custody/start acceptance. Full Tasks1-4 remain unfinished.

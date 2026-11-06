@@ -44,6 +44,14 @@ class DirectoryFileCapture(DirectoryMetadataCapture):
     def __init__(self,view=None,*,max_bytes=1048576,**kwargs):
         super().__init__(view,**kwargs);self.max_bytes=max_bytes
 
+    def _read_body(self,fd,work):
+        digest=hashlib.sha256();length=0
+        while length<65537:
+            raw=work.read(fd,min(8192,65537-length))
+            if not raw:break
+            digest.update(raw);length+=len(raw)
+        return length,digest.digest()
+
     def _candidate(self,parent,name,expected,work):
         work.tick(1)
         target=opened=None
@@ -58,18 +66,14 @@ class DirectoryFileCapture(DirectoryMetadataCapture):
             opened=os.open('/proc/self/fd/'+str(target),os.O_RDONLY|os.O_NONBLOCK|os.O_CLOEXEC)
             if (_signature(os.fstat(opened))!=expected
                     or _mount_id(opened)!=self.view.scope.root_mount_id):raise _Failed('changed')
-            digest=hashlib.sha256();length=0
-            while length<65537:
-                raw=work.read(opened,min(8192,65537-length))
-                if not raw:break
-                digest.update(raw);length+=len(raw)
+            length,measurement=self._read_body(opened,work)
             if (any(_signature(os.fstat(fd))!=expected for fd in (target,opened))
                     or _signature(os.stat(name,dir_fd=parent,follow_symlinks=False))!=expected
                     or any(_mount_id(fd)!=self.view.scope.root_mount_id for fd in (target,opened))):
                 raise _Failed('changed')
             if length>=65536 or value.st_size>=65536:return 'unreadable',('oversize',None)
             if length!=value.st_size:return 'unreadable',('io',None)
-            return 'present',(None,digest.digest())
+            return 'present',(None,measurement)
         except PermissionError:return 'unreadable',('permission',None)
         except OSError:return 'unreadable',('io',None)
         finally:
