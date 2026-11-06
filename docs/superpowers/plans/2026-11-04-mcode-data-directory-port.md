@@ -158,4 +158,20 @@ Immutable39051879696917165f86690deb500e24586b055ec269a59928c8771b6b1d96a6;
 all92trackedHearth2Python/testbytesEXACT. Narrow conditional adapter only;
 fullplanTasks1-4 remain unfinished. Historical canonicalroot Minor deferred.
 
+Increment5 lower Task1: conditional single-root DirectoryScopePolicy and
+ScopedDirectoryCapture seal declared root/context/map/parser/group/limit inputs
+and require a separate expected digest before actual acquisition. Fresh batch/
+round IDs may vary without re-enrolling that root. See
+docs/hearth2/DATA-DIRECTORY-SCOPE.md. This does not implement production
+DataDirectoryPolicy/load, independent enrollment, native source-map verification,
+discovery or helper isolation. Strict canonical paths apply to the new entrypoint;
+the old direct lower-reader limitation remains gated before production use.
+
+Increment5 verification:19newscope tests;83data-directory/80credential PASS;
+onefreshreview clean/no newfindings. Full1056Ubuntu24.04/Python3.12
+PASS188.439s actualexit0, externaldisabled/loopbackonly. Immutable
+c6da0c817e959cc03bf0f2973696b72695924d6e49b36c52ae4b245f18e6c9b3;
+all94trackedHearth2Python/testbytesEXACT. Onlyconditionalrootpin, not full
+Task1 enrollment/map or Tasks3/4 discovery/process authority.
+
 Final verification: full1018 Ubuntu-24.04/Python3.12 tests PASS175.451s, actual exit0, external network disabled/loopback only. Immutable archive e11e8592cc717ac2357dd0454a4138d51c23d45265971464164aa3cceb9d924f; all90trackedHearth2Python/test bytes match. One fresh final review found no new defects;45focused and80credential tests pass, plus six reviewer adversarial fixture checks. Historical '..' canonical-root Minor remains deferred; no new minors or declined findings. LowerTask3 synthetic conditional file-read component only; no native parser or physical enrollment/credential-custody/start acceptance. Full Tasks1-4 remain unfinished.

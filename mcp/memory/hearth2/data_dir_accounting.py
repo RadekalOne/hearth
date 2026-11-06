@@ -11,12 +11,41 @@ import os
 from .credential_sources import (CredentialSourceAccounting,SourceObservation,
     SourceAccountingSummary,_manifest)
 from .credential_coverage import CoverageSummary
+from .credential_coverage import CoverageRequirements,_body
 from .data_dir_files import DirectoryFileCapture,_FileWork
 from .data_dir_metadata import _Failed
 from .store import RecordError
 
 
 def _refuse():raise RecordError('unsupported directory source accounting request') from None
+
+
+def _source_bindings(requirements,manifest):
+    """Pure validation shared with the conditional policy; never reads a root."""
+    if type(requirements) is not CoverageRequirements:_refuse()
+    encoded=_body(requirements.scope,requirements.sources,requirements.groups,
+                  requirements.source_limit,requirements.work_limit)
+    if type(requirements.sha256) is not str or hashlib.sha256(encoded).hexdigest()!=requirements.sha256:_refuse()
+    _,limits,entries,_,oauth,_=_manifest(manifest)
+    if manifest.context!=requirements.scope.context or len(entries)!=len(requirements.sources):_refuse()
+    expected_groups={g.group_id:tuple(e.source_id for e in manifest.entries if e.group_id==g.group_id)
+                     for g in manifest.oauth_groups+manifest.selection_groups}
+    if dict(requirements.groups)!=expected_groups:_refuse()
+    for group in oauth.values():
+        if group.data_directory_id!=requirements.scope.root_id:_refuse()
+    for source in requirements.sources:
+        entry=entries.get(source.source_id)
+        if entry is None or entry.kind!=source.kind:_refuse()
+        if source.path is None:continue
+        if source.kind=='pi-auth':expected=('codex-auth.json',)
+        elif source.kind=='mcode-config':expected=('config.yaml',)
+        elif source.kind in ('oauth-store','oauth-state'):
+            group=oauth[entry.group_id]
+            expected=('auth',group.build_env,group.region,'mcode-public',
+                      'auth.json' if source.kind=='oauth-store' else 'auth-state.json')
+        else:_refuse()
+        if source.path!=expected:_refuse()
+    return limits
 
 
 @dataclass(frozen=True,slots=True,repr=False)
@@ -48,28 +77,8 @@ class DirectorySourceCapture(DirectoryFileCapture):
 
     def _bindings(self,requirements,manifest,begin):
         self._validate(requirements,begin)
-        _,limits,entries,_,oauth,_=_manifest(manifest)
-        if (manifest.context!=requirements.scope.context
-                or type(self.max_bytes) is not int or not 1<=self.max_bytes<=1048576
-                or len(entries)!=len(requirements.sources)):_refuse()
-        expected_groups={g.group_id:tuple(e.source_id for e in manifest.entries if e.group_id==g.group_id)
-                         for g in manifest.oauth_groups+manifest.selection_groups}
-        if dict(requirements.groups)!=expected_groups:_refuse()
-        for group in oauth.values():
-            if group.data_directory_id!=requirements.scope.root_id:_refuse()
-        for source in requirements.sources:
-            entry=entries.get(source.source_id)
-            if entry is None or entry.kind!=source.kind:_refuse()
-            if source.path is None:continue
-            if source.kind=='pi-auth':expected=('codex-auth.json',)
-            elif source.kind=='mcode-config':expected=('config.yaml',)
-            elif source.kind in ('oauth-store','oauth-state'):
-                group=oauth[entry.group_id]
-                expected=('auth',group.build_env,group.region,'mcode-public',
-                          'auth.json' if source.kind=='oauth-store' else 'auth-state.json')
-            else:_refuse()
-            if source.path!=expected:_refuse()
-        return limits
+        if type(self.max_bytes) is not int or not 1<=self.max_bytes<=1048576:_refuse()
+        return _source_bindings(requirements,manifest)
 
     def capture(self,requirements,manifest,*,begin):
         try:
