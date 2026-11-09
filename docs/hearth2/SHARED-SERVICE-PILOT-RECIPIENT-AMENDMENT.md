@@ -1,0 +1,19 @@
+# Receipt pilot: preflight authority conflict and proposed amendment
+
+Status 9 November 2026: Rad approved the original shared-service pilot, five-minute maintenance budget, live backup/restore gate, fixed 20-minute cutoff and disabled-fallback closeout. **Execution paused before any maintenance or production write. This recipient amendment awaits Rad's approval.**
+
+The read-only live preflight at `2026-11-09T18:46:18.401986Z` matched the packet's exact host/container/image/start time/configuration pins and canonical mount. Exactly one canonical writer; old `hearth-memory-1` stopped. Both pinned images exist. The complete live data inventory was 235 regular files, 104,839,300 bytes (plus Compose configuration), with no unsupported entries: within the reviewed 512 MiB / 10,000-file backup limit. No H2 database, session registry, required marker or existing H2 role/enrollment configuration was present. No pilot credential was created, no guard was armed and neither the five-minute outage nor the 20-minute pilot window began.
+
+The second identity precheck established that `memory-tokens.json` already contains a nonempty general HM credential for principal `codex`. The original packet calls for `HEARTH2_WORKER_IDS=codex`, session recipient `codex`, and an uncredentialed logical worker. Those conditions conflict on the actual shared service: assigning the worker role to `codex` grants that pre-existing credential v2 worker authority. The author missed this identity collision when preparing the packet. Reserved session/controller/alias names alone were checked in the original rehearsal; its synthetic fixture did not contain the existing live `codex` bearer. No value or fingerprint of that bearer was printed or copied.
+
+## Proposed exact amendment
+
+Use `codex-receipt-pilot-01a194ad` as the receipt carrier's logical assignee/worker and the named-session enrollment's `recipient`, instead of `codex`. Do **not** mint a credential for this worker. Leave the existing `codex` token and its HM authority unchanged; continue to use it only for existing-agent REST/MCP positive controls.
+
+The actual target remains this existing chat on `RSLABINSKI-PC`, native thread `01a194ad-865c-7100-a33a-e220e62cff8d`, session `codex-laptop-01a194ad`, dedicated receipt principal `codex-session-01a194ad`. Temporary controller `supervised-controller` and negative-test alias `codex-pilot-negative-alias` stay as reviewed, subject to fresh no-collision checks. The recipient is a routing identity, not a new agent, service, account, credential or workload.
+
+This replaces only the worker/recipient spelling in the original packet's enrollment, role, carrier task/claim and notice. The candidate/fallback images and source, operator helper, maintenance and cutoff budgets, backup/restore checks, original-receipt durability and denial matrix, unknown understanding, unchanged task-state requirement and disabled registry-aware fallback closeout all remain the approved scope. All three fresh session credential generations still belong to the same intended named session.
+
+Before any maintenance, repeat the live pins, size and collision checks; `codex-receipt-pilot-01a194ad` must have no existing token/reviewer identity and must be disjoint from all roles/session principals. Never remove or rotate the existing `codex` credential to satisfy this condition. If the amendment is approved, record its approval reference beside the original approval in the sealed execution plan. Approval of the original packet is not silently interpreted as approval of a different routing identity.
+
+No live backup or pilot acceptance is claimed by this preflight. The newly created Hostinger snapshot remains a separate provider recovery point, not a substitute for the cold live backup/restore gate. Existing production stays on the original `762fd5f` image until the identity conflict is resolved.
