@@ -1,6 +1,6 @@
 """Default-off routes in the existing service; no restore HTTP endpoint.
 
-Principal kinds are explicit per-instance configuration. Controller/observer tokens are
+Principal kinds are explicit per-instance configuration. Controller/observer/session tokens are
 accepted only as bearer credentials, never as browser sessions or payloads.
 """
 import json
@@ -17,7 +17,7 @@ from .backup import export_record
 class Runtime:
     def __init__(self, app, *, enabled, data_dir, principal, typed_auth,
                  same_origin, bearer_principal, human_ids, controller_ids,
-                 worker_ids, authenticated, timing=None, poll_expectations=None, observer_ids=()):
+                 worker_ids, authenticated, timing=None, poll_expectations=None, observer_ids=(), notice_sessions=None):
         self.enabled = enabled
         self.store = Store(Path(data_dir) / 'hearth2.sqlite3')
         self.principal = principal
@@ -26,6 +26,8 @@ class Runtime:
         self.bearer_principal = bearer_principal
         self.humans, self.controllers, self.workers = map(set, (human_ids, controller_ids, worker_ids))
         self.observers = set(observer_ids)
+        self.notice_sessions_raw = notice_sessions
+        self.notice_sessions = {}
         self.authenticated = authenticated
         self.timing = timing or {}
         self.poll_expectations_raw = poll_expectations
@@ -36,7 +38,11 @@ class Runtime:
     def initialize(self):
         if not self.enabled:
             return
-        groups = [self.humans, self.controllers, self.workers, self.observers]
+        from .delivery import session_enrollments
+        sessions=session_enrollments(self.notice_sessions_raw,self.humans|self.controllers|self.workers,
+            self.humans|self.controllers|self.workers|self.observers)
+        groups = [self.humans, self.controllers, self.workers, self.observers,
+                  {target.principal_id for target in sessions.values()}]
         if (not self.authenticated or not self.humans or any('anonymous' in g for g in groups)
                 or any(a & b for i,a in enumerate(groups) for b in groups[i+1:])):
             raise RuntimeError('Hearth 2 requires authentication and disjoint explicit principal roles')
@@ -54,6 +60,7 @@ class Runtime:
             raise RuntimeError('invalid Hearth 2 timing configuration') from None
         self.store.lease_seconds, self.store.deadline_seconds = store.lease_seconds, store.deadline_seconds
         self.poll_expectations = expectations
+        self.notice_sessions = sessions
         Schema.initialize(self.store.path, enabled=True)
         self.initialized = True
 
@@ -66,8 +73,9 @@ class Runtime:
         if self.typed_auth() is not None or identity == 'anonymous':
             raise HTTPException(403, 'Hearth 2 principal not authorized')
         kind = ('human' if identity in self.humans else 'controller' if identity in self.controllers
-                else 'worker' if identity in self.workers else 'observer' if identity in self.observers else None)
-        if kind not in kinds or kind in {'controller','observer'} and self.bearer_principal(request) != identity:
+                else 'worker' if identity in self.workers else 'observer' if identity in self.observers else 'session' if any(
+                    target.principal_id==identity for target in self.notice_sessions.values()) else None)
+        if kind not in kinds or kind in {'controller','observer','session'} and self.bearer_principal(request) != identity:
             raise HTTPException(403, 'Hearth 2 principal not authorized')
         if request.method != 'GET' and not self.same_origin(request):
             raise HTTPException(403, 'cross-site request rejected')
@@ -204,7 +212,36 @@ class Runtime:
         async def notice(request: Request):
             actor = self.actor(request, {'controller'})
             data = await self.body(request, {'claim', 'notice'})
-            return self.call(self.store.append_notice, actor, data.get('notice'), claim=data.get('claim'))
+            notice=data.get('notice')
+            target=None
+            if isinstance(notice,dict) and notice.get('recipient_session') is not None:
+                target=self.notice_sessions.get(notice['recipient_session']) if type(notice['recipient_session']) is str else None
+                if target is None or target.recipient!=notice.get('recipient'):
+                    raise HTTPException(400,'notice needs a matching configured session recipient')
+            return self.call(self.store.append_notice, actor, notice, claim=data.get('claim'),delivery_target=target)
+
+        def session_target(actor):
+            return next(target for target in self.notice_sessions.values() if target.principal_id==actor.id)
+
+        @app.get('/api/hearth2/session/notices')
+        def inbox(request: Request):
+            actor=self.actor(request, {'session'})
+            from .delivery import session_inbox
+            return self.call(session_inbox,self.store,actor,session_target(actor))
+
+        @app.post('/api/hearth2/notices/{notice_id}/receive')
+        async def receive_notice(notice_id: str, request: Request):
+            actor=self.actor(request, {'session'})
+            from .delivery import receive_notice
+            data=await self.body(request, {'request_id','expected_epoch'})
+            return self.call(receive_notice,self.store,actor,session_target(actor),notice_id,**data)
+
+        @app.post('/api/hearth2/notices/{notice_id}/acknowledge')
+        async def acknowledge_notice(notice_id: str, request: Request):
+            actor=self.actor(request, {'session'})
+            from .delivery import acknowledge_notice
+            data=await self.body(request, {'delivery_id','notice_digest','expected_epoch'})
+            return self.call(acknowledge_notice,self.store,actor,session_target(actor),notice_id,**data)
 
         @app.post('/api/hearth2/tasks/{task_id}/reviews')
         async def review(task_id: str, request: Request):

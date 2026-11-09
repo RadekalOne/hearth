@@ -67,12 +67,21 @@ def render_status(value):
             +lease+_details((('Task record',row['id']),('Record revision',row['revision']),('Persisted state',row['state'])),[])+'</article>')
     notices=[]
     for row in value['notices']:
+        received=row['delivery_state']=='received'
+        delivery='<span class="badge unknown">Receipt recorded</span>' if received else '<span class="badge unknown">Delivery unconfirmed</span>'
+        qualification=('Received by the intended named session. Understanding remains unknown. A receipt does not complete the task.'
+            if received else 'Stored here. Receipt by the intended session has not been confirmed.')
+        fields=(('Notice record',row['id']),('Task record',row['task_id']),('Recorded by',row['sender']),
+            ('Recording time',row['recorded_at']),('Intended session',row.get('intended_session')),
+            ('Acknowledgement','Receipt recorded' if received else 'Unknown'),('Understanding','Unknown'),
+            ('Receipt principal',row.get('receipt_actor')),('Receipt recorded at',row.get('acknowledged_at')),
+            ('Receipt journal sequence',row.get('acknowledgement_sequence')),('Delivery identity',row.get('delivery_id')),
+            ('Notice content digest',row.get('notice_digest')),('Receipt restore period',row.get('receipt_restore_epoch')))
+        historical='<p class="muted">Receipt retained from a previous restore period; no fresh delivery is inferred.</p>' if row.get('receipt_historical') else ''
         notices.append('<article class="notice"><h3>'+_e(names.get(row['task_id'],'Task notice'))+'</h3>'
-            '<span class="badge">Recorded</span><span class="badge unknown">Delivery unconfirmed</span>'
-            '<p>'+_e(row['kind'].replace('_',' '))+' · To '+_e(row['recipient'])+'</p>'
-            '<p class="muted">Stored here. Receipt by the intended session has not been confirmed.</p>'
-            +_details((('Notice record',row['id']),('Task record',row['task_id']),('Recorded by',row['sender']),
-                ('Recording time',row['recorded_at']),('Acknowledgement','Unknown')),row['supplied_references'])+'</article>')
+            '<span class="badge">Recorded</span>'+delivery
+            +'<p>'+_e(row['kind'].replace('_',' '))+' · To '+_e(row['recipient'])+'</p>'
+            +'<p class="muted">'+qualification+'</p>'+historical+_details(fields,row['supplied_references'])+'</article>')
     failures=[]
     for row in value['failures']:
         period='Historical · previous restore period' if row['historical'] else 'Current restore period'

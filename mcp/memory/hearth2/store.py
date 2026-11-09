@@ -540,7 +540,7 @@ class Store:
                        {'run_id':run['id'], 'reason':native_stop, 'revision':revision})
         return self.row(db, 'runs', run['id'])
 
-    def append_notice(self, actor, payload, *, claim):
+    def append_notice(self, actor, payload, *, claim, delivery_target=None):
         safe_payload(payload)
         with self.transaction() as db:
             current, task, run = self._live_claim(db, actor, claim)
@@ -556,7 +556,11 @@ class Store:
                        (key, task['project_id'], task['id'], actor.id, recipient, kind,
                         safe_payload({**payload, 'generation': current['generation']})))
             self.audit(db, actor, task['id'], 'notice_added')
-            return self.row(db, 'notices', key)
+            notice=self.row(db, 'notices', key)
+            if payload.get('recipient_session') is not None or delivery_target is not None:
+                from .delivery import address_notice
+                address_notice(self,db,actor,notice,delivery_target)
+            return notice
 
     def record_review(self, reviewer, task_id, expected_revision, verdict, evidence):
         require(reviewer, {'worker'})

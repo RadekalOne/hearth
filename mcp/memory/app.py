@@ -3964,6 +3964,7 @@ h2_runtime = _Hearth2Runtime(
     human_ids=_h2_ids('HEARTH2_HUMAN_IDS'), controller_ids=_h2_ids('HEARTH2_CONTROLLER_IDS'),
     worker_ids=_h2_ids('HEARTH2_WORKER_IDS'), authenticated=bool(ADMIN_TOKEN),
     observer_ids=_h2_ids('HEARTH2_OBSERVER_IDS'),
+    notice_sessions=os.environ.get('HEARTH2_NOTICE_SESSIONS'),
     poll_expectations=os.environ.get('HEARTH2_POLL_EXPECTATIONS'),
     timing={key:os.environ[name] for key,name in (
         ('lease_seconds','HEARTH2_LEASE_SECONDS'), ('deadline_seconds','HEARTH2_DEADLINE_SECONDS'))

@@ -2,6 +2,7 @@
 import json
 
 from .control import ControlJournal
+from .delivery import delivery_status
 from .store import RecordError
 from .poll_timing import poll_expectations, _time, assess_poll
 
@@ -33,8 +34,8 @@ def human_status(store, controllers, expectations, project_id=None):
             data=json.loads(row['data'])
             reference=data.get('reference')
             notices.append(dict(id=row['id'],task_id=row['task_id'],sender=row['sender'],recipient=row['recipient'],
-                kind=row['kind'],record_state='recorded',delivery_state='unconfirmed',acknowledgement_state='unknown',
-                recorded_at=None,supplied_references=[reference] if type(reference) is str else [],
+                kind=row['kind'],record_state='recorded',**delivery_status(db,row,control['restore_epoch']),
+                supplied_references=[reference] if type(reference) is str else [],
                 reference_provenance='reporter_supplied_unverified'))
         ticks={t['runner']:t for t in control['ticks']}
         polls=[]

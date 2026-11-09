@@ -89,3 +89,10 @@ The subsequent independently invoked observer increment is documented in
 server-journal overdue detection and separately owned resumption records; no
 background schedule or actual off-host observer has been activated. The earlier
 manual-report characterization above remains a separate acceptance scenario.
+
+
+The subsequent [named-session receipt increment](NAMED-SESSION-RECEIPTS.md)
+adds explicit addressing, a separately authenticated session receive/acknowledge
+protocol and receipt evidence in the human view. Legacy unaddressed notices stay
+unconfirmed. Its temporary-app acceptance proves protocol receipt while preserving
+unknown understanding and unchanged task completion; no live client is integrated.
