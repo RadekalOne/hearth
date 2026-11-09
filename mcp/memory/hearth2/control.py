@@ -67,6 +67,10 @@ class ControlJournal:
             # distinguish a new observation from an old in-flight write.
             if expected_epoch != epoch:
                 raise RecordError('control failure restore epoch conflict')
+            # Authority also gates replay of legacy self-recoveries. Historical
+            # rows remain readable; they cannot authorize a new mutation call.
+            if kind == 'runner_stale' and state == 'recovered' and actor.id == target:
+                raise RecordError('stale recovery requires an independent controller')
             entity = self.entity(['control_failure', kind, target, key])
             row = db.execute("SELECT * FROM audit_events WHERE entity_id=? AND action='control_failure' ORDER BY seq DESC LIMIT 1", (entity,)).fetchone()
             data = dict(kind=kind, target=target, key=key, state=state, evidence=evidence,

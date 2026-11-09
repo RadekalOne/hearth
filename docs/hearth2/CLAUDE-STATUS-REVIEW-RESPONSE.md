@@ -35,3 +35,11 @@ reference section; mobile content fit its viewport. The immutable offline full
 suite passed 1,094 tests in 174.434 seconds, actual exit 0, with external networking
 disabled and loopback only. All 102 checked code/test files matched the snapshot.
 No second reviewer or extra review loop was used for this author fix pass.
+
+
+Subsequent independent-recovery increment: Rad authorized the journal alternative
+for C1. The target controller now cannot mark runner_stale recovered, including
+idempotent replay of old self-recovery requests. A different authenticated
+controller remains permitted under existing CAS/epoch checks. The remaining
+observer design is separate; this rule does not turn reporter references into
+verified health. See DELIVERY-HEALTH-ACCEPTANCE.md and the independent-recovery plan.

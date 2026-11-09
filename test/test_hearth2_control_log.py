@@ -53,6 +53,43 @@ class ControlLogTests(unittest.TestCase):
             self.assertEqual(before[table], after[table])
         self.assertEqual(self.store.control_snapshot()['failures'], [closed])
 
+    def test_stale_self_recovery_is_rejected_atomically_for_either_opener(self):
+        for opener in [self.controller, Principal('supervisor','controller')]:
+            with self.subTest(opener=opener.id):
+                fields=dict(kind='runner_stale',target=self.controller.id,key='owner-'+opener.id,
+                    expected_seq=0,expected_epoch=self.store.control_snapshot()['restore_epoch'],
+                    state='open',evidence=['stale-reference'])
+                opened=self.store.control_failure(opener,**fields)
+                recovery={**fields,'state':'recovered','expected_seq':opened['seq']}
+                before=self.store.snapshot()
+                with self.assertRaisesRegex(RecordError,'independent controller'):
+                    self.store.control_failure(self.controller,**recovery)
+                self.assertEqual(self.store.snapshot(),before)
+                recovered=self.store.control_failure(Principal('supervisor','controller'),**recovery)
+                self.assertEqual(recovered['actor'],'supervisor')
+                self.assertEqual(recovered['state'],'recovered')
+                self.assertEqual(self.store.control_failure(Principal('supervisor','controller'),**recovery),recovered)
+
+    def test_legacy_self_recovery_cannot_bypass_authority_by_replay(self):
+        from hearth2.control import ControlJournal
+        fields=dict(kind='runner_stale',target=self.controller.id,key='legacy-self',
+                    expected_seq=0,expected_epoch=self.store.control_snapshot()['restore_epoch'],
+                    state='open',evidence=['legacy-reference'])
+        opened=self.store.control_failure(self.controller,**fields)
+        recovery={**fields,'state':'recovered','expected_seq':opened['seq']}
+        data={k:v for k,v in recovery.items() if k!='expected_epoch'}
+        data['restore_epoch']=recovery['expected_epoch']
+        journal=ControlJournal(self.store)
+        # Historical fixture bypasses the public write path, as an old journal would.
+        with self.store.transaction() as db:
+            legacy=journal.append(db,self.controller,journal.entity(['control_failure',
+                fields['kind'],fields['target'],fields['key']]),'control_failure',data)
+        before=self.store.snapshot()
+        with self.assertRaisesRegex(RecordError,'independent controller'):
+            self.store.control_failure(self.controller,**recovery)
+        self.assertEqual(self.store.snapshot(),before)
+        self.assertIn(legacy,self.store.control_snapshot()['failures'])
+
     def test_missing_evidence_unauthorized_and_foreign_task_are_rejected(self):
         for who in [self.rad, self.worker]:
             with self.assertRaises(RecordError):

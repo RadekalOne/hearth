@@ -68,6 +68,36 @@ class Hearth2APITests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(snap.json()['ticks'])
         self.assertEqual((await self.client.get('/api/hearth2/control',headers={'Authorization':'Bearer codex-test-token'})).status_code,403)
 
+    async def test_stale_recovery_requires_a_different_authenticated_controller(self):
+        runtime=self.memory.h2_runtime
+        runtime.controllers.add('supervisor')
+        tokens=self.memory.load_tokens();tokens['supervisor']='supervisor-fixture-token';self.memory.save_tokens(tokens)
+        try:
+            fields={'kind':'runner_stale','target':'controller','key':'independent-recovery',
+                    'expected_seq':0,'expected_epoch':runtime.store.control_snapshot()['restore_epoch'],
+                    'state':'open','evidence':['stale-reference']}
+            opened=await self.post('/control/failures',fields,'controller-fixture-token')
+            self.assertEqual(opened.status_code,200,opened.text)
+            recovery={**fields,'state':'recovered','expected_seq':opened.json()['seq']}
+            before=runtime.store.snapshot()
+            denied=await self.post('/control/failures',recovery,'controller-fixture-token')
+            self.assertEqual(denied.status_code,409,denied.text)
+            self.assertIn('independent controller',denied.text)
+            for token in ['admin-test-token','codex-test-token']:
+                self.assertEqual((await self.post('/control/failures',recovery,token)).status_code,403)
+            spoofed=await self.post('/control/failures',{**recovery,'actor':'supervisor'},'controller-fixture-token')
+            self.assertEqual(spoofed.status_code,400,spoofed.text)
+            self.assertEqual(runtime.store.snapshot(),before)
+            allowed=await self.post('/control/failures',recovery,'supervisor-fixture-token')
+            self.assertEqual(allowed.status_code,200,allowed.text)
+            self.assertEqual(allowed.json()['actor'],'supervisor')
+            self.assertEqual(allowed.json()['state'],'recovered')
+            repeated=await self.post('/control/failures',recovery,'supervisor-fixture-token')
+            self.assertEqual(repeated.json(),allowed.json())
+        finally:
+            runtime.controllers.discard('supervisor')
+            tokens=self.memory.load_tokens();tokens.pop('supervisor',None);self.memory.save_tokens(tokens)
+
     async def test_answer_route_requires_human_and_rejects_identity_in_body(self):
         data={'expected_revision':3,'run_id':'run-fixture','answer':'answer','evidence':['ref']}
         for token in ['controller-fixture-token','codex-test-token']:

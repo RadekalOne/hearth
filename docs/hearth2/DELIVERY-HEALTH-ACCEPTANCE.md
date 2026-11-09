@@ -34,7 +34,8 @@ increment. A passing record test must not be labeled successful message delivery
 | Human opens control status at 12:10 | View contains server observation time and old poll time. Time passage alone currently creates no stale incident. |
 | Separate synthetic supervisor controller reports staleness | Human view exposes the open failure and its supplied references. |
 | Controller completes a new poll | Existing failure remains open pending explicit recovery evidence. |
-| Supervisor controller supplies a recovery reference | Journal records recovered; the human view qualifies this as a recovery report. |
+| A different authenticated controller supplies a recovery reference | Journal records recovered; the human view qualifies this as a recovery report. |
+| Target controller tries to recover its own runner_stale incident | Journal rejects the request, including replay of a legacy self-recovery; no record or task changes. |
 
 The supervisor has a separate fixture identity but is still a controller
 principal. There is no distinct observer principal kind. The earlier version of
@@ -67,3 +68,17 @@ external providers and real room posts are not involved. Their first observed
 run passed both scenarios; this characterized existing behavior, so no fabricated
 RED run is claimed. The source-map/enrollment production changes separately used
 RED-to-GREEN contract tests.
+
+## Independent recovery authority
+
+The runner_stale target cannot write state=recovered, regardless of who opened
+the report. The journal enforces actor.id != target after restore-epoch validation
+and before idempotent replay. HTTP derives the actor from the authenticated
+controller principal; a body actor cannot substitute a supervisor. A different
+configured controller can recover and retry an identical request, subject to
+existing sequence and epoch checks. Self-reporting an open incident stays allowed.
+
+Historical self-recoveries remain immutable and visible as neutral, self-reported
+recovery reports. A different principal establishes separate recovery authority;
+it does not verify supplied references or prove worker health. No observer role,
+acknowledgement transport, credential changes or service activation is included.

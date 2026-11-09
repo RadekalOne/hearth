@@ -128,18 +128,24 @@ class HumanStatusTests(unittest.TestCase):
         tick=self.tick()
         opened=self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='outage',
             expected_seq=0,expected_epoch=tick['restore_epoch'],state='open',evidence=['outside-observation'])
-        self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='outage',
+        self.store.control_failure(Principal('supervisor','controller'),kind='runner_stale',target=self.controller.id,key='outage',
             expected_seq=opened['seq'],expected_epoch=tick['restore_epoch'],state='recovered',evidence=['outside-recovery'])
         page=render_status(self.view())
         self.assertIn('Recovery reported',page);self.assertIn('outside-recovery',page)
 
-    def test_self_recovery_is_labelled_self_reported_and_not_verified_health(self):
+    def test_legacy_self_recovery_is_labelled_self_reported_and_not_verified_health(self):
         from hearth2.status_page import render_status
         epoch=self.store.control_snapshot()['restore_epoch']
         opened=self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='self-outage',
             expected_seq=0,expected_epoch=epoch,state='open',evidence=['my-own-report'])
-        self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='self-outage',
-            expected_seq=opened['seq'],expected_epoch=epoch,state='recovered',evidence=['my-own-recovery'])
+        from hearth2.control import ControlJournal
+        journal=ControlJournal(self.store)
+        # Historical fixture: the current public journal forbids self-recovery.
+        with self.store.transaction() as db:
+            journal.append(db,self.controller,journal.entity(['control_failure','runner_stale',
+                self.controller.id,'self-outage']),'control_failure',dict(kind='runner_stale',
+                target=self.controller.id,key='self-outage',expected_seq=opened['seq'],
+                restore_epoch=epoch,state='recovered',evidence=['my-own-recovery']))
         view=self.view();page=render_status(view)
         self.assertIn('Self-reported',page)
         self.assertIn('Recovery reported',page)
