@@ -2007,6 +2007,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="hearth-memory", lifespan=lifespan)
 
 
+def _matched_rest_route(request):
+    from starlette.routing import Match
+    return next((route.path for route in app.routes if getattr(route,'path','').startswith('/api/')
+                 and route.matches(request.scope)[0]==Match.FULL),'')
+
+
+def _notice_session_policy():
+    subjects=h2_runtime.reserved_notice_session_principals()
+    values=load_tokens() if subjects else {}
+    credentials={subject:values[subject] for subject in subjects
+                 if type(values.get(subject)) is str and values[subject]}
+    return subjects,values,credentials
+
+
+def _notice_session_matches(token,credentials):
+    return {subject for subject,value in credentials.items()
+            if token and (pysecrets.compare_digest(token,value) or pysecrets.compare_digest(token.strip(),value))}
+
+
+_NOTICE_SESSION_ROUTES=frozenset({('GET','/api/hearth2/session/notices'),
+    ('POST','/api/hearth2/notices/{notice_id}/receive'),
+    ('POST','/api/hearth2/notices/{notice_id}/acknowledge')})
+
+
 @app.middleware("http")
 async def require_token(request: Request, call_next):
     auth_routes = {"/api/auth/status", "/api/auth/login", "/api/auth/logout"}
@@ -2015,18 +2039,46 @@ async def require_token(request: Request, call_next):
         and request.url.path not in auth_routes
     )
     cookie = request.cookies.get(SESSION_COOKIE, '')
+    browser_principal = session_principal(request)
+    try:
+        session_subjects,token_values,session_credentials=_notice_session_policy()
+    except RuntimeError:
+        return _secure_response(JSONResponse({'error':'notice-session credential policy unavailable'},status_code=503,headers={'Cache-Control':'no-store'}),request.url.path)
+    browser_session=SESSIONS.get(cookie,{})
+    session_cookie=bool(browser_principal and (browser_principal in session_subjects or
+        browser_session.get('auth_kind')=='token' and any(pysecrets.compare_digest(
+            browser_session.get('credential_hash',''),_credential_hash(value)) for value in session_credentials.values())))
+    # Reviewer cookies can also retain a credential that collides with a session token.
+    cookie_reviewer=reviewer_store.session_context(cookie) if cookie else None
+    if cookie_reviewer is not None:
+        session_cookie=session_cookie or any(context is not None and
+            (context.principal,context.credential_generation)==(cookie_reviewer.principal,cookie_reviewer.credential_generation)
+            for context in (reviewer_store.authenticate(value) for value in session_credentials.values()))
+    scoped_headers=[]
+    for authorization in request.headers.getlist('authorization'):
+        if authorization.lower().startswith('bearer '):
+            value=authorization[7:]
+            matches=_notice_session_matches(value,session_credentials)
+            if matches:scoped_headers.append((value,matches))
+    if session_cookie or scoped_headers:
+        ambiguous=any(len(matches)!=1 or
+            {name for name,value in token_values.items() if type(value) is str and pysecrets.compare_digest(value,credential)}!=matches
+            or bool(ADMIN_TOKEN and pysecrets.compare_digest(credential,ADMIN_TOKEN))
+            or reviewer_store.owns_credential(credential) for credential,matches in scoped_headers)
+        if (session_cookie or ambiguous or len(scoped_headers)!=1 or
+                len(request.headers.getlist('authorization'))!=1 or
+                (request.method,_matched_rest_route(request)) not in _NOTICE_SESSION_ROUTES):
+            return _secure_response(JSONResponse({'error':'notice-session credential not permitted'},status_code=403,headers={'Cache-Control':'no-store'}),request.url.path)
     reviewer = reviewer_store.authenticate(bearer(request))
     if not request.url.path.startswith('/mcp') and not bearer(request):
         reviewer = reviewer_store.session_context(cookie)
     if bearer(request) and reviewer is None and reviewer_store.owns_credential(bearer(request)):
         return _secure_response(JSONResponse({'error':'authentication required'},status_code=401),request.url.path)
-    browser_principal = session_principal(request)
     principal = browser_principal or "anonymous"
     if reviewer and (bearer(request) or not request.url.path.startswith('/mcp')):
         principal = reviewer.principal
         if request.url.path.startswith('/api/'):
-            from starlette.routing import Match
-            route_name = next((route.path for route in app.routes if getattr(route, 'path', '').startswith('/api/') and route.matches(request.scope)[0] == Match.FULL), '')
+            route_name = _matched_rest_route(request)
             if not _reviewers.rest_allowed(request.method, route_name):
                 return _secure_response(JSONResponse({'error':'reviewer read-only access denied'},status_code=403),request.url.path)
             if request.method == 'GET' and route_name != '/api/auth/status':
@@ -2191,6 +2243,12 @@ async def dashboard_login(request: Request):
     if not _same_origin(request):
         raise HTTPException(403, "cross-site login rejected")
     body = await request.json()
+    try:
+        session_subjects,_,session_credentials=_notice_session_policy()
+    except RuntimeError:
+        raise HTTPException(503,'notice-session credential policy unavailable') from None
+    if _notice_session_matches(str(body.get('token','')),session_credentials):
+        raise HTTPException(403,'notice-session credentials are bearer-only')
     reviewer = reviewer_store.authenticate(str(body.get('token', '')).strip())
     if reviewer:
         try: session_id = reviewer_store.session(reviewer)
@@ -2251,6 +2309,8 @@ async def dashboard_login(request: Request):
     if not principal:
         raise HTTPException(401, "invalid username, password, or access token")
 
+    if principal in session_subjects:
+        raise HTTPException(403,'notice-session credentials are bearer-only')
     session_id = create_session(principal, auth_kind, credential)
     response = JSONResponse({"authenticated": True, "principal": principal})
     response.set_cookie(

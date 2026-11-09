@@ -64,6 +64,13 @@ class Runtime:
         Schema.initialize(self.store.path, enabled=True)
         self.initialized = True
 
+    def reserved_notice_session_principals(self):
+        """Auth classification never depends on H2 readiness or database creation."""
+        from .delivery import session_enrollments
+        configured=session_enrollments(self.notice_sessions_raw,self.humans|self.controllers|self.workers,
+            self.humans|self.controllers|self.workers|self.observers)
+        return {target.principal_id for target in (*self.notice_sessions.values(),*configured.values())}
+
     def actor(self, request, kinds):
         if not self.enabled:
             raise HTTPException(409, 'Hearth 2 is disabled')
