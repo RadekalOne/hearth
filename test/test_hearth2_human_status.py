@@ -37,7 +37,7 @@ class HumanStatusTests(unittest.TestCase):
         row=self.view()['controllers'][0]
         self.assertEqual(row['poll_state'],'stale')
         self.assertEqual(row['last_completed_at'],tick['at'])
-        self.assertEqual(row['evidence'],['synthetic-poll-evidence'])
+        self.assertEqual(row['supplied_references'],['synthetic-poll-evidence'])
         self.assertEqual(row['cadence_seconds'],300)
         self.assertEqual(row['grace_seconds'],60)
         self.assertEqual(self.tick(),tick)
@@ -79,7 +79,7 @@ class HumanStatusTests(unittest.TestCase):
         result=self.view()
         row=result['notices'][0]
         self.assertEqual((row['id'],row['delivery_state'],row['recorded_at']),(notice['id'],'unconfirmed',None))
-        self.assertEqual(row['evidence'],['synthetic-evidence'])
+        self.assertEqual(row['supplied_references'],['synthetic-evidence'])
         self.assertEqual(result['tasks'][0]['state'],'running')
         encoded=json.dumps(result)
         for value in ('FORGED-DELIVERY','FORGED-ACK','PRIVATE-SENTINEL',self.claim['id']):self.assertNotIn(value,encoded)
@@ -131,7 +131,66 @@ class HumanStatusTests(unittest.TestCase):
         self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='outage',
             expected_seq=opened['seq'],expected_epoch=tick['restore_epoch'],state='recovered',evidence=['outside-recovery'])
         page=render_status(self.view())
-        self.assertIn('Recovered',page);self.assertIn('outside-recovery',page)
+        self.assertIn('Recovery reported',page);self.assertIn('outside-recovery',page)
+
+    def test_self_recovery_is_labelled_self_reported_and_not_verified_health(self):
+        from hearth2.status_page import render_status
+        epoch=self.store.control_snapshot()['restore_epoch']
+        opened=self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='self-outage',
+            expected_seq=0,expected_epoch=epoch,state='open',evidence=['my-own-report'])
+        self.store.control_failure(self.controller,kind='runner_stale',target=self.controller.id,key='self-outage',
+            expected_seq=opened['seq'],expected_epoch=epoch,state='recovered',evidence=['my-own-recovery'])
+        view=self.view();page=render_status(view)
+        self.assertIn('Self-reported',page)
+        self.assertIn('Recovery reported',page)
+        self.assertNotIn('>Recovered</span>',page)
+        self.assertIn('<span class="badge unknown">Recovery reported</span>',page)
+        self.assertTrue(view['failures'][0]['self_reported'])
+        self.assertEqual(view['failures'][0]['supplied_references'],['my-own-recovery'])
+
+    def test_separate_controller_report_does_not_become_verified_evidence(self):
+        from hearth2.status_page import render_status
+        epoch=self.store.control_snapshot()['restore_epoch']
+        self.store.control_failure(Principal('supervisor','controller'),kind='runner_stale',target=self.controller.id,
+            key='supervisor-outage',expected_seq=0,expected_epoch=epoch,state='open',evidence=['supervisor-reference'])
+        value=self.view()
+        self.assertFalse(value['failures'][0]['self_reported'])
+        self.assertEqual(value['failures'][0]['reference_provenance'],'reporter_supplied_unverified')
+        page=render_status(value)
+        self.assertIn('Reporter-supplied references (unverified)',page)
+        self.assertIn('Inspect record',page)
+        self.assertNotIn('View evidence',page)
+
+    def test_running_shows_claim_lease_expiry_without_implying_worker_liveness(self):
+        from hearth2.status_page import render_status
+        row=self.view()['tasks'][0]
+        self.assertEqual(row['claim_lease_until'],self.claim['lease_until'])
+        self.assertEqual(row['lease_state'],'current')
+        self.assertEqual(row['worker_liveness'],'unverified')
+        page=render_status(self.view())
+        self.assertIn('Running (claim recorded)',page)
+        self.assertIn('Worker liveness is unverified',page)
+        self.assertIn(self.claim['lease_until'],page)
+        self.time+=timedelta(seconds=901)
+        value=self.view();page=render_status(value)
+        self.assertEqual(value['tasks'][0]['lease_state'],'expired')
+        self.assertEqual(value['tasks'][0]['state'],'running')
+        self.assertIn('Claim lease expired',page)
+        self.assertNotIn('Worker stopped',page)
+
+    def test_old_epoch_or_malformed_lease_remains_unknown(self):
+        with self.store.transaction() as db:db.execute("UPDATE claims SET lease_until='not-a-time' WHERE id=?",(self.claim['id'],))
+        self.assertEqual(self.view()['tasks'][0]['lease_state'],'unknown')
+        with self.store.transaction() as db:
+            db.execute('UPDATE claims SET lease_until=?,restore_epoch=? WHERE id=?',
+                (self.claim['lease_until'],'old-period',self.claim['id']))
+        row=self.view()['tasks'][0]
+        self.assertEqual(row['lease_state'],'unknown')
+        self.assertIsNone(row['claim_lease_until'])
+        with self.store.transaction() as db:
+            db.execute('UPDATE claims SET restore_epoch=?,generation=generation+1 WHERE id=?',
+                (self.claim['restore_epoch'],self.claim['id']))
+        self.assertEqual(self.view()['tasks'][0]['lease_state'],'unknown')
 
     def test_page_escapes_all_stored_identity_and_evidence_without_active_links(self):
         from hearth2.status_page import render_status
@@ -164,6 +223,17 @@ class HumanStatusHTTPTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.headers['cache-control'],'no-store')
             with patch.object(self.memory.h2_runtime,'enabled',False):
                 self.assertEqual((await self.client.get(path,headers={'Authorization':'Bearer admin-test-token'})).status_code,409)
+
+    async def test_human_bearer_and_human_browser_session_are_both_supported(self):
+        response=await self.client.get('/api/hearth2/status',headers={'Authorization':'Bearer admin-test-token'})
+        self.assertEqual(response.status_code,200,response.text)
+        login=await self.client.post('/api/auth/login',json={'token':'admin-test-token'})
+        self.assertEqual(login.status_code,200,login.text)
+        for path in ('/api/hearth2/status','/api/hearth2/status/view','/api/hearth2/status/style.css'):
+            session=await self.client.get(path)
+            self.assertEqual(session.status_code,200,session.text)
+            denied=await self.client.get(path,headers={'Authorization':'Bearer controller-fixture-token'})
+            self.assertEqual(denied.status_code,403,denied.text)
 
     async def test_human_workflow_poll_evidence_and_notice_escape(self):
         from datetime import datetime,timezone

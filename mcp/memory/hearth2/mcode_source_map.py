@@ -17,11 +17,12 @@ SOURCE_PINS=(
 _ROOT=(('pi-auth',('codex-auth.json',)),('projection-shared',('local-runtime.auth.json',)),
  ('lease-capability',('run','mcode-auth-lease-v1.cap')),('shared-selector',('cli-auth','shared-projection.json')),
  ('region-selector',('preferences','mcode-region.json')),('legacy-encrypted',('auth','credentials.enc')),
- ('mcode-config',('config.yaml',)),('host-model-ref',None),('mcp-consumers',None),('environment',None))
+ ('mcode-config',('config.yaml',)),('host-model-ref',None),('mcp-consumers',None),('environment',None),
+ ('oauth-state',('auth','auth-state.json')))
 _ENV=(('projection-legacy','local-runtime.auth.json'),('legacy-scope-marker','cli-auth.scope.json'))
 _NAMESPACE=(('oauth-store','auth.json'),('oauth-state','auth-state.json'),
  ('projection-namespaced','local-runtime.auth.json'),('account-identity','account-identity.json'),('scope-marker','cli-auth.scope.json'))
-MAP_SHA256=hashlib.sha256(json.dumps(('mcode-source-map-v1','0.4.1',SOURCE_PINS,_ROOT,_ENV,_NAMESPACE),
+MAP_SHA256=hashlib.sha256(json.dumps(('mcode-source-map-v2','0.4.1',SOURCE_PINS,_ROOT,_ENV,_NAMESPACE),
     separators=(',',':')).encode('ascii')).hexdigest()
 
 
@@ -79,12 +80,15 @@ class MCodeSourceMap:
                        or any(not 33<=ord(c)<=126 or c in '/\\' for c in x) for x in path)):_refuse()
         parent=path[:-1];name=path[-1]
         auth=len(parent)==4 and parent[0]=='auth' and parent[1] in ('dev','test','staging','prod') and parent[2] in ('cn','en') and parent[3]=='mcode-public'
+        legacy_auth=parent==('auth',)
         cli=len(parent) in (2,3) and parent[0]=='cli-auth' and parent[1] in ('dev','test','staging','prod') and (len(parent)==2 or parent[2] in ('cn','en'))
-        if kind=='directory':return (auth and name=='auth.lock.lock') or (not parent and name=='config.yaml.lock')
+        if kind=='directory':return ((auth or legacy_auth) and name=='auth.lock.lock') or (not parent and name=='config.yaml.lock')
         if kind!='regular':return False
+        if (auth or legacy_auth) and name=='auth.lock':return True
         if not parent and re.fullmatch(r'\.config-tmp-[0-9a-f]{12}',name):return True
         if parent==('run',):return re.fullmatch(r'mcode-auth-lease-v1\.cap\.[1-9][0-9]*\.[0-9a-f]{16}\.tmp',name) is not None
         targets=('auth.json','auth-state.json') if auth else (('local-runtime.auth.json','cli-auth.scope.json') if cli else ())
+        if legacy_auth:targets=('auth-state.json',)
         if cli and len(parent)==3:targets+=('account-identity.json',)
         if not parent:targets=('local-runtime.auth.json',)
         if parent==('cli-auth',):targets=('shared-projection.json',)

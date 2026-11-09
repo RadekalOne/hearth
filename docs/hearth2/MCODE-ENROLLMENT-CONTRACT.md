@@ -25,8 +25,15 @@ returning one root plus necessary closure pins/limits. It excludes other roots
 and configured-source slots. The slice's content binding detects changed fields;
 it is not a signature or independent authenticated enrollment.
 
-The fixed map includes the audit's six source pins, 14 file role spellings and
-three non-file obligations. Shared/root roles appear once, environment roles once
+The revised v2 map includes the audit's six source pins and the linked Claude
+correction: 15 credential-related file locations across the existing 14 file
+kinds, plus three non-file obligations. Legacy `auth/auth-state.json` is a separate
+root `oauth-state` leaf with no environment/region and no namespace partner group.
+It stays unscanned and unsupported; it must not be paired with namespace auth.
+`auth/auth.lock` is a coordination file, with an adjacent `auth.lock.lock`
+directory; recognizing these names/types grants no ignore/absence authority.
+The map digest changes, so declarations pinned to the old map must be explicitly
+repinned; no live enrollment or migration is performed. Shared/root roles appear once, environment roles once
 per declared environment and namespace roles once per declared environment/region.
 Empty namespace declarations do not default to prod/en. All returned roles remain
 **unscanned**, with acquisition support disabled. The preexisting four-role

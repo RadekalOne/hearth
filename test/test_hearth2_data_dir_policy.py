@@ -99,7 +99,7 @@ class DataDirectoryPolicyTests(unittest.TestCase):
     def test_expansion_preserves_literal_paths_multiplicity_and_unmapped_obligations(self):
         part=self.policy().root_slice('rootA',expected_sha256=self.policy().sha256,context=self.context)
         leaves=self.m.MCodeSourceMap.expand(part)
-        paths={x.kind:x.path for x in leaves}
+        paths={x.kind:x.path for x in leaves if x.kind!='oauth-state' or x.build_env is not None}
         self.assertEqual(paths,{
             'pi-auth':('codex-auth.json',),'oauth-store':('auth','prod','en','mcode-public','auth.json'),
             'oauth-state':('auth','prod','en','mcode-public','auth-state.json'),
@@ -120,12 +120,12 @@ class DataDirectoryPolicyTests(unittest.TestCase):
         root=replace(self.root,namespaces=(ns,replace(ns,region='cn'),replace(ns,build_env='dev')))
         policy=self.policy(roots=(root,))
         leaves=self.m.MCodeSourceMap.expand(policy.root_slice('rootA',expected_sha256=policy.sha256,context=self.context))
-        self.assertEqual(len(leaves),29) # 10 root/non-file + 2*2 environment + 5*3 namespace
+        self.assertEqual(len(leaves),30) # 11 root/non-file + 2*2 environment + 5*3 namespace
         for kind in ('projection-shared','region-selector','environment'):
             self.assertEqual(sum(x.kind==kind for x in leaves),1)
         self.assertEqual(sum(x.kind=='projection-legacy' for x in leaves),2)
         self.assertEqual(sum(x.kind=='oauth-store' for x in leaves),3)
-        self.assertEqual(len({x.source_id for x in leaves}),29)
+        self.assertEqual(len({x.source_id for x in leaves}),30)
 
     def test_expansion_refuses_underdeclared_logical_budget_without_truncation(self):
         policy=self.policy(logical_source_limit=17)
@@ -168,7 +168,7 @@ class DataDirectoryPolicyTests(unittest.TestCase):
         self.assertFalse(self.m.MCodeSourceMap.account_matches(part,'prod','en'))
         policy=self.policy(roots=(replace(self.root,namespaces=()),))
         leaves=self.m.MCodeSourceMap.expand(policy.root_slice('rootA',expected_sha256=policy.sha256,context=self.context))
-        self.assertEqual(len(leaves),10)
+        self.assertEqual(len(leaves),11)
         self.assertTrue(all(x.build_env is None for x in leaves))
 
     def test_decode_rejects_unknown_duplicate_and_old_policy_fields_redacted(self):
@@ -189,6 +189,27 @@ class DataDirectoryPolicyTests(unittest.TestCase):
         # legacy branches have projection/scope roles, never account identity.
         self.assertFalse(self.m.MCodeSourceMap.transient(('cli-auth','prod','account-identity.json.12.345.tmp'),'regular'))
         self.assertTrue(self.m.MCodeSourceMap.transient(('cli-auth','prod','en','account-identity.json.12.345.tmp'),'regular'))
+
+    def test_legacy_root_state_is_a_separate_unscanned_leaf_not_a_namespace_partner(self):
+        policy=self.policy()
+        leaves=self.m.MCodeSourceMap.expand(policy.root_slice('rootA',expected_sha256=policy.sha256,context=self.context))
+        legacy=[x for x in leaves if x.path==('auth','auth-state.json')]
+        self.assertEqual(len(legacy),1)
+        self.assertEqual((legacy[0].kind,legacy[0].build_env,legacy[0].region,legacy[0].status,
+            legacy[0].acquisition_supported),('oauth-state',None,None,'unscanned',False))
+        self.assertEqual(sum(x.kind=='oauth-state' for x in leaves),2)
+        self.assertEqual(len(leaves),18)
+        exact=self.policy(logical_source_limit=18)
+        with self.assertRaises(RecordError):self.m.MCodeSourceMap.expand(exact.root_slice('rootA',expected_sha256=exact.sha256,context=self.context))
+
+    def test_legacy_lock_and_state_temporary_names_preserve_types_and_do_not_broaden_patterns(self):
+        check=self.m.MCodeSourceMap.transient
+        self.assertTrue(check(('auth','auth.lock'),'regular'))
+        self.assertTrue(check(('auth','auth.lock.lock'),'directory'))
+        self.assertTrue(check(('auth','auth-state.json.12.345.tmp'),'regular'))
+        self.assertFalse(check(('auth','auth.lock'),'symlink'))
+        self.assertFalse(check(('auth','auth.lock.lock'),'regular'))
+        self.assertFalse(check(('auth','credentials.enc.12.345.tmp'),'regular'))
 
 
 if __name__=='__main__':unittest.main()

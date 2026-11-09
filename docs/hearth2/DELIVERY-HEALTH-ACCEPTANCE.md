@@ -32,9 +32,15 @@ increment. A passing record test must not be labeled successful message delivery
 | Controller records a completed poll at 12:00 UTC | Server journal retains that observation. |
 | Ten simulated minutes pass; the same request is retried | Original timestamp remains 12:00; retry does not refresh liveness. |
 | Human opens control status at 12:10 | View contains server observation time and old poll time. Time passage alone currently creates no stale incident. |
-| Synthetic outside observer explicitly reports staleness | Human view exposes the open failure and its evidence. |
+| Separate synthetic supervisor controller reports staleness | Human view exposes the open failure and its supplied references. |
 | Controller completes a new poll | Existing failure remains open pending explicit recovery evidence. |
-| Outside observer supplies recovery evidence | Failure becomes recovered; it does not silently disappear. |
+| Supervisor controller supplies a recovery reference | Journal records recovered; the human view qualifies this as a recovery report. |
+
+The supervisor has a separate fixture identity but is still a controller
+principal. There is no distinct observer principal kind. The earlier version of
+this test used the target controller itself for these reports; Claude's review
+identified that qualification, and the fixture now uses a separate identity.
+Neither version proves an enforced independent observer authority.
 
 This verifies the journal behavior under a controlled clock. It does not verify
 an independent running observer, configured cadence/grace policy, host outage

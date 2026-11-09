@@ -1,7 +1,8 @@
 # Human work status
 
 The read-only page is `/api/hearth2/status/view` on an enabled, authenticated
-Hearth 2 instance. It uses the existing human browser session. JSON is available
+Hearth 2 instance. It accepts an existing human browser session or a human bearer
+token; worker/controller bearer tokens are rejected. JSON is available
 at `/api/hearth2/status`; both accept an optional `project_id`. The protected
 stylesheet is `/api/hearth2/status/style.css`. Workers and controllers cannot
 open these human routes. Reading the view creates no delivery acknowledgement,
@@ -14,8 +15,11 @@ deploy a page, start a runner, alter Commons watches or activate the inactive
 ## What the person sees
 
 - **Assigned work:** persisted task state and assignee, including separate
-  Running, Awaiting independent review, Awaiting human acceptance and Accepted.
-- **Notices & delivery:** Recorded / Delivery unconfirmed. Expand View evidence
+  Running (claim recorded), Awaiting independent review, Awaiting human acceptance
+  and Accepted. Running is not worker liveness: the view shows its current-epoch,
+  matching-generation claim lease expiry and current/expired/unknown lease state,
+  and explicitly leaves worker liveness unverified. Expiry does not diagnose a stop.
+- **Notices & delivery:** Recorded / Delivery unconfirmed. Expand Inspect record
   for the notice and task records, recorded sender, acknowledgement state and
   evidence reference. Existing notices have no reliable recording timestamp;
   the page leaves that unknown. Extra metadata claiming delivery is not accepted
@@ -23,9 +27,22 @@ deploy a page, start a runner, alter Commons watches or activate the inactive
 - **Controller polling:** Poll recent, Poll overdue or Poll status unknown.
   Evidence includes the last completed poll, assessment time, cadence/grace,
   age, request, journal sequence, restore period and recorded references.
-- **Reported failures:** open and recovered reports remain separate from poll
-  freshness. A new tick does not close an open report. Reports from an earlier
-  restore period are explicitly historical.
+- **Reported failures:** open and Recovery reported remain separate from poll
+  freshness. Reporter=target adds a Self-reported badge. Recovery reports use
+  neutral styling and do not establish independently verified health. A new tick
+  does not close an open report. Older restore-period reports are historical.
+
+Record fields and reporter-supplied references are presented separately. Free-text
+references are explicitly unverified. The unreleased status JSON now names them
+`supplied_references` with `reference_provenance=reporter_supplied_unverified`;
+failure rows also expose `self_reported`. Existing journal write/control APIs keep
+their original `evidence` field. No reference is validated merely by being stored.
+
+The journal still permits a controller to report its own recovery. Before adding
+acknowledgements or an outside observer, enforce a distinct observer authority or
+a rule prohibiting self-recovery. The badges address the immediate display risk,
+not that future authority boundary. A separate controller identity in tests does
+not implement a distinct observer principal kind.
 
 Controller health is instance-wide even in a project view. Task and notice cards
 are restricted to that project. All records are read in one transaction, and
@@ -71,9 +88,12 @@ Overdue, Unknown and expandable evidence at desktop and 390px mobile viewport;
 mobile document width fit its available viewport without horizontal overflow.
 The preview used synthetic data only and its loopback server was stopped.
 
-Independent review found no new issues. The immutable offline full suite passed
-1,087 tests in 152.654 seconds, actual exit 0, with external networking disabled
+The initial fresh Codex review had no findings. Claude's subsequent independent
+review passed the original three commits with one High and three Medium findings;
+the author fixes and remaining authority gate are recorded in
+`CLAUDE-STATUS-REVIEW-RESPONSE.md`. This follow-up passed the immutable offline
+suite: 1,094 tests in 174.434 seconds, actual exit 0, external networking disabled
 and loopback only. All 102 checked code/test files (including app wiring) matched
-the tested snapshot. Detailed evidence is retained in the plan's private
-workspace. The native browser/phone delivery and off-host observer tests
-remain independent future acceptance gates.
+the tested snapshot. Detailed evidence is retained in the plan's private workspace.
+Native browser/phone delivery, independent observer authority and broader-slice
+verification remain separate future acceptance gates.

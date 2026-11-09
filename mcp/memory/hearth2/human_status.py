@@ -40,13 +40,21 @@ def human_status(store, controllers, expectations, project_id=None):
         project=store.row(db,'projects',project_id) if project_id is not None else None
         control=ControlJournal(store).snapshot_in(db)
         tasks=[];notices=[]
-        rows=db.execute('SELECT id,project_id,assignee,state,revision,data FROM tasks'
+        claims={r['task_id']:r for r in db.execute("SELECT task_id,generation,restore_epoch,lease_until FROM claims WHERE state='active'")}
+        rows=db.execute('SELECT id,project_id,assignee,state,revision,generation,data FROM tasks'
             +(' WHERE project_id=?' if project_id is not None else '')+' ORDER BY id',
             (project_id,) if project_id is not None else ())
         for row in rows:
             data=json.loads(row['data'])
+            claim=claims.get(row['id']);lease_until=None;lease_state='unknown'
+            if (claim is not None and row['state']=='running' and claim['generation']==row['generation']
+                    and claim['restore_epoch']==control['restore_epoch']):
+                lease_until=claim['lease_until']
+                try:lease_state='expired' if _time(lease_until)<=_time(control['observed_at']) else 'current'
+                except (TypeError,ValueError,OverflowError):pass
             tasks.append(dict(id=row['id'],project_id=row['project_id'],assignee=row['assignee'],
-                state=row['state'],revision=row['revision'],ask=data.get('ask','Task'),done_means=data.get('done_means','')))
+                state=row['state'],revision=row['revision'],ask=data.get('ask','Task'),done_means=data.get('done_means',''),
+                claim_lease_until=lease_until,lease_state=lease_state,worker_liveness='unverified'))
         rows=db.execute('SELECT id,project_id,task_id,sender,recipient,kind,data FROM notices'
             +(' WHERE project_id=?' if project_id is not None else '')+' ORDER BY id',
             (project_id,) if project_id is not None else ())
@@ -55,7 +63,8 @@ def human_status(store, controllers, expectations, project_id=None):
             reference=data.get('reference')
             notices.append(dict(id=row['id'],task_id=row['task_id'],sender=row['sender'],recipient=row['recipient'],
                 kind=row['kind'],record_state='recorded',delivery_state='unconfirmed',acknowledgement_state='unknown',
-                recorded_at=None,evidence=[reference] if type(reference) is str else []))
+                recorded_at=None,supplied_references=[reference] if type(reference) is str else [],
+                reference_provenance='reporter_supplied_unverified'))
         ticks={t['runner']:t for t in control['ticks']}
         polls=[]
         for name in sorted(controllers):
@@ -75,9 +84,11 @@ def human_status(store, controllers, expectations, project_id=None):
                 sequence=tick['seq'] if tick else None,restore_epoch=control['restore_epoch'],
                 cadence_seconds=policy['cadence_seconds'] if policy else None,
                 grace_seconds=policy['grace_seconds'] if policy else None,
-                evidence=tick.get('evidence',[]) if tick else []))
+                supplied_references=tick.get('evidence',[]) if tick else [],
+                reference_provenance='reporter_supplied_unverified'))
         failures=[dict(kind=f['kind'],target=f['target'],key=f['key'],state=f['state'],at=f['at'],
-            sequence=f['seq'],actor=f['actor'],restore_epoch=f['restore_epoch'],evidence=f['evidence'],
+            sequence=f['seq'],actor=f['actor'],restore_epoch=f['restore_epoch'],supplied_references=f['evidence'],
+            reference_provenance='reporter_supplied_unverified',self_reported=f['actor']==f['target'],
             historical=f['restore_epoch']!=control['restore_epoch']) for f in control['failures']
             if f['kind']=='runner_stale' or project_id is None or any(t['id']==f['target'] for t in tasks)]
         return dict(observed_at=control['observed_at'],restore_epoch=control['restore_epoch'],

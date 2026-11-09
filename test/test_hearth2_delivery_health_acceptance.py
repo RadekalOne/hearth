@@ -11,7 +11,12 @@ from test import test_hearth2_api as api
 
 class DeliveryHealthAcceptanceTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
-    def setUpClass(cls):api.Hearth2APITests.setUpClass.__func__(cls)
+    def setUpClass(cls):
+        api.Hearth2APITests.setUpClass.__func__(cls)
+        # A separate fixture identity, still a controller principal. This does
+        # not implement or prove a distinct observer authority class.
+        cls.memory.h2_runtime.controllers.add('supervisor')
+        tokens=cls.memory.load_tokens();tokens['supervisor']='supervisor-fixture-token';cls.memory.save_tokens(tokens)
 
     @classmethod
     def tearDownClass(cls):api.Hearth2APITests.tearDownClass.__func__(cls)
@@ -101,7 +106,7 @@ class DeliveryHealthAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(any(f['key']=='acceptance-silence' for f in quiet['failures']))
             failure=dict(kind='runner_stale',target='controller',key='acceptance-silence',expected_seq=0,
                 expected_epoch=epoch,state='open',evidence=['synthetic-outside-staleness-observation'])
-            opened=await self.save('/control/failures',failure,'controller-fixture-token')
+            opened=await self.save('/control/failures',failure,'supervisor-fixture-token')
             # A new successful poll does not erase an unresolved failure.
             await self.save('/control/ticks',{**tick,'request_id':'acceptance-resumed-poll',
                 'expected_seq':completed['seq']},'controller-fixture-token')
@@ -109,8 +114,9 @@ class DeliveryHealthAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(next(f for f in visible['failures'] if f['key']=='acceptance-silence')['state'],'open')
             recovered=await self.save('/control/failures',
                 {**failure,'expected_seq':opened['seq'],'state':'recovered','evidence':['synthetic-outside-recovery-check']},
-                'controller-fixture-token')
+                'supervisor-fixture-token')
             self.assertEqual(recovered['state'],'recovered')
+            self.assertEqual(recovered['actor'],'supervisor')
             after=await self.get('/control')
             self.assertEqual(next(f for f in after['failures'] if f['key']=='acceptance-silence')['state'],'recovered')
 

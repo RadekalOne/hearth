@@ -150,3 +150,24 @@ Validation for this audit is source hash/excerpt readback and an independent
 read-only review. No product tests were added or rerun for this documentation-only
 slice; the prior 1056-test result belongs to commit `1558f4f`, not to new runtime
 acceptance.
+
+## Linked correction from Claude's November 8 review
+
+The original table omitted a distinct legacy state location. In the same pinned
+AAJMOWWM bytes, `J` at UTF-16 offset 23739 defines `authHome = resolve(dataDir)/auth`,
+`legacyStatePath = authHome/auth-state.json`, `legacyLockPath = authHome/auth.lock`
+and `legacyEncryptedCredentialPath = authHome/credentials.enc`. `it` reads the
+legacy state under that lock and checks its environment/region before migration.
+This statically establishes the companion state location; it does not establish
+decryption, presence, effective credentials or parser/acquisition support.
+
+The revised mapper keeps root legacy state distinct from namespace state, for
+15 credential-related locations across 14 existing file kinds and three non-file
+obligations. The root coordination file and its `.lock` directory are descriptive
+metadata, not new credential kinds or benign-ignore rules. Both AAJMOWWM and
+proper-lockfile's 2ZG44JU6 hashes were independently rechecked against the above
+pins; the latter's `J` appends `.lock` and `Te` uses mkdir (offsets 17878/18023).
+Bounded source excerpts are retained in the status-view workspace's
+`legacy-source-correction.json`, SHA256
+`a9241cd9f0f7123bc801184203c9968643a2b16609b2e50e12b376ffc3661540`.
+No native source was executed and no user configuration or credential was read.
