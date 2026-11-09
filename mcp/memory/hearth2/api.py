@@ -17,7 +17,7 @@ from .backup import export_record
 class Runtime:
     def __init__(self, app, *, enabled, data_dir, principal, typed_auth,
                  same_origin, bearer_principal, human_ids, controller_ids,
-                 worker_ids, authenticated, timing=None):
+                 worker_ids, authenticated, timing=None, poll_expectations=None):
         self.enabled = enabled
         self.store = Store(Path(data_dir) / 'hearth2.sqlite3')
         self.principal = principal
@@ -27,6 +27,8 @@ class Runtime:
         self.humans, self.controllers, self.workers = map(set, (human_ids, controller_ids, worker_ids))
         self.authenticated = authenticated
         self.timing = timing or {}
+        self.poll_expectations_raw = poll_expectations
+        self.poll_expectations = {}
         self.initialized = False
         self.routes(app)
 
@@ -38,6 +40,8 @@ class Runtime:
                 or self.humans & self.controllers or self.humans & self.workers or self.controllers & self.workers):
             raise RuntimeError('Hearth 2 requires authentication and disjoint explicit principal roles')
         try:
+            from .human_status import poll_expectations
+            expectations = poll_expectations(self.poll_expectations_raw, self.controllers)
             if set(self.timing) - {'lease_seconds', 'deadline_seconds'}:
                 raise ValueError()
             if any(not isinstance(v, str) or re.fullmatch(r'[0-9]{1,4}', v) is None for v in self.timing.values()):
@@ -46,6 +50,7 @@ class Runtime:
         except (ValueError, TypeError):
             raise RuntimeError('invalid Hearth 2 timing configuration') from None
         self.store.lease_seconds, self.store.deadline_seconds = store.lease_seconds, store.deadline_seconds
+        self.poll_expectations = expectations
         Schema.initialize(self.store.path, enabled=True)
         self.initialized = True
 
@@ -91,6 +96,26 @@ class Runtime:
             raise HTTPException(503, 'Hearth 2 store unavailable') from None
 
     def routes(self, app):
+        @app.get('/api/hearth2/status/view')
+        def human_status_page(request: Request, project_id: str | None = None):
+            self.actor(request, {'human'})
+            from .human_status import human_status
+            from .status_page import render_status
+            value = self.call(human_status, self.store, self.controllers, self.poll_expectations, project_id)
+            return Response(render_status(value), media_type='text/html', headers={'Cache-Control':'no-store'})
+
+        @app.get('/api/hearth2/status/style.css')
+        def human_status_style(request: Request):
+            self.actor(request, {'human'})
+            from .status_page import STYLE
+            return Response(STYLE, media_type='text/css', headers={'Cache-Control':'no-store'})
+
+        @app.get('/api/hearth2/status')
+        def human_status(request: Request, project_id: str | None = None):
+            self.actor(request, {'human'})
+            from .human_status import human_status
+            return self.call(human_status, self.store, self.controllers, self.poll_expectations, project_id)
+
         @app.get('/api/hearth2')
         def snapshot(request: Request, project_id: str | None = None):
             self.actor(request, {'human', 'controller'})

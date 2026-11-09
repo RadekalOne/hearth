@@ -85,15 +85,19 @@ class ControlJournal:
 
     def snapshot(self):
         with self.store.transaction() as db:
-            epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
-            ticks, failures, seen = [], [], set()
-            for row in db.execute("SELECT * FROM audit_events WHERE action IN ('runner_tick','control_failure') ORDER BY seq DESC"):
-                if row['entity_id'] in seen:
-                    continue
-                seen.add(row['entity_id'])
-                data = self.decode(row)
-                if row['action'] == 'control_failure':
-                    failures.append(data)
-                elif data['restore_epoch'] == epoch:
-                    ticks.append(data)
-            return dict(restore_epoch=epoch, observed_at=self.store.now().isoformat(), ticks=ticks, failures=failures)
+            return self.snapshot_in(db)
+
+    def snapshot_in(self, db):
+        """Read within a caller-owned transaction; no journal writes."""
+        epoch = db.execute('SELECT restore_epoch FROM record_meta WHERE id=1').fetchone()[0]
+        ticks, failures, seen = [], [], set()
+        for row in db.execute("SELECT * FROM audit_events WHERE action IN ('runner_tick','control_failure') ORDER BY seq DESC"):
+            if row['entity_id'] in seen:
+                continue
+            seen.add(row['entity_id'])
+            data = self.decode(row)
+            if row['action'] == 'control_failure':
+                failures.append(data)
+            elif data['restore_epoch'] == epoch:
+                ticks.append(data)
+        return dict(restore_epoch=epoch, observed_at=self.store.now().isoformat(), ticks=ticks, failures=failures)
