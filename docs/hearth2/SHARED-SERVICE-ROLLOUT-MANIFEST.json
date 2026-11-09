@@ -1,5 +1,5 @@
 {
-  "status": "CANDIDATE/FALLBACK IMAGE VALIDATION PASSED; deployment remains unapproved",
+  "status": "CUTOFF/RESTORE REHEARSAL PASSED; FINAL PACKET READY FOR RAD APPROVAL; deployment unapproved",
   "reported_live_build": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
   "reference_source": "59ee081f06f3654bfb34c44614022623986c2aab",
   "public_health_observed_utc": "2026-11-09T16:14:04.6737889+00:00",
@@ -151,8 +151,26 @@
     "published_or_pushed": false
   },
   "pending_deployment_gates": [
-    "Rad explicit approval after exact artifact review",
-    "Final live cutover/cold-backup-and-restore verification at approved maintenance boundary",
-    "Shared pilot cutoff rehearsal and final executable artifact sheet"
-  ]
+    "Rad explicit approval of final exact artifact packet and maintenance tradeoff",
+    "Recheck live pins and cold-backup/isolated-restore verification at approved maintenance boundary",
+    "Actual supervised shared HTTPS receipt-only acceptance and disabled-fallback closeout"
+  ],
+  "cutoff_restore_rehearsal": {
+    "report": "SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md",
+    "evidence": "SHARED-PILOT-REHEARSAL-EVIDENCE.json",
+    "final_approval_packet": "SHARED-SERVICE-FINAL-APPROVAL.md",
+    "ops_sha256": "d61c45be14dcbb0a2ce61a496195e7be6e99098c533f5cef116a87b82479a4cc",
+    "unit_tests": 8,
+    "detached_cutoff": true,
+    "active_container_restart_before_unchanged_deadline": true,
+    "credential_drift_fail_closed": true,
+    "archived_config_restore": true,
+    "full_restored_file_hashes_exact": true,
+    "stale_security_restore_refused": true,
+    "receipt_count": 1,
+    "understanding": "unknown",
+    "task_tables_unchanged": true,
+    "fixtures_cleaned": true,
+    "final_readonly_observation": "2026-11-09T17:36:42Z"
+  }
 }

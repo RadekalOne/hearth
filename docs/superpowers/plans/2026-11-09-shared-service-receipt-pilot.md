@@ -15,8 +15,8 @@ The follow-up request authorized read-only inventory resolution and isolated ima
 - [x] Resolve actual host/container/mount/configuration and image inventory through explicit existing-key read-only SSH.
 - [x] Create signed candidate5ce9ffe; build exact pinned candidate/fallback without dependency changes.
 - [x] Run409 subset-image tests, actual TLS lifecycle, default CMD and forced-off fallback/Docker-restart backout checks in isolated containers.
-- [ ] Rehearse the future shared pilot cutoff; validation-only cleanup is not that proof.
-- [ ] Fill final image digests, exact service/backup commands, interruption budget and review receipts.
+- [x] Rehearse detached cutoff, restart across unchanged deadline, credential-drift maintenance, cold backup and archived-config restore on synthetic fixtures; see SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md.
+- [x] Fill final image digests, exact service/backup commands, interruption budget and review receipts; see SHARED-SERVICE-FINAL-APPROVAL.md. Real cold backup/restore remains an approved-execution gate.
 - [ ] Rad reviews the concrete final artifacts and explicitly approves deployment.
 - [ ] Execute only that approved pilot and preserve outcome/rollback evidence.
 

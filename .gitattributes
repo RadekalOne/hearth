@@ -1,0 +1,2 @@
+# Host operator artifact is byte-pinned in the rollout packet.
+ops/hearth2/receipt_pilot_ops.py text eol=lf

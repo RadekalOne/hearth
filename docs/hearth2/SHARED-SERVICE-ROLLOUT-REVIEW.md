@@ -1,6 +1,6 @@
 # Shared-service receipt pilot: review packet
 
-Status: **inventory and image validation now complete; deployment remains unapproved.** See [SHARED-SERVICE-IMAGE-VALIDATION.md](SHARED-SERVICE-IMAGE-VALIDATION.md) for the verified target, exact candidate/fallback images and completed checks. The earlier preparation-stage observations below are historical; their inventory/image blockers are superseded by that receipt, not by deployment authority. No running shared service, production credential, volume, route, job or account has changed; isolated validation images and fixture containers were built and tested under the follow-up request. This packet does not supersede the isolated-trial restriction in OPERATIONS.md. Any shared activation needs a separately reviewed exception naming this exact pilot and its final artifacts.
+Status: **preparation complete; final exact rollout packet ready for Rad approval; deployment remains unapproved.** Read [SHARED-SERVICE-FINAL-APPROVAL.md](SHARED-SERVICE-FINAL-APPROVAL.md) for the current decision, [cutoff/restore rehearsal](SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md) and [image validation](SHARED-SERVICE-IMAGE-VALIDATION.md). The preparation-stage inventory/image blockers below are historical and superseded by those receipts. No shared deployment, restart, production credential/configuration change or canonical data copy occurred. The isolated-trial restriction remains until Rad explicitly approves this exact exception.
 
 ## Proposed change and evidence
 

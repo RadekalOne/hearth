@@ -1,0 +1,20 @@
+{
+  "format": "receipt-pilot-v1",
+  "mode": "awaiting-approval",
+  "approval_ref": null,
+  "root": "/docker/hearth-receipt-pilot-approved",
+  "config": "/docker/hearth-project-hub/compose.json",
+  "data": "/var/lib/docker/volumes/hearth_memory-data/_data",
+  "project": "hearth-project-hub",
+  "service": "hub",
+  "container": "hearth-project-hub-hub-1",
+  "candidate_image": "sha256:d12b3f802136fdb35e73b5c1492526e0ba0b7b244a877987a949666e1432865c",
+  "fallback_image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+  "script_sha256": "d61c45be14dcbb0a2ce61a496195e7be6e99098c533f5cef116a87b82479a4cc",
+  "immutable_config_sha256": null,
+  "retire": {},
+  "preserve_principals": [],
+  "boot_id": null,
+  "deadline_monotonic": null,
+  "deadline_utc": null
+}
