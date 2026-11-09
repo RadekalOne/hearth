@@ -19,6 +19,8 @@ import re
 import secrets as pysecrets
 import time
 import threading
+import sqlite3
+import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -140,18 +142,32 @@ UPDATE_TOOL = ToolAnnotations(
 )
 
 
-def load_tokens() -> dict:
+def load_tokens(*, strict=False) -> dict:
     try:
         with open(TOKENS_PATH) as f:
-            return json.load(f)
+            values=json.load(f)
+            if strict and type(values) is not dict:
+                raise RuntimeError('credential map unavailable')
+            return values
     except (FileNotFoundError, json.JSONDecodeError):
+        if strict:
+            raise RuntimeError('credential map unavailable') from None
         return {}
 
 
 def save_tokens(tokens: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(TOKENS_PATH, "w") as f:
-        json.dump(tokens, f, indent=2)
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',dir=DATA_DIR,prefix='.memory-tokens-',delete=False) as f:
+            temporary=f.name
+            json.dump(tokens, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary,TOKENS_PATH)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def bearer(request: Request) -> str:
@@ -1997,6 +2013,7 @@ mcp_app = mcp.streamable_http_app(
 async def lifespan(app: FastAPI):
     coordination_store.initialize()
     h2_runtime.initialize()
+    _notice_session_policy()
     migrate_legacy_metadata()
     if CONSOLIDATE_AGENT_WINGS:
         run_consolidation(_roster())
@@ -2014,15 +2031,16 @@ def _matched_rest_route(request):
 
 
 def _notice_session_policy():
+    strict=h2_runtime.session_registry.seen or h2_runtime.notice_sessions_raw not in (None,'{}')
+    values=h2_runtime.sync_notice_credentials(lambda:load_tokens(strict=strict))
     subjects=h2_runtime.reserved_notice_session_principals()
-    values=load_tokens() if subjects else {}
     credentials={subject:values[subject] for subject in subjects
                  if type(values.get(subject)) is str and values[subject]}
     return subjects,values,credentials
 
 
 def _notice_session_matches(token,credentials):
-    return {subject for subject,value in credentials.items()
+    return h2_runtime.session_registry.matches(token) | {subject for subject,value in credentials.items()
             if token and (pysecrets.compare_digest(token,value) or pysecrets.compare_digest(token.strip(),value))}
 
 
@@ -2042,16 +2060,18 @@ async def require_token(request: Request, call_next):
     browser_principal = session_principal(request)
     try:
         session_subjects,token_values,session_credentials=_notice_session_policy()
-    except RuntimeError:
+    except (RuntimeError, sqlite3.DatabaseError, OSError, ValueError):
         return _secure_response(JSONResponse({'error':'notice-session credential policy unavailable'},status_code=503,headers={'Cache-Control':'no-store'}),request.url.path)
     browser_session=SESSIONS.get(cookie,{})
     session_cookie=bool(browser_principal and (browser_principal in session_subjects or
+        browser_session.get('auth_kind')=='token' and h2_runtime.session_registry.owns_fingerprint(browser_session.get('credential_hash','')) or
         browser_session.get('auth_kind')=='token' and any(pysecrets.compare_digest(
             browser_session.get('credential_hash',''),_credential_hash(value)) for value in session_credentials.values())))
     # Reviewer cookies can also retain a credential that collides with a session token.
     cookie_reviewer=reviewer_store.session_context(cookie) if cookie else None
     if cookie_reviewer is not None:
-        session_cookie=session_cookie or any(context is not None and
+        session_cookie=session_cookie or h2_runtime.session_registry.owns_fingerprint(
+            reviewer_store.credential_fingerprint(cookie_reviewer)) or any(context is not None and
             (context.principal,context.credential_generation)==(cookie_reviewer.principal,cookie_reviewer.credential_generation)
             for context in (reviewer_store.authenticate(value) for value in session_credentials.values()))
     scoped_headers=[]
@@ -2061,11 +2081,17 @@ async def require_token(request: Request, call_next):
             matches=_notice_session_matches(value,session_credentials)
             if matches:scoped_headers.append((value,matches))
     if session_cookie or scoped_headers:
+        from hearth2.delivery import session_enrollments
+        configured=session_enrollments(h2_runtime.notice_sessions_raw,
+            h2_runtime.humans|h2_runtime.controllers|h2_runtime.workers,
+            h2_runtime.humans|h2_runtime.controllers|h2_runtime.workers|h2_runtime.observers)
+        inactive=any(not any(h2_runtime.session_registry.allowed(credential,target)
+            for target in configured.values()) for credential,_ in scoped_headers)
         ambiguous=any(len(matches)!=1 or
             {name for name,value in token_values.items() if type(value) is str and pysecrets.compare_digest(value,credential)}!=matches
             or bool(ADMIN_TOKEN and pysecrets.compare_digest(credential,ADMIN_TOKEN))
             or reviewer_store.owns_credential(credential) for credential,matches in scoped_headers)
-        if (session_cookie or ambiguous or len(scoped_headers)!=1 or
+        if (session_cookie or ambiguous or inactive or len(scoped_headers)!=1 or
                 len(request.headers.getlist('authorization'))!=1 or
                 (request.method,_matched_rest_route(request)) not in _NOTICE_SESSION_ROUTES):
             return _secure_response(JSONResponse({'error':'notice-session credential not permitted'},status_code=403,headers={'Cache-Control':'no-store'}),request.url.path)
@@ -2097,6 +2123,8 @@ async def require_token(request: Request, call_next):
         principal = token_principal(bearer(request)) or (
             browser_principal if request.url.path.startswith("/api/") else ""
         )
+        if principal in session_subjects and not scoped_headers:
+            return _secure_response(JSONResponse({'error':'notice-session credential not permitted'},status_code=403,headers={'Cache-Control':'no-store'}),request.url.path)
         if not principal:
             return _secure_response(JSONResponse({"error": "authentication required"},status_code=401,
                 headers={"WWW-Authenticate": "Bearer"}),request.url.path)
@@ -2245,7 +2273,7 @@ async def dashboard_login(request: Request):
     body = await request.json()
     try:
         session_subjects,_,session_credentials=_notice_session_policy()
-    except RuntimeError:
+    except (RuntimeError, sqlite3.DatabaseError, OSError, ValueError):
         raise HTTPException(503,'notice-session credential policy unavailable') from None
     if _notice_session_matches(str(body.get('token','')),session_credentials):
         raise HTTPException(403,'notice-session credentials are bearer-only')

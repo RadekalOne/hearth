@@ -31,8 +31,11 @@ def session_enrollments(raw,recipients,other_principals):
         if type(values) is not dict or len(values)>128:raise ValueError()
         sessions={};subjects=set()
         for key,value in values.items():
-            if type(value) is not dict or set(value)!={'principal_id','recipient'}:raise ValueError()
-            target=NoticeSession(key,**value)
+            if type(value) is not dict or set(value)-{'principal_id','recipient','expires_at'}:raise ValueError()
+            if 'expires_at' in value:
+                from .session_registry import expiry
+                expiry(value['expires_at'])
+            target=NoticeSession(key,**{k:v for k,v in value.items() if k!='expires_at'})
             if target.recipient not in recipients or target.principal_id in other_principals or target.principal_id in subjects:raise ValueError()
             sessions[key]=target;subjects.add(target.principal_id)
         return sessions

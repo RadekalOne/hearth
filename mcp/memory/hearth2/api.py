@@ -28,6 +28,8 @@ class Runtime:
         self.observers = set(observer_ids)
         self.notice_sessions_raw = notice_sessions
         self.notice_sessions = {}
+        from .session_registry import SessionRegistry
+        self.session_registry = SessionRegistry(Path(data_dir) / 'notice-session-credentials.sqlite3')
         self.authenticated = authenticated
         self.timing = timing or {}
         self.poll_expectations_raw = poll_expectations
@@ -69,7 +71,14 @@ class Runtime:
         from .delivery import session_enrollments
         configured=session_enrollments(self.notice_sessions_raw,self.humans|self.controllers|self.workers,
             self.humans|self.controllers|self.workers|self.observers)
-        return {target.principal_id for target in (*self.notice_sessions.values(),*configured.values())}
+        return {target.principal_id for target in (*self.notice_sessions.values(),*configured.values())} | self.session_registry.subjects()
+
+    def sync_notice_credentials(self, tokens):
+        from .delivery import session_enrollments
+        configured=session_enrollments(self.notice_sessions_raw,self.humans|self.controllers|self.workers,
+            self.humans|self.controllers|self.workers|self.observers)
+        raw=json.loads(self.notice_sessions_raw) if self.notice_sessions_raw is not None else {}
+        return self.session_registry.sync(configured,tokens,{k:v['expires_at'] for k,v in raw.items() if 'expires_at' in v})
 
     def actor(self, request, kinds):
         if not self.enabled:
@@ -114,6 +123,15 @@ class Runtime:
             raise HTTPException(503, 'Hearth 2 store unavailable') from None
 
     def routes(self, app):
+        @app.post('/api/hearth2/sessions/{session_id}/revoke')
+        async def revoke_session(session_id: str, request: Request):
+            actor=self.actor(request, {'human'})
+            await self.body(request, set())
+            try:
+                return self.session_registry.revoke(session_id, actor.id)
+            except (sqlite3.DatabaseError, OSError, RuntimeError):
+                raise HTTPException(503, 'session credential registry unavailable') from None
+
         @app.get('/api/hearth2/status/view')
         def human_status_page(request: Request, project_id: str | None = None):
             self.actor(request, {'human'})

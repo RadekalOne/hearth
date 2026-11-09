@@ -8,7 +8,15 @@ from test import test_hearth2_delivery_acceptance as base
 class SessionBoundaryTests(unittest.IsolatedAsyncioTestCase):
     setUpClass=classmethod(base.NamedSessionAcceptanceTests.setUpClass.__func__)
     tearDownClass=classmethod(base.NamedSessionAcceptanceTests.tearDownClass.__func__)
-    asyncSetUp=base.NamedSessionAcceptanceTests.asyncSetUp
+    async def asyncSetUp(self):
+        await base.NamedSessionAcceptanceTests.asyncSetUp(self)
+        from hearth2.session_registry import SessionRegistry
+        self.registry_directory=tempfile.TemporaryDirectory()
+        self.registry_patch=patch.object(self.memory.h2_runtime,'session_registry',SessionRegistry(Path(self.registry_directory.name)/'credentials.sqlite3'))
+        self.registry_patch.start()
+        self.addCleanup(self.registry_directory.cleanup)
+        self.addCleanup(self.registry_patch.stop)
+        self.memory._notice_session_policy()
     asyncTearDown=base.NamedSessionAcceptanceTests.asyncTearDown
     post=base.NamedSessionAcceptanceTests.post
     saved=base.NamedSessionAcceptanceTests.saved
@@ -102,7 +110,7 @@ class SessionBoundaryTests(unittest.IsolatedAsyncioTestCase):
         cookie=self.memory.create_session('claude-session-a','token','session-a-fixture-token')
         try:
             self.memory.save_tokens({**tokens,'claude-session-a':'rotated-session-fixture-token'})
-            self.assertEqual((await self.client.get('/api/status',headers=self.headers())).status_code,401)
+            self.assertEqual((await self.client.get('/api/status',headers=self.headers())).status_code,403)
             self.assertEqual((await self.client.get('/api/status',headers=self.headers('rotated-session-fixture-token'))).status_code,403)
             self.assertEqual((await self.client.get('/api/hearth2/session/notices',headers=self.headers('rotated-session-fixture-token'))).status_code,200)
             self.client.cookies.set(self.memory.SESSION_COOKIE,cookie)
@@ -110,7 +118,7 @@ class SessionBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(runtime,'notice_sessions_raw',None):
                 self.assertEqual((await self.client.get('/api/status',headers=self.headers('rotated-session-fixture-token'))).status_code,403)
             self.memory.save_tokens({key:value for key,value in tokens.items() if key!='claude-session-a'})
-            self.assertEqual((await self.client.get('/api/status',headers=self.headers())).status_code,401)
+            self.assertEqual((await self.client.get('/api/status',headers=self.headers())).status_code,403)
         finally:self.memory.save_tokens(tokens);self.client.cookies.clear()
 
     async def test_reviewer_and_duplicate_header_representations_cannot_hide_session_scope(self):
