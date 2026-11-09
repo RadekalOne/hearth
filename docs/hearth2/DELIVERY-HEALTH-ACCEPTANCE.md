@@ -82,3 +82,10 @@ Historical self-recoveries remain immutable and visible as neutral, self-reporte
 recovery reports. A different principal establishes separate recovery authority;
 it does not verify supplied references or prove worker health. No observer role,
 acknowledgement transport, credential changes or service activation is included.
+
+
+The subsequent independently invoked observer increment is documented in
+[STALE-POLL-OBSERVER.md](STALE-POLL-OBSERVER.md). It adds a distinct observer role,
+server-journal overdue detection and separately owned resumption records; no
+background schedule or actual off-host observer has been activated. The earlier
+manual-report characterization above remains a separate acceptance scenario.

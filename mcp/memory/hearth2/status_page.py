@@ -83,6 +83,27 @@ def render_status(value):
             +'<p class="muted">'+period+'</p><p>Recovery reports are not independent health verification.</p>'
             +_details((('Reported at',row['at']),('Reported by',row['actor']),
                 ('Incident key',row['key']),('Journal sequence',row['sequence']),('Restore period',row['restore_epoch'])),row['supplied_references'])+'</article>')
+    observers=[]
+    for event in value.get('observers',[]):
+        historical=event['restore_epoch']!=value['restore_epoch']
+        for row in event['observations']:
+            state=row['incident_state']
+            label=('Overdue incident open' if state=='open' else
+                'Polling resumed' if state=='recovered' and row['poll_state']=='recent' else
+                'Prior polling resumption' if state=='recovered' else 'No overdue incident recorded')
+            badge='open' if state=='open' else 'unknown'
+            fields=(('Observer identity',event['actor']),('Last observer check',event['at']),
+                ('Assessed at',event['assessed_at']),('Observer journal sequence',event['seq']),
+                ('Observer request',event['request_id']),('Restore period',event['restore_epoch']),
+                ('Last completed poll',row['last_completed_at']),('Assessed poll sequence',row['sequence']),
+                ('Age at check in seconds',row['age_seconds']),('Cadence in seconds',row['cadence_seconds']),
+                ('Grace in seconds',row['grace_seconds']),('Stale incident poll sequence',row['stale_tick_sequence']),
+                ('Recovery poll sequence',row['recovery_tick_sequence']))
+            observers.append('<article><h3>'+_e(row['controller'])+' · '+_e(event['actor'])+'</h3>'
+                +'<span class="badge '+badge+'">'+label+'</span>'
+                +('<p>Historical · previous restore period</p>' if historical else '')
+                +'<p>'+_e(_REASONS[row['reason']])+'</p><p>Server journal assessment of polling, not worker health verification.</p>'
+                +_details(fields,[])+'</article>')
     def section(title,cards,empty,description=''):
         return '<section><h2>'+title+'</h2>'+('<p class="muted">'+description+'</p>' if description else '')+(
             '<div class="grid">'+''.join(cards)+'</div>' if cards else '<p class="empty">'+empty+'</p>')+'</section>'
@@ -93,5 +114,6 @@ def render_status(value):
         +section('Assigned work',tasks,'No tasks in this view.')
         +section('Notices & delivery',notices,'No notices recorded. Delivery has not been established.')
         +section('Controller polling',polls,'No controllers configured. Poll status is unknown.','Instance-wide, including when a project is selected. A recent poll does not prove work succeeded or a notice arrived.')
+        +section('Independent poll observations',observers,'No observer checks recorded. Independent polling assessment is unknown.','Stored checks are separate from controller claims. A new poll needs a new observer check to record resumption. Check times do not prove an observer process is still running.')
         +section('Reported failures',failures,'No failure reports recorded. This does not prove every component is healthy.','Open reports change only after an explicit recovery report; a new poll does not close them.')
         +'<footer class="muted">Read-only snapshot. No delivery acknowledgement or independent outage detector runs from this page.</footer></main></body></html>')
