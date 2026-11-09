@@ -1,0 +1,3375 @@
+{
+  "format": "approved-shared-receipt-pilot-evidence-v1",
+  "files": {
+    "prepared.json": {
+      "at": "2026-11-09T19:14:17.159388+00:00",
+      "collision_free": true,
+      "config_sha256": "24a2c0a0dcef3d97f58cfac4bbf04d5dd9b77b6d6ed8f8d88e35344fdf18d299",
+      "container_id": "27439b7eac4483638d9ad7adde8a0bc0c475ba72081f423cfaf2838f69f08332",
+      "credential_free_recipient": "codex-receipt-pilot-01a194ad",
+      "data_bytes": 104839300,
+      "data_files": 235,
+      "image": "sha256:7b667708a22108f125d6e4382b6a70f95814d62afdca8489d74cd09c676a3e7f",
+      "source_files_verified": 21
+    },
+    "foundation-ok.json": {
+      "at": "2026-11-09T19:14:52.881149+00:00",
+      "backup": {
+        "archive_sha256": "f39bc8f681fca6faae4238ddcfc4d5d33581c9882c367b41d66a8a8ff9df13e3",
+        "bytes": 104841931,
+        "files": 236,
+        "security": {
+          "memory-tokens.json": "1455cfcdf50069355abf9afc6577dcf7ab0a884b4e35bcd8b739683310634826",
+          "notice-session-credentials.required": null,
+          "notice-session-credentials.sqlite3": null,
+          "reviewers.sqlite3": "a21b30910ee5b582a6bb802397443269705e499d2c678d92cd6291f4fb8224c0"
+        }
+      },
+      "image": "sha256:d12b3f802136fdb35e73b5c1492526e0ba0b7b244a877987a949666e1432865c",
+      "integrity": {
+        "chroma.sqlite3": "ok",
+        "chroma/chroma.sqlite3": "ok",
+        "coordination.sqlite3": "ok",
+        "inbox-acknowledgements.sqlite3": "ok",
+        "reviewers.sqlite3": "ok",
+        "work.sqlite3": "ok"
+      },
+      "maintenance_elapsed_seconds": 22.65596236498095,
+      "positive_controls": {
+        "anonymous_api": 401,
+        "at": "2026-11-09T19:14:52.878570+00:00",
+        "h2_disabled": true,
+        "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+        "human_cookie": 200,
+        "ordinary_mcp": 200,
+        "ordinary_rest": 200,
+        "stage": "foundation",
+        "unrelated_tokens_preserved": true
+      },
+      "restore_exact": true
+    },
+    "enabled.json": {
+      "at": "2026-11-09T19:15:29.244725+00:00",
+      "controls": {
+        "anonymous_api": 401,
+        "at": "2026-11-09T19:15:29.242248+00:00",
+        "h2_disabled": false,
+        "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+        "human_cookie": 200,
+        "ordinary_mcp": 200,
+        "ordinary_rest": 200,
+        "stage": "enabled",
+        "unrelated_tokens_preserved": true
+      },
+      "deadline_monotonic": 1271199.462393413,
+      "deadline_utc": "2026-11-09T19:35:21.730218+00:00",
+      "plan_sha256": "b03aa151f93b05972c29080d1b598f35cc9705e88e9db0ded2b8a6b1b3f1e5f2"
+    },
+    "sent.json": {
+      "at": "2026-11-09T19:15:31.085058+00:00",
+      "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+      "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+      "project_id": "project_75a7fede9de14b3ab2e294acd4838cf6",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "session_id": "codex-laptop-01a194ad",
+      "task_id": "task_741877b0d3314cb38c8da887cdcfdf26"
+    },
+    "restarts.json": [
+      {
+        "after_id": "a8f97fbe4fc957cecba59af1f35ab0a0f32abba77dab83ce8e33c45d1128b210",
+        "at": "2026-11-09T19:15:28.828932+00:00",
+        "before_id": "c0567aa758254be41bd8cab202ff600a3e96b16e70c08b6ef51a5523fe37d8cb",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "enable"
+      },
+      {
+        "after_id": "17ba5d16e40478a03ab31c5f6df0fe773f3be2e8f8de0bd9dab3ab5dac01fc49",
+        "at": "2026-11-09T19:16:57.975234+00:00",
+        "before_id": "a8f97fbe4fc957cecba59af1f35ab0a0f32abba77dab83ce8e33c45d1128b210",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "restart"
+      },
+      {
+        "after_id": "8dad57e13196204811a7d283cbd92861e3493386473fe36d61310a2e880d476e",
+        "at": "2026-11-09T19:17:37.459901+00:00",
+        "before_id": "17ba5d16e40478a03ab31c5f6df0fe773f3be2e8f8de0bd9dab3ab5dac01fc49",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "expiry"
+      },
+      {
+        "after_id": "b497176c9740de2495cf2b8481afe7727d46e50e3ee7592e831173dfd2b4e650",
+        "at": "2026-11-09T19:18:16.248302+00:00",
+        "before_id": "8dad57e13196204811a7d283cbd92861e3493386473fe36d61310a2e880d476e",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "expiry-restart"
+      },
+      {
+        "after_id": "e64f8359347b83218068de86bda23b6b71086afd12f5d794b4d02ebbc1905ba6",
+        "at": "2026-11-09T19:18:47.096231+00:00",
+        "before_id": "b497176c9740de2495cf2b8481afe7727d46e50e3ee7592e831173dfd2b4e650",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "rotate-b"
+      },
+      {
+        "after_id": "2438f8711657e0b3ae00e483acd05cf10063a3112a46c83aabfdc57403a1eee1",
+        "at": "2026-11-09T19:18:58.035771+00:00",
+        "before_id": "e64f8359347b83218068de86bda23b6b71086afd12f5d794b4d02ebbc1905ba6",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "revoke-restart"
+      },
+      {
+        "after_id": "a706e666164332cc0dbdecac76bb0cf3465e05f8e116beed21a1e68cf678d646",
+        "at": "2026-11-09T19:19:38.768973+00:00",
+        "before_id": "2438f8711657e0b3ae00e483acd05cf10063a3112a46c83aabfdc57403a1eee1",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "rotate-c"
+      },
+      {
+        "after_id": "316d51f76b43cc7d940c64f6d1cba677fd586820ef29d2d9cf717ee6c9d4f2a9",
+        "at": "2026-11-09T19:19:48.546181+00:00",
+        "before_id": "a706e666164332cc0dbdecac76bb0cf3465e05f8e116beed21a1e68cf678d646",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "deenroll"
+      },
+      {
+        "after_id": "305e045c13d1f11fb9cb7c31edfc16433ed029be23a26ba7767d36012fae51f5",
+        "at": "2026-11-09T19:19:58.010385+00:00",
+        "before_id": "316d51f76b43cc7d940c64f6d1cba677fd586820ef29d2d9cf717ee6c9d4f2a9",
+        "deadline_monotonic": 1271199.462393413,
+        "stage": "restore-config"
+      }
+    ],
+    "expiry.json": {
+      "at": "2026-11-09T19:17:37.462645+00:00",
+      "expires_at": "2026-11-09T19:17:55.497907+00:00"
+    },
+    "revocation.json": {
+      "actor": "admin",
+      "at": "2026-11-09T19:18:49.236789+00:00",
+      "revoked": 1,
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "original-receipt.json": {
+      "actor": "codex-session-01a194ad",
+      "at": "2026-11-09T19:16:22.878911+00:00",
+      "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+      "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+      "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+      "offered_sequence": 10,
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+      "seq": 11,
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "cutoff-result.json": {
+      "after_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+      "before_id": "305e045c13d1f11fb9cb7c31edfc16433ed029be23a26ba7767d36012fae51f5",
+      "completed_at": "2026-11-09T19:20:33.493331+00:00",
+      "deadline_monotonic": 1271199.462393413,
+      "deadline_utc": "2026-11-09T19:35:21.730218+00:00",
+      "fallback_image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+      "h2_disabled": true,
+      "immutable_config_preserved": true,
+      "operator_rest_verified": true,
+      "overshoot_seconds": 0,
+      "pilot_entries_removed": [
+        "codex-session-01a194ad",
+        "supervised-controller"
+      ],
+      "plan_sha256": "b03aa151f93b05972c29080d1b598f35cc9705e88e9db0ded2b8a6b1b3f1e5f2",
+      "triggered_at": "2026-11-09T19:20:28.394300+00:00",
+      "unrelated_tokens_preserved": true
+    },
+    "complete.json": {
+      "at": "2026-11-09T19:21:35.511428+00:00",
+      "container_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+      "cutoff": {
+        "after_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+        "before_id": "305e045c13d1f11fb9cb7c31edfc16433ed029be23a26ba7767d36012fae51f5",
+        "completed_at": "2026-11-09T19:20:33.493331+00:00",
+        "deadline_monotonic": 1271199.462393413,
+        "deadline_utc": "2026-11-09T19:35:21.730218+00:00",
+        "fallback_image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+        "h2_disabled": true,
+        "immutable_config_preserved": true,
+        "operator_rest_verified": true,
+        "overshoot_seconds": 0,
+        "pilot_entries_removed": [
+          "codex-session-01a194ad",
+          "supervised-controller"
+        ],
+        "plan_sha256": "b03aa151f93b05972c29080d1b598f35cc9705e88e9db0ded2b8a6b1b3f1e5f2",
+        "triggered_at": "2026-11-09T19:20:28.394300+00:00",
+        "unrelated_tokens_preserved": true
+      },
+      "cutoff_guard_retired": true,
+      "early_closeout": true,
+      "h2_disabled": true,
+      "image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+      "maintenance_elapsed_seconds": 22.65596236498095,
+      "receipt": {
+        "actor": "codex-session-01a194ad",
+        "at": "2026-11-09T19:16:22.878911+00:00",
+        "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+        "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+        "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+        "offered_sequence": 10,
+        "principal_id": "codex-session-01a194ad",
+        "recipient": "codex-receipt-pilot-01a194ad",
+        "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+        "seq": 11,
+        "session_id": "codex-laptop-01a194ad"
+      },
+      "receipt_count": 1,
+      "registry_states": {
+        "a": "expired",
+        "b": "revoked",
+        "c": "removed"
+      },
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown",
+      "unrelated_tokens_preserved": true
+    },
+    "final-readback.json": {
+      "at": "2026-11-09T19:22:54.724007+00:00",
+      "container_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+      "image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+      "started_at": "2026-11-09T19:20:29.554204655Z",
+      "config_sha256": "6016dc4f905e2fc1fd358cc065fc2c7bca3acb9edba4e33cdf86222453018ffc",
+      "h2_disabled": true,
+      "restart": "unless-stopped",
+      "ordinary_agent_rest": 200,
+      "health": {
+        "memory": "ok",
+        "homeserver": "ok",
+        "version": "0.10.18-receipt-pilot-5ce9ffe",
+        "build_commit": "5ce9ffefe09834fef763f22a9883adf97fe5380d"
+      },
+      "registry_states": {
+        "a": "expired",
+        "b": "revoked",
+        "c": "removed"
+      },
+      "required_marker_preserved": true,
+      "receipt": {
+        "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+        "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+        "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+        "offered_sequence": 10,
+        "principal_id": "codex-session-01a194ad",
+        "recipient": "codex-receipt-pilot-01a194ad",
+        "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+        "session_id": "codex-laptop-01a194ad",
+        "seq": 11,
+        "at": "2026-11-09T19:16:22.878911+00:00",
+        "actor": "codex-session-01a194ad"
+      },
+      "receipt_count": 1,
+      "understanding": "unknown",
+      "task_state": "running",
+      "project_tables_unchanged": true,
+      "unrelated_config_preserved": true,
+      "unrelated_tokens_preserved": true,
+      "finite_guards_remaining": [],
+      "acceptance_stages": 12,
+      "phase_protocol_checks": 437,
+      "maintenance_seconds": 22.65596236498095,
+      "cutoff_completed_at": "2026-11-09T19:20:33.493331+00:00",
+      "original_deadline_utc": "2026-11-09T19:35:21.730218+00:00",
+      "closed_early": true,
+      "archive_sha256": "f39bc8f681fca6faae4238ddcfc4d5d33581c9882c367b41d66a8a8ff9df13e3",
+      "archive_mode": "0o600",
+      "root_mode": "0o700",
+      "working_credential_files_removed": true,
+      "private_cold_backup_retained": true
+    },
+    "last-error.json": {
+      "at": "2026-11-09T19:20:38.455638+00:00",
+      "error_type": "AssertionError",
+      "phase": "closeout"
+    },
+    "probe-b-active.json": {
+      "active_generation": "b",
+      "at": "2026-11-09T19:18:48.972839+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 200
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 200
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 200
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "b-active",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-c-active.json": {
+      "active_generation": "c",
+      "at": "2026-11-09T19:19:41.433289+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 200
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 200
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 200
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "c-active",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-config-restored-still-blocked.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:20:00.710028+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "config-restored-still-blocked",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-deenrolled.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:19:51.037493+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "deenrolled",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-expired-after-restart.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:18:17.736329+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "expired-after-restart",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-expired.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:18:08.866349+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "expired",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-expiry-active.json": {
+      "active_generation": "a",
+      "at": "2026-11-09T19:17:38.702206+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "expiry-active",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-final-fallback.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:21:35.346384+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "c",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "c",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "final-fallback",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-initial.json": {
+      "active_generation": "a",
+      "at": "2026-11-09T19:16:51.350173+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "initial",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-restart-active.json": {
+      "active_generation": "a",
+      "at": "2026-11-09T19:16:59.132989+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 200
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "restart-active",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-revoked-after-restart.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:18:59.952273+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "revoked-after-restart",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "probe-revoked.json": {
+      "active_generation": null,
+      "at": "2026-11-09T19:18:51.032401+00:00",
+      "checks": [
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "a",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "a",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/hearth2/session/notices",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/receive",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/notices/notice_363cde2b556a414cad97a4af3fb69c0c/acknowledge",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/health",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/recent",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/work",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/export",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/projects",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/hearth2/sessions/codex-laptop-01a194ad/revoke",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "GET",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/mcp",
+          "status": 403
+        },
+        {
+          "generation": "b",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 401
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        },
+        {
+          "credential_form": "cookie-or-mixed",
+          "generation": "b",
+          "method": "GET",
+          "path": "/api/status",
+          "status": 403
+        }
+      ],
+      "receipt_count": 1,
+      "receipt_unchanged": true,
+      "stage": "revoked",
+      "task_state": "running",
+      "task_tables_unchanged": true,
+      "understanding_state": "unknown"
+    },
+    "controls-b-active.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:18:47.605243+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "b-active",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-c-active.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:19:39.292900+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "c-active",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-config-restored-still-blocked.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:19:58.513263+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "config-restored-still-blocked",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-deenrolled.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:19:49.037134+00:00",
+      "h2_disabled": true,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "deenrolled",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-enabled.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:15:29.242248+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "enabled",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-expired-after-restart.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:18:17.009746+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "expired-after-restart",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-expired.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:18:08.128035+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "expired",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-expiry-active.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:17:37.959368+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "expiry-active",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-final-fallback.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:21:33.186527+00:00",
+      "h2_disabled": true,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "final-fallback",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-foundation.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:14:52.878570+00:00",
+      "h2_disabled": true,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "foundation",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-initial.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:16:50.599981+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "initial",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-restart-active.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:16:58.466416+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "restart-active",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-revoked-after-restart.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:18:58.533657+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "revoked-after-restart",
+      "unrelated_tokens_preserved": true
+    },
+    "controls-revoked.json": {
+      "anonymous_api": 401,
+      "at": "2026-11-09T19:18:49.683235+00:00",
+      "h2_disabled": false,
+      "health_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+      "human_cookie": 200,
+      "ordinary_mcp": 200,
+      "ordinary_rest": 200,
+      "stage": "revoked",
+      "unrelated_tokens_preserved": true
+    }
+  },
+  "operator_sha256": "3a622cdf1e76d7bfa3d7e54d74866dbcde984fe8862327cf0c75e18ac673e133",
+  "cutoff_helper_sha256": "d61c45be14dcbb0a2ce61a496195e7be6e99098c533f5cef116a87b82479a4cc",
+  "working_credential_files_absent": true,
+  "client-initial-result.json": {
+    "phase": "initial",
+    "thread_id": "01a194ad-865c-7100-a33a-e220e62cff8d",
+    "host": "RSLABINSKI-PC",
+    "origin": "https://hearth-memory.radekal.me",
+    "target": {
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "result": {
+      "stored": 1,
+      "receipts_recorded": 1,
+      "more_pending": false,
+      "understanding_state": "unknown"
+    },
+    "receipt": {
+      "actor": "codex-session-01a194ad",
+      "at": "2026-11-09T19:16:22.878911+00:00",
+      "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+      "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+      "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+      "offered_sequence": 10,
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+      "seq": 11,
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "local_inbox_count": 1,
+    "stored_before_ack": [
+      {
+        "stored_before_ack": true,
+        "digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced"
+      }
+    ],
+    "understanding_state": "unknown",
+    "legacy_api_denied": true
+  },
+  "client-replay-result.json": {
+    "phase": "replay",
+    "thread_id": "01a194ad-865c-7100-a33a-e220e62cff8d",
+    "host": "RSLABINSKI-PC",
+    "origin": "https://hearth-memory.radekal.me",
+    "target": {
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "result": {
+      "stored": 0,
+      "receipts_recorded": 0,
+      "more_pending": false,
+      "understanding_state": "unknown"
+    },
+    "receipt": {
+      "actor": "codex-session-01a194ad",
+      "at": "2026-11-09T19:16:22.878911+00:00",
+      "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+      "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+      "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+      "offered_sequence": 10,
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+      "seq": 11,
+      "session_id": "codex-laptop-01a194ad"
+    },
+    "local_inbox_count": 1,
+    "stored_before_ack": [],
+    "understanding_state": "unknown",
+    "legacy_api_denied": true
+  },
+  "local-final-readback.json": {
+    "local_receipt_count": 1,
+    "initial_stored_before_ack": true,
+    "replay_stored": 0,
+    "replay_receipts": 0,
+    "receipt_exact": true,
+    "digest_verified": true,
+    "understanding": "unknown",
+    "local_session_credential_removed": true
+  },
+  "operator_review_regressions": {
+    "watchdog_without_cancellation_late_write_observed": true,
+    "watchdog_with_cancellation_no_late_write": true,
+    "unrelated_project_writes_ignored": true,
+    "fixture_only": true
+  }
+}

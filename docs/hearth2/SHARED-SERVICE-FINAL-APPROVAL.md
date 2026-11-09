@@ -1,5 +1,7 @@
 # Shared-service receipt pilot: final approval packet
 
+**Execution update, 9 November 2026:** Rad explicitly approved the final packet and recipient amendment; the real shared pilot passed and closed on the disabled fallback. See [execution receipt](SHARED-SERVICE-PILOT-EXECUTION.md). The proposal/preflight text below is historical. Any further activation requires new scope.
+
 **Ready for Rad's review; NOT approved or deployed.** Request one supervised maintenance cutover and a receipt-only pilot for this existing laptop chat. Fixture cutoff/restore gates passed; [rehearsal receipt](SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md) and [image validation](SHARED-SERVICE-IMAGE-VALIDATION.md) record their exact limits. Approval must explicitly grant this narrow exception to the isolated-trial activation restriction. This document grants no authority itself.
 
 ## Exact artifacts and target

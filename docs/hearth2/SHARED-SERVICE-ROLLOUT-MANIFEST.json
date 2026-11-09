@@ -1,8 +1,8 @@
 {
-  "status": "CUTOFF/RESTORE REHEARSAL PASSED; FINAL PACKET READY FOR RAD APPROVAL; deployment unapproved",
-  "reported_live_build": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
+  "status": "APPROVED SHARED PILOT PASSED/CLOSED; H2 DISABLED ON PINNED FALLBACK",
+  "reported_live_build": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
   "reference_source": "59ee081f06f3654bfb34c44614022623986c2aab",
-  "public_health_observed_utc": "2026-11-09T16:14:04.6737889+00:00",
+  "public_health_observed_utc": "2026-11-09T19:22:54.724007+00:00",
   "server_file_count": 17,
   "files": [
     {
@@ -96,32 +96,13 @@
   "static_relative_import_closure": "PASS;12 package modules and2SQL migrations",
   "candidate_image_digest": "hearth-receipt-validation@sha256:d12b3f802136fdb35e73b5c1492526e0ba0b7b244a877987a949666e1432865c",
   "rollback_image_digest": "hearth-receipt-validation@sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
-  "live_container_and_mount_verification": {
-    "status": "VERIFIED READ ONLY",
-    "hostname": "vps01hst4hermes",
-    "container": "hearth-project-hub-hub-1",
-    "container_id": "27439b7eac4483638d9ad7adde8a0bc0c475ba72081f423cfaf2838f69f08332",
-    "compose_file": "/docker/hearth-project-hub/compose.json",
-    "compose_sha256": "24a2c0a0dcef3d97f58cfac4bbf04d5dd9b77b6d6ed8f8d88e35344fdf18d299",
-    "project": "hearth-project-hub",
-    "service": "hub",
-    "data_volume": "hearth_memory-data",
-    "data_path": "/var/lib/docker/volumes/hearth_memory-data/_data",
-    "networks": [
-      "hearth_default"
-    ],
-    "source_normalized_hashes_match": 21
-  },
   "build_strategy": "Overlay exact reviewed server subset on verified live image digest; no pip/apt/model download. Produce distinct signed candidate commit; do not label mixed artifact as full59ee081.",
   "public_health_observation": {
-    "version": "0.10.18-journal-standing-762fd5f",
-    "relays": 25,
-    "checkpoints": 66,
-    "build_commit": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
-    "status": 200,
-    "drawers": 3516,
     "memory": "ok",
-    "homeserver": "ok"
+    "homeserver": "ok",
+    "version": "0.10.18-receipt-pilot-5ce9ffe",
+    "build_commit": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+    "status": 200
   },
   "candidate_source_commit": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
   "verified_live_image_id": "sha256:7b667708a22108f125d6e4382b6a70f95814d62afdca8489d74cd09c676a3e7f",
@@ -150,11 +131,7 @@
     "fallback_dockerfile_sha256": "ff2bd2f50cece24234c6bd6aa029f2bc3b5592eb638e60d47a458db2b2d2acb4",
     "published_or_pushed": false
   },
-  "pending_deployment_gates": [
-    "Rad explicit approval of final exact artifact packet and maintenance tradeoff",
-    "Recheck live pins and cold-backup/isolated-restore verification at approved maintenance boundary",
-    "Actual supervised shared HTTPS receipt-only acceptance and disabled-fallback closeout"
-  ],
+  "pending_deployment_gates": [],
   "cutoff_restore_rehearsal": {
     "report": "SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md",
     "evidence": "SHARED-PILOT-REHEARSAL-EVIDENCE.json",
@@ -172,5 +149,97 @@
     "task_tables_unchanged": true,
     "fixtures_cleaned": true,
     "final_readonly_observation": "2026-11-09T17:36:42Z"
-  }
+  },
+  "pre_pilot_live_inventory": {
+    "status": "VERIFIED READ ONLY",
+    "hostname": "vps01hst4hermes",
+    "container": "hearth-project-hub-hub-1",
+    "container_id": "27439b7eac4483638d9ad7adde8a0bc0c475ba72081f423cfaf2838f69f08332",
+    "compose_file": "/docker/hearth-project-hub/compose.json",
+    "compose_sha256": "24a2c0a0dcef3d97f58cfac4bbf04d5dd9b77b6d6ed8f8d88e35344fdf18d299",
+    "project": "hearth-project-hub",
+    "service": "hub",
+    "data_volume": "hearth_memory-data",
+    "data_path": "/var/lib/docker/volumes/hearth_memory-data/_data",
+    "networks": [
+      "hearth_default"
+    ],
+    "source_normalized_hashes_match": 21
+  },
+  "live_container_and_mount_verification": {
+    "status": "VERIFIED POST-PILOT",
+    "hostname": "vps01hst4hermes",
+    "container": "hearth-project-hub-hub-1",
+    "container_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+    "compose_file": "/docker/hearth-project-hub/compose.json",
+    "compose_sha256": "6016dc4f905e2fc1fd358cc065fc2c7bca3acb9edba4e33cdf86222453018ffc",
+    "project": "hearth-project-hub",
+    "service": "hub",
+    "data_volume": "hearth_memory-data",
+    "data_path": "/var/lib/docker/volumes/hearth_memory-data/_data",
+    "networks": [
+      "hearth_default"
+    ]
+  },
+  "shared_pilot_execution": {
+    "report": "SHARED-SERVICE-PILOT-EXECUTION.md",
+    "evidence": "SHARED-SERVICE-PILOT-EXECUTION-EVIDENCE.json",
+    "approved_recipient": "codex-receipt-pilot-01a194ad",
+    "at": "2026-11-09T19:22:54.724007+00:00",
+    "container_id": "2ca9c3291ec6792120a5b6c3dd6aeff489bdc7ce721a5fdcb74b038af281a652",
+    "image": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+    "started_at": "2026-11-09T19:20:29.554204655Z",
+    "config_sha256": "6016dc4f905e2fc1fd358cc065fc2c7bca3acb9edba4e33cdf86222453018ffc",
+    "h2_disabled": true,
+    "restart": "unless-stopped",
+    "ordinary_agent_rest": 200,
+    "health": {
+      "memory": "ok",
+      "homeserver": "ok",
+      "version": "0.10.18-receipt-pilot-5ce9ffe",
+      "build_commit": "5ce9ffefe09834fef763f22a9883adf97fe5380d"
+    },
+    "registry_states": {
+      "a": "expired",
+      "b": "revoked",
+      "c": "removed"
+    },
+    "required_marker_preserved": true,
+    "receipt": {
+      "delivery_id": "delivery_9bb1d37c2eb04e7c854a4867012b28b7",
+      "notice_digest": "6417fb8f1d63a94617d79c6abbc60fdbf3436fc8f626241c32cd8546ad76aced",
+      "notice_id": "notice_363cde2b556a414cad97a4af3fb69c0c",
+      "offered_sequence": 10,
+      "principal_id": "codex-session-01a194ad",
+      "recipient": "codex-receipt-pilot-01a194ad",
+      "restore_epoch": "30ef975588cb411492eedba5d6eaa554",
+      "session_id": "codex-laptop-01a194ad",
+      "seq": 11,
+      "at": "2026-11-09T19:16:22.878911+00:00",
+      "actor": "codex-session-01a194ad"
+    },
+    "receipt_count": 1,
+    "understanding": "unknown",
+    "task_state": "running",
+    "project_tables_unchanged": true,
+    "unrelated_config_preserved": true,
+    "unrelated_tokens_preserved": true,
+    "finite_guards_remaining": [],
+    "acceptance_stages": 12,
+    "phase_protocol_checks": 437,
+    "maintenance_seconds": 22.65596236498095,
+    "cutoff_completed_at": "2026-11-09T19:20:33.493331+00:00",
+    "original_deadline_utc": "2026-11-09T19:35:21.730218+00:00",
+    "closed_early": true,
+    "archive_sha256": "f39bc8f681fca6faae4238ddcfc4d5d33581c9882c367b41d66a8a8ff9df13e3",
+    "archive_mode": "0o600",
+    "root_mode": "0o700",
+    "working_credential_files_removed": true,
+    "private_cold_backup_retained": true
+  },
+  "future_scope_requires_new_approval": [
+    "Any further H2 enablement or pilot",
+    "Ongoing delivery/polling, observer or worker/provider activation",
+    "Broader shared rollout or data/security recovery"
+  ]
 }

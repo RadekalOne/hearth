@@ -1,5 +1,7 @@
 # Receipt pilot: preflight authority conflict and proposed amendment
 
+**Execution update, 9 November 2026:** Rad explicitly approved the final packet and recipient amendment; the real shared pilot passed and closed on the disabled fallback. See [execution receipt](SHARED-SERVICE-PILOT-EXECUTION.md). The proposal/preflight text below is historical. Any further activation requires new scope.
+
 Status 9 November 2026: Rad approved the original shared-service pilot, five-minute maintenance budget, live backup/restore gate, fixed 20-minute cutoff and disabled-fallback closeout. **Execution paused before any maintenance or production write. This recipient amendment awaits Rad's approval.**
 
 The read-only live preflight at `2026-11-09T18:46:18.401986Z` matched the packet's exact host/container/image/start time/configuration pins and canonical mount. Exactly one canonical writer; old `hearth-memory-1` stopped. Both pinned images exist. The complete live data inventory was 235 regular files, 104,839,300 bytes (plus Compose configuration), with no unsupported entries: within the reviewed 512 MiB / 10,000-file backup limit. No H2 database, session registry, required marker or existing H2 role/enrollment configuration was present. No pilot credential was created, no guard was armed and neither the five-minute outage nor the 20-minute pilot window began.

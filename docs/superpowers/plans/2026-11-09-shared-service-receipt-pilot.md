@@ -17,7 +17,7 @@ The follow-up request authorized read-only inventory resolution and isolated ima
 - [x] Run409 subset-image tests, actual TLS lifecycle, default CMD and forced-off fallback/Docker-restart backout checks in isolated containers.
 - [x] Rehearse detached cutoff, restart across unchanged deadline, credential-drift maintenance, cold backup and archived-config restore on synthetic fixtures; see SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md.
 - [x] Fill final image digests, exact service/backup commands, interruption budget and review receipts; see SHARED-SERVICE-FINAL-APPROVAL.md. Real cold backup/restore remains an approved-execution gate.
-- [ ] Rad reviews the concrete final artifacts and explicitly approves deployment.
+- [x] Rad explicitly approved final artifacts and recipient amendment; real shared pilot passed and closed on disabled fallback. See SHARED-SERVICE-PILOT-EXECUTION.md.
 - [ ] Execute only that approved pilot and preserve outcome/rollback evidence.
 
 Rulings: prior whole-branch tests do not validate the proposed subset; pre-guard image fallback is unsafe after session issuance without a separately reviewed recovery; registry and marker are security state independent of ordinary data backup. No shared-service writes, production credential issuance/restarts, purchase, push or merge. Isolated image builds and fixture restarts were authorized by the follow-up validation request.

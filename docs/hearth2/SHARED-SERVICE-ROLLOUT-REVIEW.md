@@ -1,5 +1,7 @@
 # Shared-service receipt pilot: review packet
 
+**Execution update, 9 November 2026:** Rad explicitly approved the final packet and recipient amendment; the real shared pilot passed and closed on the disabled fallback. See [execution receipt](SHARED-SERVICE-PILOT-EXECUTION.md). The proposal/preflight text below is historical. Any further activation requires new scope.
+
 Status: **preparation complete; final exact rollout packet ready for Rad approval; deployment remains unapproved.** Read [SHARED-SERVICE-FINAL-APPROVAL.md](SHARED-SERVICE-FINAL-APPROVAL.md) for the current decision, [cutoff/restore rehearsal](SHARED-PILOT-CUTOFF-RESTORE-REHEARSAL.md) and [image validation](SHARED-SERVICE-IMAGE-VALIDATION.md). The preparation-stage inventory/image blockers below are historical and superseded by those receipts. No shared deployment, restart, production credential/configuration change or canonical data copy occurred. The isolated-trial restriction remains until Rad explicitly approves this exact exception.
 
 ## Proposed change and evidence
