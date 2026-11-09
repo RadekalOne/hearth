@@ -89,3 +89,9 @@ This is local synthetic protocol acceptance, not a live Claude/Codex session or
 physical delivery demonstration. No live credentials/session enrollment, client
 integration, push transport or production deployment is included. The existing
 900s/full-run inactive policy, observer and Commons automation are unchanged.
+
+
+The subsequent [named-session client integration](NAMED-SESSION-CLIENT.md)
+adds a reusable one-pass client and durable local inbox, including lost-response
+and restart acceptance. The preceding server-only acceptance remains historical;
+no live native session or credential enrollment has been installed.

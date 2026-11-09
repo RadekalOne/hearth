@@ -41,7 +41,7 @@ class NamedSessionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         await self.saved('/decisions/'+decision['id']+'/actions',{'expected_revision':1,'action':'approve','source':'synthetic-human-approval'})
         await self.saved('/roles/codex',{'model':'gpt-6.1-sol','family':'openai','role':'senior'})
         task=await self.saved('/tasks',{'project_id':project['id'],'plan_id':plan['id'],'action_id':'draft',**handoff})
-        claim=await self.saved('/tasks/'+task['id']+'/claim',{'expected_revision':1,'request_id':'named-session-claim'},'controller-fixture-token')
+        claim=await self.saved('/tasks/'+task['id']+'/claim',{'expected_revision':1,'request_id':'named-session-claim-'+task['id']},'controller-fixture-token')
         notice=await self.saved('/notices',{'claim':claim,'notice':{'task_id':task['id'],'recipient':'claude',
             'recipient_session':'claude-a','kind':'interface_changed','reference':'Notice body for the intended Claude session'}},'controller-fixture-token')
         return task,notice
