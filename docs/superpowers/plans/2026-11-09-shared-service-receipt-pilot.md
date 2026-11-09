@@ -11,12 +11,13 @@ Scope authority: Rad requested preparation for review before deployment. Existin
 - [x] Independent review of this preparation packet: no blocking findings; all17 reference hashes/three baseline hashes and relative-import closure independently verified.
 - [x] Retain checked proposal, manifest and continuity; preparation complete, deployment gated by final artifact sheet.
 
-Deployment work below is explicitly NOT executed by this preparation task:
-- [ ] Resolve actual host/container/mount/configuration and image inventory through approved read-only access.
-- [ ] Create a separate signed release commit; build exact pinned overlay and registry-aware fallback with no dependency upgrade.
-- [ ] Run subset-image compatibility/lifecycle and rollback/cutoff rehearsal in staging.
+The follow-up request authorized read-only inventory resolution and isolated image validation; shared cutover remains unapproved:
+- [x] Resolve actual host/container/mount/configuration and image inventory through explicit existing-key read-only SSH.
+- [x] Create signed candidate5ce9ffe; build exact pinned candidate/fallback without dependency changes.
+- [x] Run409 subset-image tests, actual TLS lifecycle, default CMD and forced-off fallback/Docker-restart backout checks in isolated containers.
+- [ ] Rehearse the future shared pilot cutoff; validation-only cleanup is not that proof.
 - [ ] Fill final image digests, exact service/backup commands, interruption budget and review receipts.
 - [ ] Rad reviews the concrete final artifacts and explicitly approves deployment.
 - [ ] Execute only that approved pilot and preserve outcome/rollback evidence.
 
-Rulings: prior whole-branch tests do not validate the proposed subset; pre-guard image fallback is unsafe after session issuance without a separately reviewed recovery; registry and marker are security state independent of ordinary data backup. No shared writes, live credential issuance, restarts, build, purchase, push or merge in this task.
+Rulings: prior whole-branch tests do not validate the proposed subset; pre-guard image fallback is unsafe after session issuance without a separately reviewed recovery; registry and marker are security state independent of ordinary data backup. No shared-service writes, production credential issuance/restarts, purchase, push or merge. Isolated image builds and fixture restarts were authorized by the follow-up validation request.

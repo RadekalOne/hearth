@@ -1,5 +1,5 @@
 {
-  "status": "REVIEW PROPOSAL ONLY; not built, deployed or deployment-approved",
+  "status": "CANDIDATE/FALLBACK IMAGE VALIDATION PASSED; deployment remains unapproved",
   "reported_live_build": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
   "reference_source": "59ee081f06f3654bfb34c44614022623986c2aab",
   "public_health_observed_utc": "2026-11-09T16:14:04.6737889+00:00",
@@ -94,9 +94,24 @@
   "excluded": "All other Hearth2 modules, session client/inbox (remain local), PyYAML requirements change, static assets, existing legacy modules and configuration",
   "patch_sha256": "b6769aef56299dba7680afdd0c03aa721391f94562ae4d33958dff03a1bf0a40",
   "static_relative_import_closure": "PASS;12 package modules and2SQL migrations",
-  "candidate_image_digest": null,
-  "rollback_image_digest": null,
-  "live_container_and_mount_verification": "UNRESOLVED; SSH signing agent failure; Hostinger inventory did not return",
+  "candidate_image_digest": "hearth-receipt-validation@sha256:d12b3f802136fdb35e73b5c1492526e0ba0b7b244a877987a949666e1432865c",
+  "rollback_image_digest": "hearth-receipt-validation@sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+  "live_container_and_mount_verification": {
+    "status": "VERIFIED READ ONLY",
+    "hostname": "vps01hst4hermes",
+    "container": "hearth-project-hub-hub-1",
+    "container_id": "27439b7eac4483638d9ad7adde8a0bc0c475ba72081f423cfaf2838f69f08332",
+    "compose_file": "/docker/hearth-project-hub/compose.json",
+    "compose_sha256": "24a2c0a0dcef3d97f58cfac4bbf04d5dd9b77b6d6ed8f8d88e35344fdf18d299",
+    "project": "hearth-project-hub",
+    "service": "hub",
+    "data_volume": "hearth_memory-data",
+    "data_path": "/var/lib/docker/volumes/hearth_memory-data/_data",
+    "networks": [
+      "hearth_default"
+    ],
+    "source_normalized_hashes_match": 21
+  },
   "build_strategy": "Overlay exact reviewed server subset on verified live image digest; no pip/apt/model download. Produce distinct signed candidate commit; do not label mixed artifact as full59ee081.",
   "public_health_observation": {
     "version": "0.10.18-journal-standing-762fd5f",
@@ -107,5 +122,37 @@
     "drawers": 3516,
     "memory": "ok",
     "homeserver": "ok"
-  }
+  },
+  "candidate_source_commit": "5ce9ffefe09834fef763f22a9883adf97fe5380d",
+  "verified_live_image_id": "sha256:7b667708a22108f125d6e4382b6a70f95814d62afdca8489d74cd09c676a3e7f",
+  "candidate_image_id": "sha256:d12b3f802136fdb35e73b5c1492526e0ba0b7b244a877987a949666e1432865c",
+  "fallback_image_id": "sha256:26e3d1d4134dc1924fa2c1fbef66ebf1205e1f3e0411a615becf92664f448265",
+  "runtime_validation": {
+    "tests": 409,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "real_tls_lifecycle": true,
+    "default_candidate_cmd": true,
+    "fallback_entrypoint_and_restart": true,
+    "receipt_count": 1,
+    "understanding": "unknown",
+    "task_tables_unchanged": true,
+    "production_identity_starttime_config_unchanged": true,
+    "report": "SHARED-SERVICE-IMAGE-VALIDATION.md"
+  },
+  "build_controls": {
+    "network": "none",
+    "dependency_versions_unchanged": true,
+    "base_layers_preserved": true,
+    "fallback_wrapper_sha256": "681d54b0ee4d4f389b620f30cfbb364ce5321c5fd6093e44a63781d2852ff61f",
+    "candidate_dockerfile_sha256": "e03c5665ccca5c6b7131d27cc2fc8a50367ffac9ad73dae7fea1789a251083da",
+    "fallback_dockerfile_sha256": "ff2bd2f50cece24234c6bd6aa029f2bc3b5592eb638e60d47a458db2b2d2acb4",
+    "published_or_pushed": false
+  },
+  "pending_deployment_gates": [
+    "Rad explicit approval after exact artifact review",
+    "Final live cutover/cold-backup-and-restore verification at approved maintenance boundary",
+    "Shared pilot cutoff rehearsal and final executable artifact sheet"
+  ]
 }
