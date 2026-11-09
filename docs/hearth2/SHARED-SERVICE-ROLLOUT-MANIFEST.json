@@ -1,0 +1,111 @@
+{
+  "status": "REVIEW PROPOSAL ONLY; not built, deployed or deployment-approved",
+  "reported_live_build": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
+  "reference_source": "59ee081f06f3654bfb34c44614022623986c2aab",
+  "public_health_observed_utc": "2026-11-09T16:14:04.6737889+00:00",
+  "server_file_count": 17,
+  "files": [
+    {
+      "path": "mcp/memory/app.py",
+      "reference_sha256": "7d61f44c1ee33fa85cf7e6e69251b0b2ab899895ea4f0100bc744511dc5a2ca1",
+      "baseline_sha256": "55f15c5e1e14ef5e87ec227c5856978350646e053fe0b355ec8d4bb8742b781a"
+    },
+    {
+      "path": "mcp/memory/reviewers.py",
+      "reference_sha256": "e6317b591dd017391e18bf9803b841854f62977af7dc6aac1e57d2f720d333ce",
+      "baseline_sha256": "c6f3d5e783deac83f3590cb9691974366d7cd1d28f56e75b916da27b5c55f465"
+    },
+    {
+      "path": "mcp/memory/Dockerfile",
+      "reference_sha256": "065a3e39c87ed5db7c1cde28661fc2b8c9f210968befd75c5c4f5914314f979c",
+      "baseline_sha256": "c315c3e4ddb1668d7c2737745ee44e257371b3886240a71adceaaa42c4f0cc97"
+    },
+    {
+      "path": "mcp/memory/hearth2/__init__.py",
+      "reference_sha256": "051cef212583100bd81d79f47444d62a25b0150c24b5b2305b236468ff5aaae8",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/api.py",
+      "reference_sha256": "2df0fb583e027f05664f28cbb750afaa1a55dd36fb39ead6f32c487ba612437f",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/backup.py",
+      "reference_sha256": "4e425763738d5e4961cca4c10193eec772a62f6220ad99761ecff1c137cf9859",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/control.py",
+      "reference_sha256": "f952ffd21b3b469014c4ee0a637463fdcb63cd0dcfb6beed8f6cc13e847284c6",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/delivery.py",
+      "reference_sha256": "1ad3b9ec00b64bdc3ded59b20d0b3df177d062179e9078e56f77cbd4c708ef6b",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/human_status.py",
+      "reference_sha256": "7d4b14bd77f0e34f320b8c18fff152cc9cf68e0e4b6750b042c47db6307f2aea",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/poll_observer.py",
+      "reference_sha256": "70f4630e0ee2ac43066451d5ac0b2ec887173809573cac5ee32a0b7f1b5347fb",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/poll_timing.py",
+      "reference_sha256": "9909da3e407a2806bd7fd4dad3e3418fea2919722b34a5d82b80c93b1fffc568",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/schema.py",
+      "reference_sha256": "19cf6dc6662a63893431f15d0e6e1e6cdb40f5d5a396c6fb2027765c67f1774f",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/session_registry.py",
+      "reference_sha256": "bafa02ce83b5e3a16a2329ed2fec09825ab9957ccbf88b27ad8ed62d0c337543",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/status_page.py",
+      "reference_sha256": "0fafc5f6a9ca355ffb0af5c8bfda782b0a0c8b5b1a39747c052acaee89ec3a7c",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/store.py",
+      "reference_sha256": "2b9a423eb2ac36f0ff6a475cb18f62880f8dcef27d26fcd82b9ddd566bdb8bfe",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/migrations/001_initial.up.sql",
+      "reference_sha256": "7251a3b0feec3bbb3ce3a13a715e22dfaf903068d2ecf6b941959c083d3bc620",
+      "baseline_sha256": null
+    },
+    {
+      "path": "mcp/memory/hearth2/migrations/001_initial.down.sql",
+      "reference_sha256": "8737d6a9078415b63b9c875605567d9e25bcc9683334990a29f4db84a85945db",
+      "baseline_sha256": null
+    }
+  ],
+  "excluded": "All other Hearth2 modules, session client/inbox (remain local), PyYAML requirements change, static assets, existing legacy modules and configuration",
+  "patch_sha256": "b6769aef56299dba7680afdd0c03aa721391f94562ae4d33958dff03a1bf0a40",
+  "static_relative_import_closure": "PASS;12 package modules and2SQL migrations",
+  "candidate_image_digest": null,
+  "rollback_image_digest": null,
+  "live_container_and_mount_verification": "UNRESOLVED; SSH signing agent failure; Hostinger inventory did not return",
+  "build_strategy": "Overlay exact reviewed server subset on verified live image digest; no pip/apt/model download. Produce distinct signed candidate commit; do not label mixed artifact as full59ee081.",
+  "public_health_observation": {
+    "version": "0.10.18-journal-standing-762fd5f",
+    "relays": 25,
+    "checkpoints": 66,
+    "build_commit": "762fd5fa0e9cff64179f5ec80d8846c0855e802e",
+    "status": 200,
+    "drawers": 3516,
+    "memory": "ok",
+    "homeserver": "ok"
+  }
+}
