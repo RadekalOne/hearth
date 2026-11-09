@@ -83,6 +83,14 @@ class ReviewerStore:
         with closing(self.connect()) as db:
             return self.context(db.execute('SELECT * FROM accounts WHERE credential_hash=?',(digest(credential),)).fetchone(),'reviewer_bearer')
 
+    def credential_fingerprint(self, context):
+        """Fingerprint for a validated current session, never the raw credential."""
+        if context is None or not self.path.exists(): return None
+        with closing(self.connect()) as db:
+            row=db.execute('SELECT credential_hash FROM accounts WHERE name=? AND generation=?',
+                (context.principal.removeprefix('reviewer:'),context.credential_generation)).fetchone()
+            return row['credential_hash'] if row else None
+
     def session(self,context,*,now=None):
         now=time.time() if now is None else now
         cookie=secrets.token_urlsafe(32)

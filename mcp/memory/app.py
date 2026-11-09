@@ -19,6 +19,8 @@ import re
 import secrets as pysecrets
 import time
 import threading
+import sqlite3
+import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -140,18 +142,32 @@ UPDATE_TOOL = ToolAnnotations(
 )
 
 
-def load_tokens() -> dict:
+def load_tokens(*, strict=False) -> dict:
     try:
         with open(TOKENS_PATH) as f:
-            return json.load(f)
+            values=json.load(f)
+            if strict and type(values) is not dict:
+                raise RuntimeError('credential map unavailable')
+            return values
     except (FileNotFoundError, json.JSONDecodeError):
+        if strict:
+            raise RuntimeError('credential map unavailable') from None
         return {}
 
 
 def save_tokens(tokens: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(TOKENS_PATH, "w") as f:
-        json.dump(tokens, f, indent=2)
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',dir=DATA_DIR,prefix='.memory-tokens-',delete=False) as f:
+            temporary=f.name
+            json.dump(tokens, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary,TOKENS_PATH)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def bearer(request: Request) -> str:
@@ -1996,6 +2012,8 @@ mcp_app = mcp.streamable_http_app(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     coordination_store.initialize()
+    h2_runtime.initialize()
+    _notice_session_policy()
     migrate_legacy_metadata()
     if CONSOLIDATE_AGENT_WINGS:
         run_consolidation(_roster())
@@ -2006,6 +2024,31 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="hearth-memory", lifespan=lifespan)
 
 
+def _matched_rest_route(request):
+    from starlette.routing import Match
+    return next((route.path for route in app.routes if getattr(route,'path','').startswith('/api/')
+                 and route.matches(request.scope)[0]==Match.FULL),'')
+
+
+def _notice_session_policy():
+    strict=h2_runtime.session_registry.seen or h2_runtime.notice_sessions_raw not in (None,'{}')
+    values=h2_runtime.sync_notice_credentials(lambda:load_tokens(strict=strict))
+    subjects=h2_runtime.reserved_notice_session_principals()
+    credentials={subject:values[subject] for subject in subjects
+                 if type(values.get(subject)) is str and values[subject]}
+    return subjects,values,credentials
+
+
+def _notice_session_matches(token,credentials):
+    return h2_runtime.session_registry.matches(token) | {subject for subject,value in credentials.items()
+            if token and (pysecrets.compare_digest(token,value) or pysecrets.compare_digest(token.strip(),value))}
+
+
+_NOTICE_SESSION_ROUTES=frozenset({('GET','/api/hearth2/session/notices'),
+    ('POST','/api/hearth2/notices/{notice_id}/receive'),
+    ('POST','/api/hearth2/notices/{notice_id}/acknowledge')})
+
+
 @app.middleware("http")
 async def require_token(request: Request, call_next):
     auth_routes = {"/api/auth/status", "/api/auth/login", "/api/auth/logout"}
@@ -2014,18 +2057,54 @@ async def require_token(request: Request, call_next):
         and request.url.path not in auth_routes
     )
     cookie = request.cookies.get(SESSION_COOKIE, '')
+    browser_principal = session_principal(request)
+    try:
+        session_subjects,token_values,session_credentials=_notice_session_policy()
+    except (RuntimeError, sqlite3.DatabaseError, OSError, ValueError):
+        return _secure_response(JSONResponse({'error':'notice-session credential policy unavailable'},status_code=503,headers={'Cache-Control':'no-store'}),request.url.path)
+    browser_session=SESSIONS.get(cookie,{})
+    session_cookie=bool(browser_principal and (browser_principal in session_subjects or
+        browser_session.get('auth_kind')=='token' and h2_runtime.session_registry.owns_fingerprint(browser_session.get('credential_hash','')) or
+        browser_session.get('auth_kind')=='token' and any(pysecrets.compare_digest(
+            browser_session.get('credential_hash',''),_credential_hash(value)) for value in session_credentials.values())))
+    # Reviewer cookies can also retain a credential that collides with a session token.
+    cookie_reviewer=reviewer_store.session_context(cookie) if cookie else None
+    if cookie_reviewer is not None:
+        session_cookie=session_cookie or h2_runtime.session_registry.owns_fingerprint(
+            reviewer_store.credential_fingerprint(cookie_reviewer)) or any(context is not None and
+            (context.principal,context.credential_generation)==(cookie_reviewer.principal,cookie_reviewer.credential_generation)
+            for context in (reviewer_store.authenticate(value) for value in session_credentials.values()))
+    scoped_headers=[]
+    for authorization in request.headers.getlist('authorization'):
+        if authorization.lower().startswith('bearer '):
+            value=authorization[7:]
+            matches=_notice_session_matches(value,session_credentials)
+            if matches:scoped_headers.append((value,matches))
+    if session_cookie or scoped_headers:
+        from hearth2.delivery import session_enrollments
+        configured=session_enrollments(h2_runtime.notice_sessions_raw,
+            h2_runtime.humans|h2_runtime.controllers|h2_runtime.workers,
+            h2_runtime.humans|h2_runtime.controllers|h2_runtime.workers|h2_runtime.observers)
+        inactive=any(not any(h2_runtime.session_registry.allowed(credential,target)
+            for target in configured.values()) for credential,_ in scoped_headers)
+        ambiguous=any(len(matches)!=1 or
+            {name for name,value in token_values.items() if type(value) is str and pysecrets.compare_digest(value,credential)}!=matches
+            or bool(ADMIN_TOKEN and pysecrets.compare_digest(credential,ADMIN_TOKEN))
+            or reviewer_store.owns_credential(credential) for credential,matches in scoped_headers)
+        if (session_cookie or ambiguous or inactive or len(scoped_headers)!=1 or
+                len(request.headers.getlist('authorization'))!=1 or
+                (request.method,_matched_rest_route(request)) not in _NOTICE_SESSION_ROUTES):
+            return _secure_response(JSONResponse({'error':'notice-session credential not permitted'},status_code=403,headers={'Cache-Control':'no-store'}),request.url.path)
     reviewer = reviewer_store.authenticate(bearer(request))
     if not request.url.path.startswith('/mcp') and not bearer(request):
         reviewer = reviewer_store.session_context(cookie)
     if bearer(request) and reviewer is None and reviewer_store.owns_credential(bearer(request)):
         return _secure_response(JSONResponse({'error':'authentication required'},status_code=401),request.url.path)
-    browser_principal = session_principal(request)
     principal = browser_principal or "anonymous"
     if reviewer and (bearer(request) or not request.url.path.startswith('/mcp')):
         principal = reviewer.principal
         if request.url.path.startswith('/api/'):
-            from starlette.routing import Match
-            route_name = next((route.path for route in app.routes if getattr(route, 'path', '').startswith('/api/') and route.matches(request.scope)[0] == Match.FULL), '')
+            route_name = _matched_rest_route(request)
             if not _reviewers.rest_allowed(request.method, route_name):
                 return _secure_response(JSONResponse({'error':'reviewer read-only access denied'},status_code=403),request.url.path)
             if request.method == 'GET' and route_name != '/api/auth/status':
@@ -2044,6 +2123,8 @@ async def require_token(request: Request, call_next):
         principal = token_principal(bearer(request)) or (
             browser_principal if request.url.path.startswith("/api/") else ""
         )
+        if principal in session_subjects and not scoped_headers:
+            return _secure_response(JSONResponse({'error':'notice-session credential not permitted'},status_code=403,headers={'Cache-Control':'no-store'}),request.url.path)
         if not principal:
             return _secure_response(JSONResponse({"error": "authentication required"},status_code=401,
                 headers={"WWW-Authenticate": "Bearer"}),request.url.path)
@@ -2190,6 +2271,12 @@ async def dashboard_login(request: Request):
     if not _same_origin(request):
         raise HTTPException(403, "cross-site login rejected")
     body = await request.json()
+    try:
+        session_subjects,_,session_credentials=_notice_session_policy()
+    except (RuntimeError, sqlite3.DatabaseError, OSError, ValueError):
+        raise HTTPException(503,'notice-session credential policy unavailable') from None
+    if _notice_session_matches(str(body.get('token','')),session_credentials):
+        raise HTTPException(403,'notice-session credentials are bearer-only')
     reviewer = reviewer_store.authenticate(str(body.get('token', '')).strip())
     if reviewer:
         try: session_id = reviewer_store.session(reviewer)
@@ -2250,6 +2337,8 @@ async def dashboard_login(request: Request):
     if not principal:
         raise HTTPException(401, "invalid username, password, or access token")
 
+    if principal in session_subjects:
+        raise HTTPException(403,'notice-session credentials are bearer-only')
     session_id = create_session(principal, auth_kind, credential)
     response = JSONResponse({"authenticated": True, "principal": principal})
     response.set_cookie(
@@ -3940,5 +4029,35 @@ def static_asset(name: str):
                         headers={"Cache-Control": "no-cache"})
 
 
-# MCP streamable HTTP endpoint lives at /mcp on this same port.
+
+
+# Hearth 2 is opt-in and has its own operational database in an isolated instance.
+# Package loading also supports tests that import this file directly by path.
+import sys as _h2_sys
+_h2_package_path = os.path.join(os.path.dirname(__file__), 'hearth2')
+if 'hearth2' not in _h2_sys.modules:
+    _h2_spec = importlib.util.spec_from_file_location('hearth2', os.path.join(_h2_package_path, '__init__.py'), submodule_search_locations=[_h2_package_path])
+    _h2_package = importlib.util.module_from_spec(_h2_spec)
+    _h2_sys.modules['hearth2'] = _h2_package
+    _h2_spec.loader.exec_module(_h2_package)
+from hearth2.api import Runtime as _Hearth2Runtime
+
+def _h2_ids(name):
+    return {v.strip() for v in os.environ.get(name, '').split(',') if v.strip()}
+
+h2_runtime = _Hearth2Runtime(
+    app, enabled=os.environ.get('HEARTH2_ENABLED', '').lower() in {'1', 'true', 'yes'},
+    data_dir=DATA_DIR, principal=_principal, typed_auth=CURRENT_AUTH.get,
+    same_origin=_same_origin, bearer_principal=lambda request: token_principal(bearer(request)),
+    human_ids=_h2_ids('HEARTH2_HUMAN_IDS'), controller_ids=_h2_ids('HEARTH2_CONTROLLER_IDS'),
+    worker_ids=_h2_ids('HEARTH2_WORKER_IDS'), authenticated=bool(ADMIN_TOKEN),
+    observer_ids=_h2_ids('HEARTH2_OBSERVER_IDS'),
+    notice_sessions=os.environ.get('HEARTH2_NOTICE_SESSIONS'),
+    poll_expectations=os.environ.get('HEARTH2_POLL_EXPECTATIONS'),
+    timing={key:os.environ[name] for key,name in (
+        ('lease_seconds','HEARTH2_LEASE_SECONDS'), ('deadline_seconds','HEARTH2_DEADLINE_SECONDS'))
+        if name in os.environ},
+)
+
+# Register the catch-all MCP mount after all explicit REST routes.
 app.mount("/", mcp_app)

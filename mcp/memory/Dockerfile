@@ -16,6 +16,7 @@ COPY commons_files.py .
 COPY glossary.py .
 COPY journal.py .
 COPY dashboard-watchers.json .
+COPY hearth2 ./hearth2
 COPY static ./static
 ENV HEARTH_DATA_DIR=/data
 ENV HEARTH_MEMORY_VERSION=$HEARTH_MEMORY_VERSION

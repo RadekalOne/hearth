@@ -1,0 +1,15 @@
+DROP TABLE audit_events;
+DROP TABLE scorecard_events;
+DROP TABLE incident_attempts;
+DROP TABLE incidents;
+DROP TABLE notices;
+DROP TABLE decisions;
+DROP TABLE runs;
+DROP TABLE claims;
+DROP TABLE role_grants;
+DROP TABLE dependencies;
+DROP TABLE tasks;
+DROP TABLE plans;
+DROP TABLE projects;
+DROP TABLE record_meta;
+DROP TABLE schema_migrations;
