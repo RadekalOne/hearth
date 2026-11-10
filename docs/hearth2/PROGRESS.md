@@ -2,6 +2,14 @@
 
 ## Active scope — 9 November refocus
 
+10November paid-turn packet revision: Claude's three conditional-review gaps
+are addressed in documentation: conditions3–5 must ship/pass independent review
+before scheduling; both screenshots must be within15minutes of send with
+auto-recharge/PAYGextrausage OFF confirmations; inconsistent/unreconciled
+consumption fails the financial gate regardless of model success. Prepare-only;
+no live conditions implemented, financial ceiling still unestablished, no new
+review PASS, paid run, activation or production change.
+
 10November Claude independently passed thread adapter and synthetic walking
 scope (`drawer_ff38dcebac9a75cb3e448ac8c5f8f6c3`); reproduced96 tests, not VPS
 receipts/signature. Six shipped-launcher conditions remain open. Prepared
