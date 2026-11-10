@@ -1,0 +1,241 @@
+{
+  "host": "srv2065995",
+  "started_at": "2026-11-10T14:40:15.150586+00:00",
+  "completed_at": "2026-11-10T14:40:42.383095+00:00",
+  "exercise_id": "codex-01591-ca4eff1b5ee14989856d65ef357c8f6e",
+  "profile_id": "codex-01591-candidate",
+  "checker_image_id": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+  "network_mode": "none",
+  "real_credentials": false,
+  "paid_run": false,
+  "service_activated": false,
+  "production_contacted": false,
+  "observer": "root host Docker/cgroup observer outside UID1000 candidate namespace",
+  "refusal_controls": [
+    {
+      "control": "unknown_model",
+      "reason": "model_not_allowed",
+      "thread_start_count": 0
+    },
+    {
+      "control": "request_override",
+      "reason": "request_fields_not_allowed",
+      "thread_start_count": 0
+    },
+    {
+      "control": "guard_exception",
+      "reason": "guard_error",
+      "thread_start_count": 0
+    }
+  ],
+  "positive_model": "gpt-6.1-sol",
+  "positive_sandbox": {
+    "networkAccess": false,
+    "type": "readOnly"
+  },
+  "native_rpc_trace": [
+    {
+      "method": "initialize",
+      "id": 1,
+      "sha256": "ef07c01da9a5291e82c13367b1ff316916317abeab22b93d6dda2cd6582211b9"
+    },
+    {
+      "method": "model/list",
+      "id": 2,
+      "sha256": "5773c9b6884e16937f4c1d0d8fa08c0866a1f08fdc360d610ce7a13558ee5132"
+    },
+    {
+      "method": "model/list",
+      "id": 3,
+      "sha256": "3a566244102bec0fa0c5ed669957250212f421ead2364bc22e7ccac8996dcc38"
+    },
+    {
+      "method": "model/list",
+      "id": 4,
+      "sha256": "a35f0fd7fb7a2908e7ff00933c3e2b69e070113ad9ce3a432a50ad38902f00a9"
+    },
+    {
+      "method": "model/list",
+      "id": 5,
+      "sha256": "e0fcb7d87d1aacfafe8a6860d0d43cd0a2a5bb10ffbd3ceed96cd038621e72e8"
+    },
+    {
+      "method": "model/list",
+      "id": 6,
+      "sha256": "13a34bd8ec268204bb7192307bc53bcaac09e98866cb8cdd73a30e3e28105127"
+    },
+    {
+      "method": "thread/start",
+      "id": 7,
+      "sha256": "8875831086d6b724e0794fa60a279ed2e1fd93062c1914b03890331325fe769b"
+    }
+  ],
+  "model_decisions": [
+    {
+      "allowed_model": "gpt-6.1-sol",
+      "audit_seq": 1,
+      "binary_sha256": null,
+      "catalog_sha256": null,
+      "client_list_age_seconds": 0.00047492189332842827,
+      "client_list_fresh": true,
+      "client_list_received_at": "2026-11-10T14:40:26.279601+00:00",
+      "client_list_rpc_id": 3,
+      "client_list_rpc_session": "c28f09323d07447695fc56f3c5088a12",
+      "client_list_sha256": "3a566244102bec0fa0c5ed669957250212f421ead2364bc22e7ccac8996dcc38",
+      "decision_at": "2026-11-10T14:40:26.280091+00:00",
+      "failure_class": "model_selection",
+      "kind": "native_model_selection",
+      "launch_attempt_id": "523f88bab7b645ba85f2262c56b3fa3d",
+      "outcome": "refused",
+      "reason": "model_not_allowed",
+      "requested_model": "hearth2-unsupported-model-negative-control"
+    },
+    {
+      "allowed_model": "gpt-6.1-sol",
+      "audit_seq": 2,
+      "binary_sha256": null,
+      "catalog_sha256": null,
+      "client_list_age_seconds": 0.0004669718910008669,
+      "client_list_fresh": true,
+      "client_list_received_at": "2026-11-10T14:40:26.287070+00:00",
+      "client_list_rpc_id": 4,
+      "client_list_rpc_session": "c28f09323d07447695fc56f3c5088a12",
+      "client_list_sha256": "a35f0fd7fb7a2908e7ff00933c3e2b69e070113ad9ce3a432a50ad38902f00a9",
+      "decision_at": "2026-11-10T14:40:26.287550+00:00",
+      "failure_class": "model_selection",
+      "kind": "native_model_selection",
+      "launch_attempt_id": "1c37bcf76a544731a2ff186d10d4bd00",
+      "outcome": "refused",
+      "reason": "request_fields_not_allowed",
+      "requested_model": "gpt-6.1-sol"
+    },
+    {
+      "allowed_model": "gpt-6.1-sol",
+      "audit_seq": 3,
+      "binary_sha256": null,
+      "catalog_sha256": null,
+      "client_list_age_seconds": 0.0005240219179540873,
+      "client_list_fresh": true,
+      "client_list_received_at": "2026-11-10T14:40:26.292620+00:00",
+      "client_list_rpc_id": 5,
+      "client_list_rpc_session": "c28f09323d07447695fc56f3c5088a12",
+      "client_list_sha256": "e0fcb7d87d1aacfafe8a6860d0d43cd0a2a5bb10ffbd3ceed96cd038621e72e8",
+      "decision_at": "2026-11-10T14:40:26.293155+00:00",
+      "failure_class": "guard_error",
+      "kind": "native_model_selection",
+      "launch_attempt_id": "5b518dabd2e743bea036bc8d77ae43b7",
+      "outcome": "refused",
+      "reason": "guard_error",
+      "requested_model": "gpt-6.1-sol"
+    },
+    {
+      "allowed_model": "gpt-6.1-sol",
+      "audit_seq": 4,
+      "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+      "catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1",
+      "client_list_age_seconds": 0.441859191050753,
+      "client_list_fresh": true,
+      "client_list_received_at": "2026-11-10T14:40:26.298855+00:00",
+      "client_list_rpc_id": 6,
+      "client_list_rpc_session": "c28f09323d07447695fc56f3c5088a12",
+      "client_list_sha256": "13a34bd8ec268204bb7192307bc53bcaac09e98866cb8cdd73a30e3e28105127",
+      "decision_at": "2026-11-10T14:40:26.740717+00:00",
+      "failure_class": null,
+      "kind": "native_model_selection",
+      "launch_attempt_id": "5c77aebd2d9c43f291406b2e09c75107",
+      "outcome": "allowed",
+      "reason": "exact_model_in_both_catalogs",
+      "requested_model": "gpt-6.1-sol"
+    }
+  ],
+  "native_thread_start_count": 1,
+  "turn_submitted": false,
+  "single_use_refused": true,
+  "final_fence_events": [
+    {
+      "rpc_last_id": 6,
+      "rpc_last_method": "model/list",
+      "persisted_audit_seq": 4,
+      "fixture_identity_valid": true
+    }
+  ],
+  "fence_scope": "fixture container identity only; not a live claim fence",
+  "library_source_hashes": {
+    "native_model_guard.py": "49bb113b8d22fdeecc914ea57cc9ed199059cca6510aa4dd792e95fbd6725fac",
+    "native_rpc.py": "732ae9e9a5aeb6f96e6301aac5782940202f898d51f458dae5a56f0c057194fa",
+    "native_model_audit.py": "e8ad2315e32e45adc9c552a8d95cda756965276bda621af184ca4850725b8c6e",
+    "native_thread_launcher.py": "1f3f846191a4d89da3aff8789b1cd775bdb180ee4dd81be0852ac77587e7ee2c"
+  },
+  "container_stopped": true,
+  "whole_workload_empty": true,
+  "cgroup_observation": {
+    "cgroup": "/sys/fs/cgroup/system.slice/docker-f6166c34d4870d0264eed11fcef778f0ec0ee96a1b0790bcb5031fe15d1b6c41.scope",
+    "events_before": "populated 1\nfrozen 0\n"
+  },
+  "cgroup_absent_after_stop": true,
+  "container_removed": true,
+  "quarantined_home": "/root/hearth-runner-trial/clients/codex/0.159.1/quarantine/codex-01591-ca4eff1b5ee14989856d65ef357c8f6e",
+  "unaffected_baseline_file_count": 309,
+  "unaffected_inventory_coverage": [
+    "installed Codex package tree and global launcher",
+    "root/home default Codex config and model caches",
+    "root/home user systemd and Cloudroom config trees",
+    "/etc/systemd/system and /etc/cron.d",
+    "existing trial config.toml and probe scripts"
+  ],
+  "unaffected_changed_paths": [],
+  "global_and_recorded_profiles_unchanged": true,
+  "unit_result": {
+    "exit_code": 0,
+    "source_hashes": {
+      "mcp/memory/hearth2/native_model_guard.py": "49bb113b8d22fdeecc914ea57cc9ed199059cca6510aa4dd792e95fbd6725fac",
+      "mcp/memory/hearth2/native_rpc.py": "732ae9e9a5aeb6f96e6301aac5782940202f898d51f458dae5a56f0c057194fa",
+      "mcp/memory/hearth2/native_model_audit.py": "e8ad2315e32e45adc9c552a8d95cda756965276bda621af184ca4850725b8c6e",
+      "mcp/memory/hearth2/native_thread_launcher.py": "1f3f846191a4d89da3aff8789b1cd775bdb180ee4dd81be0852ac77587e7ee2c",
+      "test/test_hearth2_native_model_guard.py": "728bbfafe2e1e663c52d009ec74b9219418f75a43589797e1797da1316f417e1",
+      "test/test_hearth2_native_thread_launcher.py": "b0c3d9daba82bcef04b7dbf3d66baa82c58ba29f3db81c722f0c89a9fb1c3dcf"
+    },
+    "log_sha256": "c01ced98f95b667d3e6bc43a24010f7aede752d5219cdd61e18ba2ddc15d1850"
+  },
+  "internal_review": {
+    "agent": "review_native_thread_integration",
+    "scope": "complete active increment, read-only source review",
+    "findings": [
+      "P2 final fence/freshness before RPC mutex wait",
+      "P2 available model-list error-response evidence dropped"
+    ],
+    "disposition": "both reproduced RED and fixed; four regressions plus real-pipe error evidence; no repeat review claimed"
+  },
+  "harness_failure_and_recovery": {
+    "reason": "fixture variable-name collision after container removal, before home quarantine/receipt",
+    "container_id": "540f74d0228129a8083b2deb6c120cd86534edccd7a9606b17eb5e07bd73a8d4",
+    "actions": [
+      "create",
+      "attach",
+      "start",
+      "die",
+      "destroy"
+    ],
+    "container_absent": true,
+    "cgroup_absent": true,
+    "quarantined_home": "/root/hearth-runner-trial/clients/codex/0.159.1/quarantine/codex-01591-911bb1d8b1854c9b9a1d87e64aadc51f",
+    "observed_at": "2026-11-10T14:40:12.609821+00:00",
+    "controller_sha256": "12c02577012c542bb90554b6433ea2df0089bcd11f00c2a27f14d130a452b041"
+  },
+  "remote_receipt_sha256": "228ace47ee03dd30faf0f679086140e3980b85710df1baf8fd00adc19b1243bc",
+  "audit_sha256": "75bdb079ba57395f1877da77056299b7740ebd04dbcf9a9efda6279ff35b4d93",
+  "responses_sha256": "15c5e3023acf60ac3a509a9bbb43b8f46ca6a4fb2e1ad6f82e686678ba9733ba",
+  "targeted_thread_adapter_passed": true,
+  "full_os_lifecycle_composed": false,
+  "full_runtime_compatible": null,
+  "account_executes": null,
+  "actual_scoped_broker_exercised": false,
+  "remote_evidence_dir": "/root/hearth-runner-trial/native-thread-launcher-raheblm6",
+  "remaining_open": [
+    "RootLifecycleDriver policy/assembly composition: v1 forbids bind-mounted interactive fixture",
+    "real scoped broker",
+    "forbidden-tool/expiry/output settlement",
+    "bubblewrap PATH or pin/hash bundled helper before any shell enablement",
+    "entitlement/live A-tests"
+  ]
+}

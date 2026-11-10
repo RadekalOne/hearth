@@ -1,0 +1,191 @@
+{
+  "host": "srv2065995",
+  "started_at": "2026-11-10T04:30:46.196456+00:00",
+  "completed_at": "2026-11-10T04:30:54.834772+00:00",
+  "exercise_id": "codex-01591-215e7dc314aa45a4aaa9fd86739847eb",
+  "profile_id": "codex-01591-candidate",
+  "checker_image_id": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+  "network_mode": "none",
+  "real_credentials": false,
+  "paid_run": false,
+  "service_activated": false,
+  "production_contacted": false,
+  "observer": "root host Docker/cgroup observer outside UID1000 candidate namespace",
+  "request_override_controls": [
+    {
+      "field": "modelProvider",
+      "reason": "request_fields_not_allowed",
+      "thread_start_calls": 0
+    },
+    {
+      "field": "config",
+      "reason": "request_fields_not_allowed",
+      "thread_start_calls": 0
+    },
+    {
+      "field": "baseInstructions",
+      "reason": "request_fields_not_allowed",
+      "thread_start_calls": 0
+    },
+    {
+      "field": "sandbox",
+      "reason": "request_fields_not_allowed",
+      "thread_start_calls": 0
+    }
+  ],
+  "hearth_negative_control": {
+    "decision": {
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "hearth2-unsupported-model-negative-control",
+      "outcome": "refused",
+      "reason": "model_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    "thread_start_calls": 0,
+    "native_thread_start_count_before": 0,
+    "refused_before_thread": true
+  },
+  "hearth_positive_control": {
+    "model": "gpt-6.1-sol",
+    "sandbox": {
+      "type": "readOnly",
+      "networkAccess": false
+    },
+    "thread_start_calls": 1
+  },
+  "model_guard_decisions": [
+    {
+      "seq": 1,
+      "at": "2026-11-10T04:30:52.887874+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "hearth2-unsupported-model-negative-control",
+      "outcome": "refused",
+      "reason": "model_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 2,
+      "at": "2026-11-10T04:30:52.890593+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "refused",
+      "reason": "request_fields_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 3,
+      "at": "2026-11-10T04:30:52.894066+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "refused",
+      "reason": "request_fields_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 4,
+      "at": "2026-11-10T04:30:52.896120+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "refused",
+      "reason": "request_fields_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 5,
+      "at": "2026-11-10T04:30:52.897626+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "refused",
+      "reason": "request_fields_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 6,
+      "at": "2026-11-10T04:30:53.328173+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "allowed",
+      "reason": "exact_model_in_both_catalogs",
+      "failure_class": null,
+      "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+      "catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1"
+    }
+  ],
+  "model_guard_sha256": "a05bb498976d28894d238b669cc3f1e7a5ccf44cbffc70da6e4623128852fa1b",
+  "container_stopped": true,
+  "whole_workload_empty": true,
+  "cgroup_observation": {
+    "cgroup": "/sys/fs/cgroup/system.slice/docker-db1b73704e0adeb999269ce0555853311cb9525f1853ed581642a6c1902d5e54.scope",
+    "events_before": "populated 1\nfrozen 0\n"
+  },
+  "cgroup_absent_after_stop": true,
+  "container_removed": true,
+  "quarantined_home": "/root/hearth-runner-trial/clients/codex/0.159.1/quarantine/codex-01591-215e7dc314aa45a4aaa9fd86739847eb",
+  "unaffected_baseline_file_count": 309,
+  "unaffected_inventory_coverage": [
+    "installed Codex package tree and global launcher",
+    "root/home default Codex config and model caches",
+    "root/home user systemd and Cloudroom config trees",
+    "/etc/systemd/system and /etc/cron.d",
+    "existing trial config.toml and probe scripts"
+  ],
+  "unaffected_changed_paths": [],
+  "global_and_recorded_profiles_unchanged": true,
+  "review": "drawer_a3e6dca5280e24cfd909e21543ad685a",
+  "required_change": "fixed five-key request contract; refuse missing/extra/nonfixed request fields before transport",
+  "allowed_request": {
+    "model": "gpt-6.1-sol",
+    "cwd": "/scratch",
+    "approvalPolicy": "never",
+    "sandbox": "read-only",
+    "ephemeral": true
+  },
+  "targeted_request_guard_status": "passed",
+  "full_runtime_compatible": null,
+  "account_executes": null,
+  "native_sent_methods": [
+    "initialize",
+    "model/list",
+    "thread/start"
+  ],
+  "unit_red": "16 tests;14 failing new subcases reproduced request forwarding; original13 tests passed",
+  "unit_green": "16 tests passed0.017s on trialPython3.12",
+  "source_hashes": {
+    "mcp/memory/hearth2/native_model_guard.py": "a05bb498976d28894d238b669cc3f1e7a5ccf44cbffc70da6e4623128852fa1b",
+    "test/test_hearth2_native_model_guard.py": "af05f446ac780390c760238e5e1913e50a9574860c212fa49095c9a926b6d2de"
+  },
+  "remote_receipt_sha256": "70c29a6a172866061ae0c29b31c888a48abb580f2d235bcc2810f44b2b478115",
+  "remote_evidence_dir": "/root/hearth-runner-trial/codex-model-guard-request-oxworo88",
+  "open_review_notes": [
+    "client model/list digest and RPC ID in each decision for auditable freshness",
+    "unexpected _check exception should record guard_error where possible; currently aborts before transport",
+    "bounded hash/repr for invalid requested model currently recorded asNone",
+    "per-admission binary hashing intentionally retained, no cache"
+  ],
+  "remaining_open": [
+    "real scoped broker",
+    "forbidden-tool/expiry/output settlement",
+    "concrete live launcher integration",
+    "bubblewrap PATH or pinned bundled helper before any shell enablement",
+    "entitlement/runtime/live A-tests"
+  ]
+}

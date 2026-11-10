@@ -1,0 +1,125 @@
+{
+  "host": "srv2065995",
+  "started_at": "2026-11-10T02:42:31.579431+00:00",
+  "completed_at": "2026-11-10T02:42:51.922357+00:00",
+  "exercise_id": "codex-01591-4370fb9332724dbeb946fe9143cb4117",
+  "profile_id": "codex-01591-candidate",
+  "checker_image_id": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+  "container_id": "ff80e7c7f968fa0cf02ebd0a364e16e07a1cda0ed6d5fb616968c80fb1651e2b",
+  "network_mode": "none",
+  "real_credentials": false,
+  "paid_run": false,
+  "service_activated": false,
+  "production_contacted": false,
+  "observer": "root host Docker/cgroup observer outside UID1000 candidate namespace",
+  "hearth_negative_control": {
+    "decision": {
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "hearth2-unsupported-model-negative-control",
+      "outcome": "refused",
+      "reason": "model_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    "thread_start_calls": 0,
+    "native_thread_start_count_before": 0,
+    "refused_before_thread": true
+  },
+  "hearth_positive_control": {
+    "model": "gpt-6.1-sol",
+    "sandbox": {
+      "type": "readOnly",
+      "networkAccess": false
+    },
+    "thread_start_calls": 1
+  },
+  "model_guard_decisions": [
+    {
+      "seq": 1,
+      "at": "2026-11-10T02:42:36.167663+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "hearth2-unsupported-model-negative-control",
+      "outcome": "refused",
+      "reason": "model_not_allowed",
+      "failure_class": "model_selection",
+      "binary_sha256": null,
+      "catalog_sha256": null
+    },
+    {
+      "seq": 2,
+      "at": "2026-11-10T02:42:40.686648+00:00",
+      "kind": "native_model_selection",
+      "allowed_model": "gpt-6.1-sol",
+      "requested_model": "gpt-6.1-sol",
+      "outcome": "allowed",
+      "reason": "exact_model_in_both_catalogs",
+      "failure_class": null,
+      "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+      "catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1"
+    }
+  ],
+  "model_guard_sha256": "2634e7fc04660af081bd40c1f90905fd9e53bbf61e307cb007bd0fa903800757",
+  "container_stopped": true,
+  "container_exit_code": 0,
+  "cgroup_observation": {
+    "cgroup": "/sys/fs/cgroup/system.slice/docker-ff80e7c7f968fa0cf02ebd0a364e16e07a1cda0ed6d5fb616968c80fb1651e2b.scope",
+    "events_before": "populated 1\nfrozen 0\n"
+  },
+  "cgroup_absent_after_stop": true,
+  "whole_workload_empty": true,
+  "container_removed": true,
+  "quarantined_home": "/root/hearth-runner-trial/clients/codex/0.159.1/quarantine/codex-01591-4370fb9332724dbeb946fe9143cb4117",
+  "unaffected_inventory_coverage": [
+    "installed Codex package tree and global launcher",
+    "root/home default Codex config and model caches",
+    "root/home user systemd and Cloudroom config trees",
+    "/etc/systemd/system and /etc/cron.d",
+    "existing trial config.toml and probe scripts"
+  ],
+  "unaffected_baseline_file_count": 309,
+  "unaffected_changed_paths": [],
+  "global_and_recorded_profiles_unchanged": true,
+  "targeted_model_gate_status": "passed",
+  "full_runtime_compatible": null,
+  "account_executes": null,
+  "actual_scoped_broker_exercised": false,
+  "model_guard_audit_location": "root-private host model-decisions.jsonl, outside candidate mounts",
+  "native_sent_methods": [
+    "initialize",
+    "model/list",
+    "thread/start"
+  ],
+  "version": "codex-cli 0.159.1",
+  "catalog_slugs": [
+    "gpt-6.1-sol",
+    "gpt-6-astra",
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-daybreak-blue-latest",
+    "gpt-daybreak-red-latest",
+    "gpt-5.5",
+    "codex-auto-review"
+  ],
+  "mounted_binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+  "mounted_catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1",
+  "unit_red": "13 failed because guard absent",
+  "unit_green": "13 passed0.014s Python3.12 trial",
+  "test_sha256": "3ad421eb043e0dda85267206ee5c930c6f4290afabb178fa741e72b472035aa8",
+  "remote_receipt_sha256": "444081066e1dae2db2688bfc445e007497a829d040c0e31e3a02de36784b5d28",
+  "audit_sha256": "913acb055e003e19db96208258553cc68bc27f10ca66dc04334518496f26c030",
+  "remote_evidence_dir": "/root/hearth-runner-trial/codex-01591-model-guard-jh22otnc",
+  "remaining_open": [
+    "real scoped Hearth broker",
+    "forbidden-tool and expiry checks",
+    "output settlement",
+    "bubblewrap PATH/bundled-copy hash before any future shell enablement",
+    "concrete live launcher integration",
+    "provider entitlement/runtime and live acceptance"
+  ]
+}

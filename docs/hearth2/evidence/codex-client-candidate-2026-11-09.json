@@ -1,0 +1,199 @@
+{
+  "status": "review_candidate_catalog_verified_runtime_pending",
+  "date": "2026-11-09",
+  "model": "gpt-6.1-sol",
+  "target": {
+    "host": "srv2065995",
+    "vps_id": 2065995,
+    "address": "179.236.82.242",
+    "trial_only": true
+  },
+  "installed": {
+    "version": "0.154.0",
+    "binary_sha256": "3188814c35471432d4123203e0eb38e5bddc60226e3d7ddf0e59e649ea140022",
+    "exact_model_in_bundled_catalog": false
+  },
+  "candidate": {
+    "version": "0.159.1",
+    "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.159.1-linux-x64.tgz",
+    "integrity": "sha512-NmXTe4LDsShovyGYH5Q5AP2S5kRtY6wEWkAMGm28pYGQsjUd1MMSPBK7obnepYgaqX774jDF0w8jpDPmOLSx3w==",
+    "archive_sha256": "9d6476abf421afe566c7afade3bb3c4aa1586c6f673c6a9e346b625e6b19561f",
+    "archive_bytes": 162497372,
+    "binary_path": "package/vendor/x86_64-unknown-linux-musl/bin/codex",
+    "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+    "catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1",
+    "slugs": [
+      "gpt-6-astra",
+      "gpt-6.1-sol",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-daybreak-blue-latest",
+      "gpt-daybreak-red-latest",
+      "gpt-5.5",
+      "codex-auto-review"
+    ],
+    "exact_model": [
+      {
+        "slug": "gpt-6.1-sol",
+        "visibility": "list",
+        "supported_in_api": true
+      }
+    ]
+  },
+  "stable_release_checks": [
+    {
+      "version": "0.155.0",
+      "binary_sha256": "660e159a49e823ac8e5986cb238f73158ce4b957d40d9292f8de90862644b501",
+      "archive_sha256": "4c4c874e0dff97277f2de92cfe82e8d84ddc2d80f206779f38c831bd2e147647",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.155.1",
+      "binary_sha256": "0753dfe1d8b87a52436deb13eb1c549661ef4c84fee2c5aa688385eebeccb761",
+      "archive_sha256": "f110cccdd50b0be8130b84f45b3144ea775c233f1c8bd8226da6ee719d63d206",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.156.0",
+      "binary_sha256": "78a11f06e0a2dda42d13fba1d50dc62e8cbdb2d5f69789722f4d4d99b5cdbe30",
+      "archive_sha256": "e16d3ee5f51562cdb83a523ac5f2b8929fe4693c744e1484d478112f52e3a239",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.156.1",
+      "binary_sha256": "0b2e9301d6100dddda3b9d5c80ebaeaa3a2f1962388f2f36f6b96a9f08b1f33f",
+      "archive_sha256": "ded9840babeb511e79738ae708044ae489fbce50db7002b943b3195cf5ae6a25",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.157.0",
+      "binary_sha256": "1a822376d4634ac32dddc030e5117c63359f7f8cd4b1b64382c68190287d0258",
+      "archive_sha256": "8cc62b1a3b0d7fd2c3227c2b82a8c442bedff52a7b30b69850686e6f5129abd3",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.157.1",
+      "binary_sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
+      "archive_sha256": "7f12677740f439fe4884c7031d9d703e571cecf5ea9fa3a05abd1bbccc2162a8",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.158.0",
+      "binary_sha256": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9",
+      "archive_sha256": "3fe84106aaf2fbfc13299068510d34b3d0157eeb9af4b37be8cf5416f485a6bb",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.159.0",
+      "binary_sha256": "d2752c52353401f7f6efbfcea68796f4f7a3d3e4769f5d1da53fa49d4856b72f",
+      "archive_sha256": "27a80e1904c7337fe65d94f881779ba7700f42a8a87f3d06352b543b0115df98",
+      "exact_model_in_bundled_catalog": false
+    },
+    {
+      "version": "0.159.1",
+      "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+      "archive_sha256": "9d6476abf421afe566c7afade3bb3c4aa1586c6f673c6a9e346b625e6b19561f",
+      "exact_model_in_bundled_catalog": true
+    }
+  ],
+  "proposed_trial_client_path": "/root/hearth-runner-trial/clients/codex/0.159.1/vendor/x86_64-unknown-linux-musl/bin/codex",
+  "global_client_replacement": false,
+  "candidate_executed": false,
+  "account_catalog_refreshed": false,
+  "paid_run_performed": false,
+  "trial_activation_performed": false,
+  "production_contacted": false,
+  "approval_required": [
+    "candidate installation or execution on trial",
+    "trial profile activation",
+    "real provider inference or spend"
+  ],
+  "local_context": {
+    "windows_bundled_version": "0.167.0-alpha.3.2",
+    "windows_npm_package_version": "0.164.0",
+    "wsl_ubuntu_24_04_resolution": "/mnt/c/Users/rslabinski/AppData/Roaming/npm/codex",
+    "wsl_probe_result": "exec: node: not found",
+    "local_native_catalog_lists_exact_model": true,
+    "local_context_proves_trial_compatibility": false
+  },
+  "revision": 2,
+  "claude_review": "drawer_0c02f4c2ca4904db4e7d8533390ecdec",
+  "review_status": "four_required_changes_addressed_in_proposal_exercise_not_run",
+  "evidence_claims": {
+    "catalog_present": true,
+    "runtime_compatible": null,
+    "account_executes": null,
+    "null_means": "unknown_not_exercised"
+  },
+  "pre_activation_profile": {
+    "profile_id": "codex-01591-candidate",
+    "selection_point": "evidence/codex-client-candidate-2026-11-09.json#/pre_activation_profile",
+    "consumer": "candidate-specific fixture copy only; consumer not implemented or executed",
+    "native_binary": "/root/hearth-runner-trial/clients/codex/0.159.1/vendor/x86_64-unknown-linux-musl/bin/codex",
+    "expected_version_stdout": "codex-cli 0.159.1",
+    "binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+    "expected_model": "gpt-6.1-sol",
+    "expected_model_list_slugs": [
+      "gpt-6-astra",
+      "gpt-6.1-sol",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-daybreak-blue-latest",
+      "gpt-daybreak-red-latest",
+      "gpt-5.5",
+      "codex-auto-review"
+    ],
+    "expected_catalog_sha256": "719c75b77ed02c783263f8fe62532ecd0abc1d1ccf2c34b12e5d221d509995a1",
+    "codex_home_host_template": "/root/hearth-runner-trial/clients/codex/0.159.1/homes/<exercise_id>",
+    "container_environment": {
+      "HOME": "/scratch",
+      "CODEX_HOME": "/scratch/codex-home"
+    },
+    "fresh_home_per_exercise": true,
+    "inherit_global_config_auth_cache_or_sessions": false,
+    "candidate_config_read_only": true,
+    "real_credentials_in_offline_exercise": false,
+    "global_path_lookup_or_binary_override_allowed": false,
+    "mounted_binary_and_catalog_hash_before_exec_required": true,
+    "unsupported_model_control": "hearth2-unsupported-model-negative-control",
+    "unsupported_model_expected": "explicit refusal; no substitution, accepted runnable thread or native turn",
+    "unknown_model_or_policy_behavior": "fail exercise; stop for separate reviewed launch-boundary correction",
+    "unaffected_consumers_check": {
+      "status": "required_not_performed",
+      "scope": "global Codex launcher and all other Codex trial profiles/consumers; other provider pins unchanged",
+      "before_and_after": [
+        "complete consumer inventory",
+        "resolved native path",
+        "wrapper_sha256",
+        "native_binary_sha256",
+        "profile_config_sha256"
+      ],
+      "expected_codex_binary_sha256": "3188814c35471432d4123203e0eb38e5bddc60226e3d7ddf0e59e649ea140022",
+      "unknown_changed_or_unenumerated_consumer": "block promotion"
+    },
+    "rollback": {
+      "stop_confirmation": "non-controller observer principal or Rad",
+      "candidate_home_cache": "quarantine root-only after confirmed stop; never reuse with 0.154.0",
+      "termination_unknown": "hold; no retry or release"
+    }
+  },
+  "provenance": {
+    "evidence_file": "codex-client-provenance-2026-11-09.json",
+    "evidence_sha256": "cc6296774493a6f97fb986934e50340258e25f0a6b085da5ee2d7018190785f4",
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "signature_chain_identity_and_log_verification": "passed",
+    "subject_digest_matches_candidate_archive": true,
+    "source_commit": "8e68a98ef03cdde76d2e6800791ebdf1b3b95b24",
+    "workflow_identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.159.1",
+    "wrong_identity_refused": true,
+    "tampered_payload_refused": true,
+    "verifier": "sigstore 4.1.1",
+    "verified_at": "2026-11-09T21:44:49.444Z"
+  }
+}

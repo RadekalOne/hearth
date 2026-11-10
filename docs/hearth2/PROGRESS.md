@@ -1,5 +1,25 @@
 # Hearth 2 piece 1 preparation ledger
 
+## Active scope — 9 November refocus
+
+10 November: native stdio/thread-launch adapter and root decision journal added,
+with model-list hash/RPC/session/time provenance and audited guard_error refusal.
+38 focused trial tests and the credential-free native fixture passed. See
+`NATIVE-THREAD-LAUNCHER.md`. Full OS lifecycle composition and real broker/tool/
+runtime acceptance remain open; no activation, paid run or production change.
+
+Rad's 9 November decision supersedes the older active-work ordering below.
+Credential inventory, acquisition/data-directory work, source-map/enrollment,
+named-session client and receipt pilot are closed and frozen. Historical limits
+remain evidence limits, not an open implementation backlog. No further work on
+that track without new scope from Rad.
+
+The critical path is Piece 2 trial live acceptance, then pieces 3–4 together,
+then piece 5. See `SLICE-REFOCUS-2026-11-09.md` for the provisional estimate,
+verified trial/catalog observations, remaining work and approval boundaries.
+Production is outside this work. No deployment, merge or spend is authorized
+by this status entry.
+
 Plan: `docs/superpowers/plans/2026-10-27-hearth2-work-record.md`.
 
 ## Piece 2 broker foundation (28 October)
