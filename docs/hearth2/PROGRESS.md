@@ -2,6 +2,14 @@
 
 ## Active scope — 9 November refocus
 
+10 November, piece2 A4/A8/A9 shapes: credential-free walking fixture completed
+assignment → claim → actual0.159.1 synthetic turn → closeout → verified exit/empty
+→ record receipt. Positive reaches review; missing-closeout opens an incident.
+106 focused tests and10 optimized fixture controls passed; broader853-test run
+had99 dependency-related errors, not a full PASS. Explicit stubs and remaining
+live/OS/broker/artifact work: `WALKING-SKELETON.md`. Production unchanged;
+activation/paid runs gated. Sources preserved on remote feature branches, no merge.
+
 10 November: native stdio/thread-launch adapter and root decision journal added,
 with model-list hash/RPC/session/time provenance and audited guard_error refusal.
 38 focused trial tests and the credential-free native fixture passed. See
