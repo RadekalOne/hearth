@@ -2,6 +2,13 @@
 
 ## Active scope — 9 November refocus
 
+10November Claude independently passed thread adapter and synthetic walking
+scope (`drawer_ff38dcebac9a75cb3e448ac8c5f8f6c3`); reproduced96 tests, not VPS
+receipts/signature. Six shipped-launcher conditions remain open. Prepared
+`ENTITLEMENT-PROBE-DRAFT-2026-11-10.md` and `DESIGN-ANSWERS-2026-11-10.md`;
+usage screenshots/monthly headroom, reviewed live safeguards and enforceable
+financial ceiling remain pending. Draft only; no new code, account calls or runs.
+
 10 November, piece2 A4/A8/A9 shapes: credential-free walking fixture completed
 assignment → claim → actual0.159.1 synthetic turn → closeout → verified exit/empty
 → record receipt. Positive reaches review; missing-closeout opens an incident.
