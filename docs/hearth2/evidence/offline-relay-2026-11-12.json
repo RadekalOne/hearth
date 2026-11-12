@@ -1,0 +1,288 @@
+{
+  "work_id": "codex-20261112-212920",
+  "relay_id": "relay_8cd89cb609ed4819",
+  "review_generation": 1,
+  "prepared_at": "2026-11-12T22:31:51.779974+00:00",
+  "source_commit": "1d2c6a4f2a794e3d6dfeded1d3b6a5f533c681d0",
+  "source_hashes": {
+    "docs/hearth2/OFFLINE-RELAY.md": "7da07dcd5d8cf56ea17e4cdf39356ce95b51c968c733b5dd2a6724ab9dad5986",
+    "ops/hearth2/install-offline-relay.ps1": "d36ca923f0160b6795a0dfb84aac34f47289af79c86b22cc4524225b2927a90f",
+    "ops/hearth2/offline_relay.py": "ff3dd9362625bbc545e90b8314386c3e5f587558260fcc9cf2a25336a2b72d85",
+    "ops/hearth2/offline_relay_ports.py": "9c555577a6c15073897d4efd2bf2cff501a195625be183fd0218e3d70ba2ae44",
+    "ops/hearth2/offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+    "ops/hearth2/offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+    "ops/hearth2/pause-offline-relay.ps1": "97b8895f0806cfcfa61a35e80f30f39778e966f41958e9744262dfaabfbcddf9",
+    "test/fixtures/offline_relay/acceptance.py": "7953e1e12d96574cb0ea9dae9f89f2ba488646eb19675a408f14fdeb464e260f",
+    "test/fixtures/offline_relay/probe.py": "e7861b425e129f3bf18a65e710658d1ef3a122578b3dcee5b7fed9ac5d3d8f71",
+    "test/fixtures/offline_relay/sandbox_controller.py": "60dfb5b7b5572d5871add8bdddd84b3f142cc6016f54746b60752ea8567cd89a",
+    "test/test_offline_relay.py": "c020ef3c563758376d550003de26fee44ba68bd86fbfe5d9c9382ab4e1e5c75e",
+    "test/test_offline_relay_ports.py": "f368b928447b173d8c365820f0465671a095d9d5b5b8eae88be4f15be423d650",
+    "test/test_offline_relay_recovery.py": "60eb4ed018197c51034b97de2deb05ce7ace22ef7dca8fe9a69dd03a9d5a7030"
+  },
+  "archive_sha256": "b9abaad17fe328dabc2aab7a574e6b033ad13e2260a65bcf1b353532240a9f2e",
+  "local_host": "RSLABINSKI-PC",
+  "trial_host": "srv2065995",
+  "full_suite": {
+    "collected": 1267,
+    "passed": 1266,
+    "skipped": 1,
+    "seconds": 141.065,
+    "exit_code": 0,
+    "command": "python -m unittest discover -s test -p 'test_*.py'",
+    "image": "sha256:8dd6062553ce6d14439fbcc1d972e19e1c2acd0f259f1893f6a26eaea80c1972",
+    "network": "none",
+    "log_sha256": "a79f4d0518ca3020cc8e9ecf0f963faa084671f2cb09f4da36f8062d4a83ca26"
+  },
+  "windows_focused": {
+    "passed": 27,
+    "seconds": 11.388,
+    "exit_code": 0,
+    "log_sha256": "0f75ccd05877937eb55722d6bb577b3bd2c6ad8f134f8a45e29e5bffbc1525f1"
+  },
+  "physical_acceptance": {
+    "windows-exact": {
+      "started_at": "2026-11-12T22:30:15.706845+00:00",
+      "mode": "windows",
+      "synthetic": true,
+      "cutoff_test": false,
+      "model_calls": 0,
+      "paid_runs": false,
+      "production_contact": false,
+      "job": "d23d607769ac47c59cb4ee8c1fbaaf85",
+      "ready": {
+        "fixture": true,
+        "job": "d23d607769ac47c59cb4ee8c1fbaaf85",
+        "keeper_pid": 63472,
+        "child_pid": 41752
+      },
+      "pause": {
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "d23d607769ac47c59cb4ee8c1fbaaf85": true
+        }
+      },
+      "keeper_exit": 137,
+      "passed": true,
+      "final_empty": true
+    },
+    "trial-exact": {
+      "started_at": "2026-11-12T22:27:59.111547+00:00",
+      "mode": "trial",
+      "synthetic": true,
+      "cutoff_test": false,
+      "model_calls": 0,
+      "paid_runs": false,
+      "production_contact": false,
+      "job": "a977411f503546bea8cabfc1ce9135e9",
+      "start": {
+        "job": "a977411f503546bea8cabfc1ce9135e9",
+        "container_id": "82e242ae9f973dac875781358879c16567a0daf867cca33b59d59f62303960f2",
+        "phase": "active",
+        "cgroup": "/sys/fs/cgroup/system.slice/docker-82e242ae9f973dac875781358879c16567a0daf867cca33b59d59f62303960f2.scope",
+        "network": "none",
+        "readonly": true,
+        "user": "1000:1000",
+        "cap_drop": [
+          "ALL"
+        ],
+        "mounts": [
+          "/fixture/probe.py"
+        ],
+        "watchdog_pid": 478866
+      },
+      "isolation": {
+        "uid": 1000,
+        "credentials_absent": true,
+        "docker_socket_absent": true,
+        "network_interfaces": [
+          "lo"
+        ],
+        "readonly_root": true,
+        "egress_denied": true,
+        "scratch_writable": true,
+        "child_pid": 7
+      },
+      "pause": {
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "a977411f503546bea8cabfc1ce9135e9": true
+        }
+      },
+      "late_start": {
+        "job": "a977411f503546bea8cabfc1ce9135e9",
+        "refused": true
+      },
+      "passed": true,
+      "final_empty": true
+    },
+    "windows-cutoff": {
+      "started_at": "2026-11-12T22:26:40.712193+00:00",
+      "mode": "windows",
+      "synthetic": true,
+      "cutoff_test": true,
+      "model_calls": 0,
+      "paid_runs": false,
+      "production_contact": false,
+      "job": "5495a533cca34464952d1a95ef60bb17",
+      "ready": {
+        "fixture": true,
+        "job": "5495a533cca34464952d1a95ef60bb17",
+        "keeper_pid": 21692,
+        "child_pid": 41436
+      },
+      "starter_exit": 0,
+      "cutoff_observed": true,
+      "pause": {
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "5495a533cca34464952d1a95ef60bb17": true
+        }
+      },
+      "passed": true,
+      "final_empty": true
+    },
+    "trial-cutoff": {
+      "started_at": "2026-11-12T22:27:02.217536+00:00",
+      "mode": "trial",
+      "synthetic": true,
+      "cutoff_test": true,
+      "model_calls": 0,
+      "paid_runs": false,
+      "production_contact": false,
+      "job": "bbed9994d2c947c9bbe23d42d1db3cbf",
+      "start": {
+        "job": "bbed9994d2c947c9bbe23d42d1db3cbf",
+        "container_id": "a531f37a0a8f93736111f4ae76725cd1d80dd3d4618aaab2882e53b89013e422",
+        "phase": "active",
+        "cgroup": "/sys/fs/cgroup/system.slice/docker-a531f37a0a8f93736111f4ae76725cd1d80dd3d4618aaab2882e53b89013e422.scope",
+        "network": "none",
+        "readonly": true,
+        "user": "1000:1000",
+        "cap_drop": [
+          "ALL"
+        ],
+        "mounts": [
+          "/fixture/probe.py"
+        ],
+        "watchdog_pid": 476414
+      },
+      "isolation": {
+        "uid": 1000,
+        "credentials_absent": true,
+        "docker_socket_absent": true,
+        "network_interfaces": [
+          "lo"
+        ],
+        "readonly_root": true,
+        "egress_denied": true,
+        "scratch_writable": true,
+        "child_pid": 7
+      },
+      "cutoff_observed": true,
+      "pause": {
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "bbed9994d2c947c9bbe23d42d1db3cbf": true
+        }
+      },
+      "late_start": {
+        "job": "bbed9994d2c947c9bbe23d42d1db3cbf",
+        "refused": true
+      },
+      "passed": true,
+      "final_empty": true
+    }
+  },
+  "trial_observer": {
+    "host": "srv2065995",
+    "baseline_count": 309,
+    "baseline_changed_paths": [],
+    "fixture_containers": [],
+    "suite_containers": [],
+    "fixture_watchdogs": [],
+    "fixture_source_hashes": {
+      "probe.py": "e7861b425e129f3bf18a65e710658d1ef3a122578b3dcee5b7fed9ac5d3d8f71",
+      "sandbox_controller.py": "60dfb5b7b5572d5871add8bdddd84b3f142cc6016f54746b60752ea8567cd89a"
+    }
+  },
+  "windows_observer": {
+    "observed_at": "2026-11-12T22:31:51.5905970Z",
+    "helper_pids": [],
+    "host": "RSLABINSKI-PC"
+  },
+  "disabled_install": {
+    "state": "Disabled",
+    "pause_shortcut_verified": true,
+    "runlevel": "Limited",
+    "source_hashes": {
+      "offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+      "pause-offline-relay.ps1": "97b8895f0806cfcfa61a35e80f30f39778e966f41958e9744262dfaabfbcddf9",
+      "offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+      "offline_relay.py": "ff3dd9362625bbc545e90b8314386c3e5f587558260fcc9cf2a25336a2b72d85",
+      "offline_relay_ports.py": "9c555577a6c15073897d4efd2bf2cff501a195625be183fd0218e3d70ba2ae44"
+    },
+    "prior_task_count": 240,
+    "last_run": "1999-11-30T00:00:00.0000000-05:00",
+    "existing_hearth_definitions_unchanged": true,
+    "trigger_count": 17,
+    "unrelated_definition_drift": [
+      {
+        "name": "RefreshCache",
+        "path": "\\Microsoft\\Windows\\Flighting\\OneSettings\\"
+      }
+    ],
+    "logon": "Interactive",
+    "enabled": false,
+    "last_result": 267011,
+    "task_name": "Hearth-Codex-Offline-Relay"
+  },
+  "installed_state": {
+    "control": {
+      "activation_at": null,
+      "enabled": 0,
+      "epoch": 1,
+      "id": 1,
+      "last_check": "2026-11-12T22:28:34.531913+00:00",
+      "paused": 1,
+      "status": "paused"
+    },
+    "jobs": [],
+    "outbox": []
+  },
+  "installed_pause": {
+    "scheduler_disabled": true,
+    "state": "paused",
+    "stops": {}
+  },
+  "review": {
+    "fresh_context_review": true,
+    "critical": 0,
+    "important": 4,
+    "disposition": "one fix pass; all six added regression cases RED then GREEN; exact source full suite and physical acceptance passed",
+    "claude_exact_commit_review": "pending",
+    "minor_disposition": "owner-trusted hash staging and missing live result/evidence/usage documented"
+  },
+  "bounded_unknowns": [
+    "live coordination/authorization/checkout/allowance/unattended launch adapters unavailable, default refuse",
+    "WSL staging and real Codex unattended support unverified; distributions remain stopped",
+    "Windows OneSettings RefreshCache definition hash drift; cause not verified; no write to that task performed",
+    "current interactive coding-session seat usage unavailable; not zero or free",
+    "provider financial enforcement and real-model behavior unverified"
+  ],
+  "worker_model_calls": 0,
+  "first_week_usage_window": "not_started",
+  "activation": false,
+  "paid_runs": false,
+  "merge": false,
+  "deploy": false,
+  "production_contact": false,
+  "understanding": "unknown",
+  "human_acceptance": false,
+  "live_autonomous_loop": false,
+  "private_evidence_directory": ".superpowers\\sdd\\2026-11-12-hearth-offline-relay",
+  "trial_evidence_directory": "/root/hearth-runner-trial/offline-relay-20261112"
+}
