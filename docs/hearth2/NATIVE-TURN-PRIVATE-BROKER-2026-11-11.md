@@ -37,7 +37,7 @@ tests and is not the new launch path.
 ## Verification and limits
 
 Focused tests run on trial Linux/Python3.12 with private pipes/real Broker:
-74 pass. The full repository suite passes all 1,222 tests in 119.726 seconds
+74 pass. The full repository suite passes all 1,222 tests in 120.554 seconds
 (exit0). Coverage includes >64 events, pre-ack events, count/bytes/deadline/final
 text bounds, wrong identities, replay, audit/fence failures, expiry, read scope,
 private channel cleanup and actual loopback transport without bearer forwarding.
@@ -48,7 +48,7 @@ rechecks the live fence after the audit and before transport write. All 74
 focused tests pass afterward. No second reviewer pass or Claude PASS is claimed.
 
 Final actual native-client pair:
-`/root/hearth-runner-trial/walking-f30c044e028d49eb9c737710ffe11b27`.
+`/root/hearth-runner-trial/walking-01a0da849b2d4991b0dedb9b05cd41f0`.
 The provider and HM upstream are explicitly synthetic. The positive run enters
 review; the missing-closeout run returns to ready with an incident. Both native
 processes exit0, their cgroups are independently confirmed empty, and containers
@@ -83,3 +83,10 @@ post-thread-start failure reconciliation/ID persistence and the unattended
 journal capacity/lifecycle still require shipped-launcher review. Shell remains
 disabled; bubblewrap must be resolved before any shell enablement. Production,
 service activation, global client, accounts, credentials and billing are unchanged.
+
+Canonical Git LF archive for source commit22555e41f8037f3bfa52ec3c15daf0799076d291
+was rerun: full1222 PASS120.554s exit0 and native pair PASS. All13 recorded
+source hashes match archive bytes exactly. Earlier CRLF archive conversion was
+newline-only and is retained as a diagnostic, not the final source artifact.
+Local SSH signature verification was unavailable because allowedSignersFile is
+unconfigured; no independently verified signature is claimed.
