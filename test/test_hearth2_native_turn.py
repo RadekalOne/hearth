@@ -8,6 +8,7 @@ import time
 import unittest
 from unittest.mock import patch
 import os
+from contextlib import contextmanager
 sys.path.insert(0,str(Path(__file__).parents[1]/'mcp/memory'))
 from hearth2.native_rpc import NativeRpcClient,NativeRpcError,canonical_object
 
@@ -53,7 +54,7 @@ for raw in sys.stdin:
 
 
 class NativeTurnTests(unittest.TestCase):
-    def peer(self,mode='normal',**options):
+    def peer(self,mode='normal',*,start_thread=True,**options):
         self.assertTrue(callable(getattr(NativeRpcClient,'turn_start',None)),'canonical turn API missing')
         process=subprocess.Popen([sys.executable,'-u','-c',PEER,mode],stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'})
@@ -62,7 +63,8 @@ class NativeTurnTests(unittest.TestCase):
             process.wait(timeout=3);process.stdin.close();process.stdout.close()
         self.addCleanup(close)
         options.setdefault('turn_timeout_seconds',45) # Explicit synthetic fixture policy, not provider timing.
-        client=NativeRpcClient(process.stdout,process.stdin,**options);client.initialize();client.thread_start(THREAD)
+        client=NativeRpcClient(process.stdout,process.stdin,**options);client.initialize()
+        if start_thread:client.thread_start(THREAD)
         return client
 
     def run_turn(self,client,request=None,**overrides):
@@ -248,6 +250,77 @@ class NativeTurnTests(unittest.TestCase):
         with self.assertRaises(NativeRpcError):self.run_turn(self.peer('badturn'))
         self.assertIsNone(self.rows[-1]['turn_id'])
         self.assertNotIn('must-not-log',json.dumps(self.rows))
+
+    def test_repeated_thread_start_refuses_before_any_second_request(self):
+        client=self.peer();last=client.last_request_id
+        with self.assertRaises(NativeRpcError):client.thread_start(THREAD)
+        self.assertEqual(client.last_request_id,last)
+        self.assertEqual(self.run_turn(client).thread_id,'thread-owned')
+
+    def test_failed_first_thread_write_cannot_be_retried(self):
+        client=self.peer(start_thread=False)
+        with patch.object(client,'_write',side_effect=OSError('synthetic write failure')):
+            with self.assertRaises(NativeRpcError):client.thread_start(THREAD)
+        last=client.last_request_id
+        with self.assertRaises(NativeRpcError):client.thread_start(THREAD)
+        self.assertEqual(client.last_request_id,last)
+
+    def test_interrupt_stops_once_audits_and_reraises_original_control_exception(self):
+        for phase in ['before_send','after_ack']:
+            for kind in [KeyboardInterrupt,SystemExit]:
+                client=self.peer();control=kind('private-control-detail')
+                def fence():
+                    if phase=='before_send':raise control
+                    return True
+                def audit(row):
+                    self.rows.append(row)
+                    if row['kind']=='native_turn_started':raise control
+                    return True
+                with self.subTest(phase=phase,kind=kind),self.assertRaises(kind) as error:
+                    self.run_turn(client,before_send=fence,record_event=audit)
+                self.assertIs(error.exception,control);self.assertEqual(self.stops,[True])
+                self.assertEqual(self.rows[-1]['failure_class'],'interrupted')
+                self.assertEqual(self.rows[-1]['send_state'],'not_sent' if phase=='before_send' else 'response_received')
+                self.assertNotIn('private-control-detail',json.dumps(self.rows))
+
+    def test_interrupt_while_acquiring_turn_lock_also_stops_and_audits(self):
+        for kind in [KeyboardInterrupt,SystemExit]:
+            client=self.peer();control=kind('private-lock-detail')
+            @contextmanager
+            def interrupted(method):
+                raise control
+                yield
+            with patch.object(client,'_serialized',interrupted),self.assertRaises(kind) as error:
+                self.run_turn(client)
+            self.assertIs(error.exception,control);self.assertEqual(self.stops,[True])
+            row=self.rows[-1]
+            self.assertEqual(row['stage'],'serialization');self.assertEqual(row['send_state'],'not_sent')
+            self.assertEqual(row['failure_class'],'interrupted');self.assertTrue(row['stop_confirmed'])
+            self.assertNotIn('private-lock-detail',json.dumps(row))
+
+    def test_outer_lock_exit_interrupt_uses_conservative_unknown_send_evidence(self):
+        client=self.peer();original=client._serialized;depth=[0];control=KeyboardInterrupt()
+        @contextmanager
+        def exit_interrupted(method):
+            outer=depth[0]==0;depth[0]+=1
+            try:
+                with original(method):yield
+            finally:depth[0]-=1
+            if outer:raise control
+        with patch.object(client,'_serialized',exit_interrupted),self.assertRaises(KeyboardInterrupt):
+            self.run_turn(client)
+        self.assertEqual(self.stops,[True]);row=self.rows[-1]
+        self.assertEqual(row['send_state'],'possibly_sent_unconfirmed')
+        self.assertIsNone(row['request_written']);self.assertIsNone(row['bytes_written'])
+
+    def test_second_interrupt_inside_stop_does_not_replace_original_or_skip_audit(self):
+        client=self.peer();first=KeyboardInterrupt();calls=[]
+        def fence():raise first
+        def stop():calls.append(True);raise SystemExit()
+        with self.assertRaises(KeyboardInterrupt) as error:
+            self.run_turn(client,before_send=fence,stop_workload=stop)
+        self.assertIs(error.exception,first);self.assertEqual(calls,[True])
+        self.assertFalse(self.rows[-1]['stop_confirmed'])
 
 
 if __name__=='__main__':unittest.main()

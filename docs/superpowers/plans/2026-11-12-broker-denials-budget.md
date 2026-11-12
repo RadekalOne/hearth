@@ -1,0 +1,8 @@
+# D/E and lifecycle review response
+Base6170160; source Claude drawer_6aa3493f61c23d6f9d823b3cecfd1123, existing approved inactive piece2 build/test scope. Keep paid/activation/production and live timing gates.
+1 TDD D: parsed safe request IDs get fixed JSONRPC errors for denied/expired/malformed envelopes; unparseable requests idnull/parseerror. Matchable responses across Unix and real loopback; pinned native synthetic refusal case proves no15s tool timeout reliance.
+2 TDD E: Broker fixed root-selected max_reads default8 (1..64), atomic per-grant attempts reserved before upstream, never refunded on failure, removed onrevoke/prune. Worker cannot reset/remint; metadata discovery not charged. No real HM upstream.
+3 TDD cleanup: once-only thread_start consumed beforepossiblewrite; KeyboardInterrupt/SystemExit stop once, audit sanitized sendstate and re-raise original interruption, preserve independent root cutoff requirement. Stop callback remains bounded/trusted externalrequirement.
+4 Focused/fullLinuxnetworknone, pinned native positive/missingcloseout/refusal, exactsourcepin/baseline cleanup; one fresh-context final review and one fixpass. Preserve remote featurebranch, HM/Claude exactcommitreview, checkpoint/relaydisposition. No scheduling/paidclearance inferred.
+Ruling: new featurebranch existing dedicated checkout, ignored continuity retained. Eight reads is deliberately small synthetic/firstprobe headroom; finiteattemptbudget notcostcap or persistent cross-grant accounting. Root remint trusted, workers cannotmint.
+Ruling: correlatederrorreflects only bounded plainstr/int IDs from parseable object, never arbitrary input/rawexception/token. malformed/unparseable IDs null. Budgetdenial fixedcode/message; don't reveal grant state.

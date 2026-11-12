@@ -94,6 +94,7 @@ class NativeRpcClient:
         self.max_turn_events,self.max_turn_bytes=max_turn_events,max_turn_bytes
         self.turn_timeout_seconds=turn_timeout_seconds
         self._started_thread=None;self._started_request=None;self._turn_used=False;self._turn_context=None
+        self._thread_used=False
         os.set_blocking(reader.fileno(),False);os.set_blocking(writer.fileno(),False)
 
     @property
@@ -205,6 +206,8 @@ class NativeRpcClient:
     def thread_start(self,request,*,before_send=None):
         if not self._initialized:raise NativeRpcError('thread/start',None,'not_initialized')
         with self._serialized('thread/start'):
+            if self._thread_used:raise NativeRpcError('thread/start',None,'thread_already_consumed')
+            self._thread_used=True
             raw=canonical_object(request)
             reply=self._exchange('thread/start',_decode(raw),before_send=before_send)
             self._started_thread=reply;self._started_request=raw

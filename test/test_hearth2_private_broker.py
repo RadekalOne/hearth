@@ -56,6 +56,24 @@ class PrivateBrokerTests(unittest.TestCase):
         self.time+=timedelta(minutes=16)
         self.assertIn('error',self.rpc('tools/list',{}));self.assertEqual(self.reads,[])
 
+    def test_denied_requests_have_correlated_jsonrpc_errors(self):
+        self.channel.start()
+        malformed=self.rpc(id='request-one',authorization='worker-forgery')
+        self.assertEqual(malformed['jsonrpc'],'2.0');self.assertEqual(malformed['id'],'request-one')
+        self.assertIsInstance(malformed['error']['code'],int)
+        self.time+=timedelta(minutes=16)
+        expired=self.rpc(id=17)
+        self.assertEqual(expired['id'],17);self.assertEqual(expired['jsonrpc'],'2.0')
+        self.assertNotIn('result',expired);self.assertEqual(self.reads,[])
+
+    def test_unparseable_request_returns_null_id_parse_error(self):
+        self.channel.start()
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(3);client.connect(str(self.channel.socket_path));client.sendall(b'{bad\n')
+            reply=json.loads(client.makefile('rb').readline(65537))
+        self.assertEqual(reply['jsonrpc'],'2.0');self.assertIsNone(reply['id'])
+        self.assertEqual(reply['error']['code'],-32700)
+
     def test_writes_override_fields_and_scope_broadening_are_refused(self):
         self.channel.start()
         for response in [self.rpc(params={'name':'memory_add','arguments':{'content':'no'}}),
@@ -100,6 +118,10 @@ class PrivateBrokerTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as error:send(headers)
             self.assertEqual(error.exception.code,403)
         self.assertEqual(len(self.reads),1)
+        self.time+=timedelta(minutes=16)
+        expired=json.loads(send().read())
+        self.assertEqual(expired['id'],3);self.assertEqual(expired['jsonrpc'],'2.0')
+        self.assertIn('error',expired);self.assertEqual(len(self.reads),1)
 
 
 class PrivateProfileTests(unittest.TestCase):

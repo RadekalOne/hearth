@@ -23,9 +23,12 @@ seat, deliver a plan document, or start the seven-night window.
 
 12 November review update: conditions3–5 passed as inactive components, not a
 live launcher. Claude's follow-up findings A–E are additional paid-turn blockers.
-A/C have an author fix candidate under review; B (a deliberate live timing
-policy) remains unresolved, and D/E (correlated denied reads/read budget) remain
-open. No component PASS or test count clears these gates. See
+A/C independently passed at6170160 and B was accepted as partial in Claude's
+`drawer_6aa3493f61c23d6f9d823b3cecfd1123`. B (a deliberate live timing policy)
+remains unresolved. D/E and interruption/repeated-thread cleanup now have a new
+inactive candidate awaiting exact-commit review; see
+`BROKER-DENIALS-BUDGET-2026-11-12.md`. No component PASS or test count clears
+the scheduling, live-composition or financial gates. See
 `TURN-REVIEW-ABC-2026-11-12.md` for the exact dispositions.
 
 **Do not schedule the actual turn until conditions 3–5 below are implemented in
@@ -110,6 +113,9 @@ to price a subscription turn, and no speculative dollar upper bound is claimed.
    provider requests (memory-tool step and final response), counting attempted
    native retries; a third request is denied, not retried. These are review
    requirements, not controls implemented by this draft.
+   The live driver must have an independent root cutoff outside the worker covering the
+   whole workload and every child during silent output and interruptions;
+   event-triggered authority checks cannot replace it. This draft installs none.
 6. Live cutoffs are unresolved: the earlier45s/90s figures have synthetic fixture
    evidence only and must not silently become live policy. Native turns now
    require an explicit timeout;45s remains the component ceiling, not evidence

@@ -15,6 +15,12 @@ from .native_rpc import _decode,canonical_object
 from .store import RecordError
 
 
+def error_response(request,code=-32001):
+    ident=request.get('id') if type(request) is dict else None
+    if not (type(ident) is str and len(ident)<=256 or type(ident) is int and ident.bit_length()<=63):ident=None
+    return {'jsonrpc':'2.0','id':ident,'error':{'code':code,'message':'Private read request denied'}}
+
+
 class PrivateBrokerChannel:
     def __init__(self,broker,controller,claim,*,directory,wing,room):
         self.broker,self.controller,self.claim=broker,controller,claim
@@ -49,13 +55,17 @@ class PrivateBrokerChannel:
         class Handler(socketserver.StreamRequestHandler):
             def handle(self):
                 self.request.settimeout(2)
+                request=None
                 try:
                     raw=self.rfile.readline(65537)
                     if len(raw)>65536 or not raw.endswith(b'\n'):raise BrokerError()
-                    reply=owner._dispatch(_decode(raw))
+                    try:request=_decode(raw)
+                    except Exception:
+                        self.wfile.write(canonical_object(error_response(None,-32700))+b'\n');return
+                    reply=owner._dispatch(request)
                     data=b'null' if reply is None else canonical_object(reply)
                     if len(data)>1_000_000:raise BrokerError()
-                except Exception:data=b'{"error":"Private read request denied"}'
+                except Exception:data=canonical_object(error_response(request))
                 try:self.wfile.write(data+b'\n')
                 except Exception:pass
         class Server(socketserver.ThreadingMixIn,socketserver.UnixStreamServer):
@@ -82,6 +92,10 @@ class PrivateBrokerChannel:
             self.close();raise RecordError('private Broker channel unavailable') from None
 
     def _dispatch(self,request):
+        try:return self._dispatch_authorized(request)
+        except Exception:return error_response(request)
+
+    def _dispatch_authorized(self,request):
         if (type(request) is not dict or set(request)-{'jsonrpc','id','method','params'}
                 or request.get('jsonrpc')!='2.0' or type(request.get('method')) is not str
                 or 'id' in request and type(request['id']) not in {str,int}):raise BrokerError()
@@ -104,11 +118,9 @@ class PrivateBrokerChannel:
                 'capabilities':{'tools':{}},'serverInfo':{'name':'hearth-private-task-memory','version':'1'}}
         elif method=='tools/list' and not params:result={'tools':TOOLS}
         elif method=='tools/call':
-            try:
-                if set(params)!={'name','arguments'}:raise BrokerError()
-                value=self.broker.read(self.__cap,params['name'],params['arguments'])
-                result={'content':[{'type':'text','text':canonical_object(value).decode('ascii')}]}
-            except BrokerError:result={'content':[{'type':'text','text':'Read request denied'}],'isError':True}
+            if set(params)!={'name','arguments'}:raise BrokerError()
+            value=self.broker.read(self.__cap,params['name'],params['arguments'])
+            result={'content':[{'type':'text','text':canonical_object(value).decode('ascii')}]}
         else:return {'jsonrpc':'2.0','id':ident,'error':{'code':-32601,'message':'Method not permitted'}}
         self.broker.check(self.__cap)
         return {'jsonrpc':'2.0','id':ident,'result':result}

@@ -39,9 +39,11 @@ class Provider(BaseHTTPRequestHandler):
                 'name':'memory_get','arguments':json.dumps({'drawer_id':'drawer_fixture'})}]
         else:
             outputs=[x for x in body.get('input',[]) if x.get('type')=='function_call_output' and x.get('call_id')=='call_read']
-            if len(outputs)!=1 or 'synthetic-memory-'+task['challenge'] not in json.dumps(outputs):
+            expected='Private read request denied' if task['mode']=='denied-read' else 'synthetic-memory-'+task['challenge']
+            if len(outputs)!=1 or expected not in json.dumps(outputs):
                 self.send_error(400,'fixture memory output missing: '+json.dumps(outputs)[:900]);return
             text=json.dumps(task['closeout']) if task['mode']=='positive' else 'Synthetic completed turn with no structured closeout.'
+            if task['mode']=='denied-read':text='Synthetic refusal observed; no successful memory read.'
             if task.get('stream_stress') and task['mode']=='positive':text=' '*4096+text
             items=[{'type':'message','id':'msg_walk','role':'assistant','status':'completed',
                 'content':[{'type':'output_text','text':text,'annotations':[]}]}]

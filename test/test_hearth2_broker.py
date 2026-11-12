@@ -10,6 +10,8 @@ from hearth2.store import Store
 from pathlib import Path
 from contextlib import contextmanager
 from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+import threading
 from hearth2.store import timestamp
 
 
@@ -27,6 +29,27 @@ class BrokerTests(unittest.TestCase):
     def grant(self,**changes):
         fields=dict(wing='trial',room='project');fields.update(changes)
         return self.broker.mint(self.controller,self.claim,**fields)
+
+    def test_read_budget_is_atomic_across_concurrent_calls(self):
+        self.broker=Broker(self.store,self.controller,self.upstream,max_reads=3);token=self.grant()
+        barrier=threading.Barrier(12)
+        def read(n):
+            barrier.wait()
+            try:self.broker.read(token,'memory_get',{'drawer_id':'drawer_fixture'});return True
+            except BrokerError:return False
+        with ThreadPoolExecutor(max_workers=12) as pool:results=list(pool.map(read,range(12)))
+        self.assertEqual(sum(results),3);self.assertEqual(len(self.calls),3)
+        self.broker.check(token) # Budget does not revoke metadata/authority checks.
+
+    def test_failed_read_attempt_consumes_budget_and_discovery_does_not(self):
+        self.broker=Broker(self.store,self.controller,self.upstream,max_reads=1);token=self.grant()
+        for _ in range(10):self.broker.check(token)
+        with self.assertRaises(BrokerError):self.broker.read(token,'forbidden',{})
+        with self.assertRaises(BrokerError):self.broker.read(token,'memory_get',{'drawer_id':'drawer_fixture'})
+        self.assertEqual(self.calls,[])
+        self.broker.revoke(self.controller,token);fresh=self.grant()
+        self.broker.read(fresh,'memory_get',{'drawer_id':'drawer_fixture'})
+        self.assertEqual(len(self.calls),1)
 
     def test_scoped_reads_and_no_bearer_persistence(self):
         token=self.grant()

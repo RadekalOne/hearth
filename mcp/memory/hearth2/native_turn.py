@@ -112,9 +112,33 @@ def _request(client,request):
 
 
 def run_turn(client,request,*,before_send,record_event,stop_workload):
+    # Cover acquisition/release too: the workload already exists before the
+    # public call. Inner cleanup sets handled before touching callbacks.
+    scope={'entered':False,'handled':False}
+    try:return _run_turn_locked(client,request,before_send=before_send,
+        record_event=record_event,stop_workload=stop_workload,scope=scope)
+    except BaseException as cause:
+        if isinstance(cause,Exception) or scope['handled']:raise
+        entered=scope['entered']
+        failure={'rpc_session':client.session_id,'thread_id':None,'turn_id':None,
+            'request_sha256':None,'failure_class':'interrupted',
+            'stage':'outer_cleanup' if entered else 'serialization',
+            'send_state':'possibly_sent_unconfirmed' if entered else 'not_sent',
+            'request_written':None if entered else False,'bytes_written':None if entered else 0,
+            'rpc_id':None,'response_sha256':None}
+        try:confirmed=stop_workload() is True
+        except BaseException:confirmed=False
+        try:record_event({'kind':'native_turn_failure',**failure,'stop_confirmed':confirmed,'event_count':0})
+        except BaseException:pass
+        cause.stop_confirmed=confirmed;cause.failure_evidence=dict(failure)
+        raise
+
+
+def _run_turn_locked(client,request,*,before_send,record_event,stop_workload,scope):
     if any(not callable(x) for x in [before_send,record_event,stop_workload]):
         raise NativeRpcError('turn/start',None,'trusted_turn_callbacks_required')
     with client._serialized('turn/start'):
+        scope['entered']=True
         if client._turn_used:raise NativeRpcError('turn/start',None,'turn_already_consumed')
         client._turn_used=True
         thread_id=turn_id=request_sha256=None;stream=None;stage='request_validation'
@@ -166,8 +190,10 @@ def run_turn(client,request,*,before_send,record_event,stop_workload):
             stream.stage='terminal_fence';stream.check(force=True)
             return NativeTurnResult(thread_id,turn_id,reply.rpc_id,client.session_id,stream.count,
                 stream.digest.hexdigest(),canonical_object(result))
-        except Exception as cause:
-            if isinstance(cause,TurnFailure):reason=str(cause)
+        except BaseException as cause:
+            scope['handled']=True
+            if not isinstance(cause,Exception):reason='interrupted'
+            elif isinstance(cause,TurnFailure):reason=str(cause)
             elif stream is None:reason='request_contract'
             elif stream.failure_class is not None:reason=stream.failure_class
             elif isinstance(cause,NativeRpcError) and cause.code=='remote_error':reason='native_remote_error'
@@ -181,10 +207,13 @@ def run_turn(client,request,*,before_send,record_event,stop_workload):
                 'rpc_id':stream.rpc_id if stream else None,
                 'response_sha256':stream.response_sha256 if stream else None}
             try:confirmed=stop_workload() is True
-            except Exception:confirmed=False
+            except BaseException:confirmed=False
             try:audit('native_turn_failure',stop_confirmed=confirmed,**failure,
                 event_count=stream.count if stream else 0)
-            except Exception:pass
+            except BaseException:pass
+            if not isinstance(cause,Exception):
+                cause.stop_confirmed=confirmed;cause.failure_evidence=dict(failure)
+                raise
             error=NativeRpcError('turn/start',failure['rpc_id'],'turn_refused_or_incomplete',failure['response_sha256'])
             error.stop_confirmed=confirmed
             error.failure_evidence=dict(failure)

@@ -201,8 +201,10 @@ def _run_case(directory,mode,state):
     state['claim']=claim
     if poll_once(store,controller,registry,hashlib.sha256(policy_raw).hexdigest()) is not None:
         raise RuntimeError('duplicate fixture dispatch')
-    challenge=uuid.uuid4().hex;reads=[]
+    challenge=uuid.uuid4().hex;reads=[];denied_reads=[]
     def upstream(tool,args):
+        if mode=='denied-read':
+            denied_reads.append(tool);raise BrokerError('synthetic refused read')
         reads.append(tool)
         row={'drawer_id':'drawer_fixture','wing':'trial','room':'skeleton','content':'synthetic-memory-'+challenge}
         return row if tool=='memory_get' else {'results':[row]}
@@ -256,7 +258,8 @@ def _run_case(directory,mode,state):
             attach=subprocess.Popen(['docker','start','--attach','--interactive',cid],
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,start_new_session=True)
         state['attach']=attach
-        client=NativeRpcClient(attach.stdout,attach.stdin,turn_timeout_seconds=45) # Synthetic policy only.
+        fixture_timeout=5 if mode=='denied-read' else 45
+        client=NativeRpcClient(attach.stdout,attach.stdin,turn_timeout_seconds=fixture_timeout) # Synthetic only.
         client.initialize()
         spec=json.loads(command('docker','inspect',cid))[0];pid=spec['State']['Pid']
         if pid<=0:raise RuntimeError('fixture native process not running')
@@ -299,7 +302,7 @@ def _run_case(directory,mode,state):
             before_send=fence,record_event=journal.record,stop_workload=stop_workload)
         receipt.update(turn_id=turn.turn_id,native_event_count=turn.event_count,native_event_sha256=turn.event_sha256,
             usage_provenance='synthetic_provider_reported',turn_elapsed_seconds=time.monotonic()-turn_started,
-            expensive_fence_calls=fence_calls,synthetic_turn_timeout_seconds=45)
+            expensive_fence_calls=fence_calls,synthetic_turn_timeout_seconds=fixture_timeout)
         (directory/'turn-result.json').write_text(json.dumps(turn.native_result,indent=2))
         client.writer.close();attach.wait(timeout=10)
     except Exception as error:
@@ -309,8 +312,15 @@ def _run_case(directory,mode,state):
     finally:
         cleanup(state,receipt)
         receipt['memory_reads']=reads
+        receipt['denied_reads']=denied_reads
     completed=not receipt['errors'] and turn is not None
     result=turn.native_result if completed else unknown_result()
+    if mode=='denied-read':
+        receipt['native_state']=result['state']
+        receipt['denial_observed']=result.get('text')=='Synthetic refusal observed; no successful memory read.'
+        # Native handling of an error is not successful memory-first task work.
+        # Preserve raw native result, and reconcile unknown/held deliberately.
+        result=unknown_result()
     settled=settle(registry,claim,result,memory_reads=reads,ended_at=now(),exit_status=receipt.get('exit_status'),
         verified_empty=receipt['verified_empty'],evidence=['root-docker-cgroup-observer:'+ident] if receipt['verified_empty'] else [])
     receipt['record_run']=settled['run'];receipt['registration_phase']=settled['registration']['phase']
@@ -326,6 +336,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute-trial-fixture',action='store_true')
     parser.add_argument('--stream-stress',action='store_true',help='Synthetic whitespace deltas; no provider timing claim')
+    parser.add_argument('--denied-read',action='store_true',help='Additional native MCP refusal negative control')
     parser.add_argument('--watch',nargs=3)
     args=parser.parse_args()
     require_trial_host(socket.gethostname(),os.geteuid())
@@ -337,12 +348,18 @@ def main():
     directory=TRIAL/('walking-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
     results=[run_case(directory/'positive','positive',stream_stress=args.stream_stress),
         run_case(directory/'missing-closeout','missing-closeout',stream_stress=args.stream_stress)]
+    if args.denied_read:results.append(run_case(directory/'denied-read','denied-read'))
     passed=(all(not r['errors'] and r.get('verified_empty') and r.get('container_removed') and r['exit_status']==0
                 and r.get('worker_bearer_absent') and r.get('worker_token_env_absent') for r in results)
         and results[0].get('native_event_count',0)>(4000 if args.stream_stress else 64)
         and results[0]['task_state']=='review' and results[0]['registration_phase']=='released'
         and results[1]['task_state']=='ready' and results[1]['incident_count']==1
         and results[1]['record_run']['closeout_validation']=='missing')
+    if args.denied_read:
+        refused=results[2]
+        passed=passed and (refused.get('denial_observed') and refused.get('native_state')=='completed'
+            and refused['task_state']=='held' and refused['memory_reads']==[] and refused['denied_reads']==['memory_get']
+            and refused.get('turn_elapsed_seconds',99)<5)
     summary={'directory':str(directory),'piece':2,'test_shapes':['A4','A8','A9'],'passed':passed,'stream_stress':args.stream_stress,
         'full_live_acceptance':False,'results':results}
     (directory/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')

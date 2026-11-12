@@ -22,13 +22,18 @@ class Grant:
     wing: str
     room: str
     expires_at: str
+    read_limit: int
 
 
 class Broker:
-    def __init__(self, store, controller, upstream):
+    def __init__(self, store, controller, upstream, *, max_reads=8):
         require(controller, {'controller'})
+        if type(max_reads) is not int or not 1<=max_reads<=64:
+            raise BrokerError('bounded read budget required')
         self.store, self.controller, self._upstream = store, controller, upstream
+        self.max_reads=max_reads
         self._grants = {}
+        self._read_counts = {}
         self._lock = threading.RLock()
 
     def _controller(self, actor):
@@ -64,7 +69,7 @@ class Broker:
             with self.store.transaction() as db:
                 current, task, run = self.store._live_claim(db, self.controller, bound)
                 expiry = min(timestamp(current['lease_until']), timestamp(run['deadline_at'])).isoformat()
-            grant = Grant(bound, wing, room, expiry)
+            grant = Grant(bound, wing, room, expiry, self.max_reads)
         except Exception:
             raise BrokerError('capability unavailable') from None
         with self._lock:
@@ -73,17 +78,21 @@ class Broker:
                     self._live(old)
                 except BrokerError:
                     del self._grants[key]
+                    self._read_counts.pop(key,None)
             if self._grants:
                 raise BrokerError('one active capability permitted')
             self._live(grant)
             token = secrets.token_hex(32)
             self._grants[self._digest(token)] = grant
+            self._read_counts[self._digest(token)] = 0
             return token
 
     def revoke(self, actor, token):
         self._controller(actor)
         with self._lock:
-            self._grants.pop(self._digest(token), None)
+            digest=self._digest(token)
+            self._grants.pop(digest, None)
+            self._read_counts.pop(digest,None)
 
     def _authorized(self, digest, grant):
         with self._lock:
@@ -139,7 +148,12 @@ class Broker:
             grant = self._grants.get(digest)
             if grant is None:
                 raise BrokerError('capability unavailable')
-        self._authorized(digest, grant)
+            self._authorized(digest, grant)
+            # Reserve exactly once under the same lock as grant identity.
+            # Failed/denied attempts are not refunded; upstream runs unlocked.
+            if self._read_counts[digest]>=grant.read_limit:
+                raise BrokerError('read budget unavailable')
+            self._read_counts[digest]+=1
         try:
             forwarded = self._arguments(tool, arguments, grant)
             result = self._result(tool, forwarded, self._upstream(tool, forwarded), grant)
