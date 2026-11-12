@@ -1,7 +1,7 @@
 """Bounded Linux stdio port for an already isolated, root-selected app-server.
 
 Owns no process, credentials, container, turn, cleanup or launch authority.
-Only initialize, model/list and thread/start exist in this pre-activation port.
+One canonical turn is available only through the bounded public turn_start API.
 """
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -72,7 +72,8 @@ class NativeReply:
 
 class NativeRpcClient:
     def __init__(self,reader,writer,*,timeout_seconds=15,max_frame=1_000_000,
-                 max_total=16_000_000,clock=None,monotonic=time.monotonic):
+                 max_total=16_000_000,clock=None,monotonic=time.monotonic,
+                 max_turn_events=10000,max_turn_bytes=8_000_000,turn_timeout_seconds=45):
         if (os.name!='posix' or type(timeout_seconds) not in (int,float)
                 or not math.isfinite(timeout_seconds) or not 0<timeout_seconds<=30
                 or type(max_frame) is not int or not 128<=max_frame<=1_000_000
@@ -85,6 +86,13 @@ class NativeRpcClient:
         self.last_request_id=None;self.last_request_method=None
         self._next_id=1;self._buffer=b'';self._total=0;self._notifications=[]
         self._initialized=False;self._lock=threading.RLock()
+        if (type(max_turn_events) is not int or not 1<=max_turn_events<=10000
+                or type(max_turn_bytes) is not int or not 1024<=max_turn_bytes<=16_000_000
+                or type(turn_timeout_seconds) not in (int,float) or not math.isfinite(turn_timeout_seconds)
+                or not 0<turn_timeout_seconds<=45):raise NativeRpcError('configuration',None,'invalid_turn_bounds')
+        self.max_turn_events,self.max_turn_bytes=max_turn_events,max_turn_bytes
+        self.turn_timeout_seconds=turn_timeout_seconds
+        self._started_thread=None;self._started_request=None;self._turn_used=False;self._turn_context=None
         os.set_blocking(reader.fileno(),False);os.set_blocking(writer.fileno(),False)
 
     @property
@@ -128,7 +136,9 @@ class NativeRpcClient:
                 self._buffer+=chunk
 
     def _exchange(self,method,params,*,before_send=None):
-        if method not in ('initialize','model/list','thread/start'):
+        if method=='turn/start' and self._turn_context is None:
+            raise NativeRpcError(method,None,'public_turn_context_required')
+        if method not in ('initialize','model/list','thread/start','turn/start'):
             raise NativeRpcError(method,None,'method_not_permitted')
         with self._serialized(method):
             # Authority/freshness belong at dispatch, after lock acquisition.
@@ -139,14 +149,19 @@ class NativeRpcClient:
             self.last_request_id,self.last_request_method=ident,method
             try:
                 deadline=self.monotonic()+self.timeout
+                if method=='turn/start':deadline=min(deadline,self._turn_context.deadline)
                 self._write(canonical_object({'id':ident,'method':method,'params':params})+b'\n',deadline)
                 while True:
                     value=_decode(self._line(deadline))
                     if 'id' not in value:
                         if (type(value.get('method')) is not str or len(value['method'])>200
-                                or 'result' in value or 'error' in value or len(self._notifications)>=64):
+                                or 'result' in value or 'error' in value):
                             raise ValueError('invalid notification')
-                        self._notifications.append(canonical_object(value));continue
+                        if method=='turn/start':self._turn_context.accept(value)
+                        else:
+                            if len(self._notifications)>=64:raise ValueError('control notification bound')
+                            self._notifications.append(canonical_object(value))
+                        continue
                     if (type(value['id']) is not int or value['id']!=ident
                             or ('result' in value)==('error' in value)):
                         raise ValueError('unexpected response identity')
@@ -175,4 +190,12 @@ class NativeRpcClient:
 
     def thread_start(self,request,*,before_send=None):
         if not self._initialized:raise NativeRpcError('thread/start',None,'not_initialized')
-        return self._exchange('thread/start',request,before_send=before_send)
+        with self._serialized('thread/start'):
+            raw=canonical_object(request)
+            reply=self._exchange('thread/start',_decode(raw),before_send=before_send)
+            self._started_thread=reply;self._started_request=raw
+            return reply
+
+    def turn_start(self,request,*,before_send,record_event,stop_workload):
+        from .native_turn import run_turn
+        return run_turn(self,request,before_send=before_send,record_event=record_event,stop_workload=stop_workload)

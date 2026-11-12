@@ -26,6 +26,8 @@ from hearth2.broker import Broker,BrokerError
 from hearth2.native_rpc import NativeRpcClient,NativeRpcError,_decode,canonical_object
 from hearth2.native_model_audit import RootModelDecisionJournal
 from hearth2.native_thread_launcher import CodexThreadLauncher
+from hearth2.private_broker import PrivateBrokerChannel
+from hearth2.native_profiles import codex_private_config
 
 TRIAL=Path('/root/hearth-runner-trial')
 BINARY=TRIAL/'clients/codex/0.159.1/vendor/x86_64-unknown-linux-musl/bin/codex'
@@ -70,36 +72,6 @@ def settle(registry,claim,result,*,memory_reads,ended_at,exit_status,verified_em
         raise RecordError('fixture memory-first evidence absent')
     return registry.record_native_result(claim,result,ended_at=ended_at,exit_status=exit_status,
         containment_state='verified_empty' if verified_empty else 'unconfirmed',termination_evidence=evidence)
-
-
-class FixtureTurnClient(NativeRpcClient):
-    """One offline turn extension. The reviewed production RPC port is unchanged."""
-    def turn_once(self,thread_id,prompt,*,before_send):
-        if getattr(self,'_fixture_turn_used',False):raise RuntimeError('fixture turn already consumed')
-        self._fixture_turn_used=True
-        with self._serialized('fixture-turn'):
-            if before_send() is not True:raise RuntimeError('fixture turn authority refused')
-            ident=self._next_id;self._next_id+=1
-            deadline=self.monotonic()+30
-            self._write(canonical_object({'id':ident,'method':'turn/start','params':{
-                'threadId':thread_id,'input':[{'type':'text','text':prompt}]}})+b'\n',deadline)
-            accepted=None;messages=[];events=[];self.fixture_events=events
-            while True:
-                value=_decode(self._line(deadline));events.append(value)
-                if len(events)>300:raise RuntimeError('fixture event bound')
-                if 'id' in value:
-                    if value['id']!=ident or 'error' in value:raise RuntimeError('fixture turn RPC refused')
-                    accepted=value['result']['turn']['id'];continue
-                method=value.get('method');params=value.get('params',{})
-                if method=='item/completed' and params.get('threadId')==thread_id:
-                    item=params.get('item',{})
-                    if item.get('type')=='agentMessage':messages.append(item.get('text',''))
-                if method=='turn/completed':
-                    turn=params.get('turn',{})
-                    if (not accepted or params.get('threadId')!=thread_id or turn.get('id')!=accepted
-                            or turn.get('status')!='completed'):raise RuntimeError('fixture turn did not complete')
-                    if len(messages)!=1:raise RuntimeError('fixture expected one final message')
-                    return {'thread_id':thread_id,'turn_id':accepted,'text':messages[0],'events':events}
 
 
 def command(*args,timeout=12):
@@ -184,6 +156,7 @@ def cleanup(state,receipt):
     if state.get('server'):
         attempt('cleanup server shutdown',state['server'].shutdown)
         attempt('cleanup server close',state['server'].server_close)
+    if state.get('private_channel'):attempt('cleanup private channel',state['private_channel'].close)
 
 
 def run_case(directory,mode):
@@ -233,31 +206,13 @@ def _run_case(directory,mode,state):
         reads.append(tool)
         row={'drawer_id':'drawer_fixture','wing':'trial','room':'skeleton','content':'synthetic-memory-'+challenge}
         return row if tool=='memory_get' else {'results':[row]}
-    broker=Broker(store,controller,upstream);cap=broker.mint(controller,claim,wing='trial',room='skeleton')
-    state.update(broker=broker,cap=cap)
-    bridge=directory/'bridge';bridge.mkdir(mode=0o755);bridge.chmod(0o755)
-    class Handler(socketserver.StreamRequestHandler):
-        def handle(self):
-            self.request.settimeout(5)
-            try:
-                envelope=json.loads(self.rfile.readline(65537));request=envelope['request']
-                if envelope['authorization']!='Bearer '+cap:raise BrokerError()
-                broker.check(cap);method=request['method'];params=request.get('params',{})
-                if method=='initialize':result={'protocolVersion':params['protocolVersion'],
-                    'serverInfo':{'name':'root-real-broker-fixture-transport','version':'1'},'capabilities':{'tools':{}}}
-                elif method=='notifications/initialized':result={}
-                elif method=='tools/list':result={'tools':mcp_read_tools()}
-                elif method=='tools/call':
-                    result={'content':[{'type':'text','text':json.dumps(broker.read(cap,params['name'],params['arguments']))}]}
-                else:raise BrokerError()
-                broker.check(cap)
-                response={'jsonrpc':'2.0','id':request.get('id'),'result':result}
-            except Exception:response={'error':'fixture broker request denied'}
-            self.wfile.write(json.dumps(response).encode()+b'\n')
-    class Server(socketserver.ThreadingUnixStreamServer):daemon_threads=True
-    server=Server(str(bridge/'broker.sock'),Handler);(bridge/'broker.sock').chmod(0o666)
-    state['server']=server
-    threading.Thread(target=server.serve_forever,daemon=True).start()
+    captured=[]
+    class ObservedBroker(Broker):
+        def mint(self,*args,**kwargs):
+            token=super().mint(*args,**kwargs);captured.append(token);return token
+    broker=ObservedBroker(store,controller,upstream)
+    channel=PrivateBrokerChannel(broker,controller,claim,directory=directory,wing='trial',room='skeleton')
+    state['private_channel']=channel;channel.start()
     assets=directory/'assets';assets.mkdir(mode=0o755);assets.chmod(0o755)
     closeout={'task':claim['task_id'],'attempt':claim['attempt'],'status':'done','produced':'synthetic-plan-via-stdio',
         'changed':'fixture only','unblocked':'none','memory-used':['drawer_fixture'],
@@ -265,7 +220,7 @@ def _run_case(directory,mode,state):
         'next':'independent review; no human acceptance implied'}
     (assets/'task.json').write_text(json.dumps({'mode':mode,'closeout':closeout,'challenge':challenge}))
     prior=TRIAL/'native-thread-launcher-raheblm6'
-    config=(prior/'config.toml').read_text().replace('forced_login_method = "chatgpt"','forced_login_method = "api"')
+    config=codex_private_config(model='gpt-6.1-sol').replace('forced_login_method = "chatgpt"','forced_login_method = "api"')
     # Fixture-only transport substitution; never silently applied to a live profile.
     config=config.replace('model_provider = "openai"','model_provider = "hearth-fixture"')
     config+='\n[model_providers.hearth-fixture]\nname="Synthetic loopback only"\nbase_url="http://127.0.0.1:8099/v1"\nwire_api="responses"\nrequires_openai_auth=false\n'
@@ -273,6 +228,7 @@ def _run_case(directory,mode,state):
     (assets/'requirements.toml').write_bytes((prior/'requirements.toml').read_bytes())
     bootstrap=Path(__file__).with_name('hearth2_walking_bootstrap.py')
     (assets/'bootstrap.py').write_bytes(bootstrap.read_bytes())
+    (assets/'private_broker_bridge.py').write_bytes((Path(__file__).parents[2]/'mcp/memory/hearth2/private_broker_bridge.py').read_bytes())
     for path in assets.iterdir():path.chmod(0o444)
     ident='walk-'+uuid.uuid4().hex;cid=None;attach=None;watch=None;cg=None;turn=None
     receipt={'exercise_id':ident,'mode':mode,'started_at':now(),'host':socket.gethostname(),
@@ -286,11 +242,10 @@ def _run_case(directory,mode,state):
             '--pids-limit','64','--memory','1g','--cpus','1','--log-driver','none',
             '--tmpfs','/scratch:rw,nosuid,nodev,uid=1000,gid=1000,size=64m',
             '--tmpfs','/tmp:rw,nosuid,nodev,uid=1000,gid=1000,size=64m','--workdir','/scratch',
-            '--env','HEARTH_BROKER_CAPABILITY='+cap,
             '--mount',f'type=bind,src={BINARY.parent.parent},dst=/opt/codex,readonly',
             '--mount',f'type=bind,src={assets},dst=/fixture,readonly',
             '--mount',f'type=bind,src={assets}/requirements.toml,dst=/etc/codex/requirements.toml,readonly',
-            '--mount',f'type=bind,src={bridge},dst=/bridge,readonly',IMAGE,'python','/fixture/bootstrap.py')
+            '--mount',f'type=bind,src={channel.socket_path},dst=/run/hearth-memory.sock,readonly',IMAGE,'python','/fixture/bootstrap.py')
         receipt['container_id']=cid
         state['cid']=cid
         watch=subprocess.Popen([sys.executable,__file__,'--watch',cid,ident,str(directory)],
@@ -300,7 +255,7 @@ def _run_case(directory,mode,state):
             attach=subprocess.Popen(['docker','start','--attach','--interactive',cid],
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,start_new_session=True)
         state['attach']=attach
-        client=FixtureTurnClient(attach.stdout,attach.stdin)
+        client=NativeRpcClient(attach.stdout,attach.stdin)
         client.initialize()
         spec=json.loads(command('docker','inspect',cid))[0];pid=spec['State']['Pid']
         if pid<=0:raise RuntimeError('fixture native process not running')
@@ -310,9 +265,15 @@ def _run_case(directory,mode,state):
             raise RuntimeError('fixture cgroup path refused')
         state['cg']=cg
         receipt['cgroup']=str(cg);receipt['cgroup_before']=(cg/'cgroup.events').read_text()
+        public=json.dumps(spec)+Path(f'/proc/{pid}/environ').read_bytes().decode(errors='replace')+Path(f'/proc/{pid}/cmdline').read_bytes().decode(errors='replace')
+        public+=Path(f'/proc/{pid}/root/scratch/codex-home/config.toml').read_text()
+        receipt['worker_bearer_absent']=bool(captured) and all(token not in public for token in captured)
+        receipt['worker_token_env_absent']='HEARTH_BROKER_CAPABILITY' not in public
+        if not receipt['worker_bearer_absent'] or not receipt['worker_token_env_absent']:
+            raise RuntimeError('private Broker delivery failed')
         journal=RootModelDecisionJournal(directory)
         def fence():
-            broker.check(cap)
+            channel.check()
             current=json.loads(command('docker','inspect',cid))[0]
             return (current['Id']==cid and current['State']['Running'] and current['State']['Pid']==pid
                 and current['HostConfig']['NetworkMode']=='none' and current['HostConfig']['ReadonlyRootfs']
@@ -321,22 +282,29 @@ def _run_case(directory,mode,state):
             expected_binary_sha256=BINARY_SHA,expected_catalog_sha256=CATALOG_SHA,
             record_decision=journal.record,pre_thread_fence=fence)
         thread=launcher.launch_thread(REQUEST);receipt['thread_id']=thread['thread']['id']
-        turn=client.turn_once(thread['thread']['id'],'Synthetic trial only: read drawer_fixture using Hearth memory, then return the structured fixture closeout.',before_send=fence)
-        (directory/'native-events.json').write_text(json.dumps(turn['events'],indent=2))
-        receipt['turn_id']=turn['turn_id']
+        def stop_workload():
+            current=json.loads(command('docker','inspect',cid))[0]
+            if current['Id']!=cid or current['Config']['Labels'].get('hearth2.walk')!=ident:return False
+            if current['State']['Running']:command('docker','kill','--signal','KILL',cid)
+            command('docker','wait',cid);attach.wait(timeout=5)
+            current=json.loads(command('docker','inspect',cid))[0]['State']
+            return not current['Running'] and current['Pid']==0 and (not cg.exists() or 'populated 0' in (cg/'cgroup.events').read_text())
+        turn=client.turn_start({'threadId':thread['thread']['id'],'input':[{'type':'text',
+            'text':'Synthetic trial only: read drawer_fixture using Hearth memory, then return the structured fixture closeout.'}]},
+            before_send=fence,record_event=journal.record,stop_workload=stop_workload)
+        receipt.update(turn_id=turn.turn_id,native_event_count=turn.event_count,native_event_sha256=turn.event_sha256,
+            usage_provenance='synthetic_provider_reported')
+        (directory/'turn-result.json').write_text(json.dumps(turn.native_result,indent=2))
         client.writer.close();attach.wait(timeout=10)
     except Exception as error:
         receipt['errors'].append(type(error).__name__+': '+str(error)[:300])
         if attach and 'client' in locals():
-            (directory/'native-events-failure.json').write_text(json.dumps(getattr(client,'fixture_events',[]),indent=2))
+            (directory/'native-events-failure.json').write_text(json.dumps({'last_rpc_id':client.last_request_id},indent=2))
     finally:
         cleanup(state,receipt)
         receipt['memory_reads']=reads
     completed=not receipt['errors'] and turn is not None
-    result={'provider':'openai','state':'completed' if completed else 'unknown',
-        'text':turn['text'] if completed else None,'stop_reason':None,
-        'pause_role':False,'usage_scope':'unknown','usage':{'state':'unknown','units':None,
-        'estimated_cost':None,'actual_charge':None}}
+    result=turn.native_result if completed else unknown_result()
     settled=settle(registry,claim,result,memory_reads=reads,ended_at=now(),exit_status=receipt.get('exit_status'),
         verified_empty=receipt['verified_empty'],evidence=['root-docker-cgroup-observer:'+ident] if receipt['verified_empty'] else [])
     receipt['record_run']=settled['run'];receipt['registration_phase']=settled['registration']['phase']
@@ -361,7 +329,9 @@ def main():
     command('docker','image','inspect',IMAGE)
     directory=TRIAL/('walking-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
     results=[run_case(directory/'positive','positive'),run_case(directory/'missing-closeout','missing-closeout')]
-    passed=(all(not r['errors'] and r.get('verified_empty') and r.get('container_removed') and r['exit_status']==0 for r in results)
+    passed=(all(not r['errors'] and r.get('verified_empty') and r.get('container_removed') and r['exit_status']==0
+                and r.get('worker_bearer_absent') and r.get('worker_token_env_absent') for r in results)
+        and results[0].get('native_event_count',0)>64
         and results[0]['task_state']=='review' and results[0]['registration_phase']=='released'
         and results[1]['task_state']=='ready' and results[1]['incident_count']==1
         and results[1]['record_run']['closeout_validation']=='missing')

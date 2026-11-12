@@ -219,9 +219,9 @@ for line in sys.stdin:
         for mode in ['duplicate','wrongid','oversize','hang']:
             with self.subTest(mode=mode),self.assertRaises(self.rpc.NativeRpcError):
                 self.peer(mode,timeout_seconds=.2,max_frame=1024).initialize()
-    def test_no_turn_or_arbitrary_rpc_api_is_exposed(self):
+    def test_turn_exists_only_with_public_context_and_no_arbitrary_rpc_api(self):
         client=self.peer()
-        self.assertFalse(hasattr(client,'turn_start'))
+        self.assertTrue(callable(getattr(client,'turn_start',None)))
         with self.assertRaises(self.rpc.NativeRpcError):client._exchange('turn/start',{})
     def test_real_pipe_remote_error_retains_owned_response_evidence(self):
         client=self.peer('remote_model_error');client.initialize()

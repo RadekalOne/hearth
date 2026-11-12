@@ -8,6 +8,9 @@ import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+import sys
+sys.path.insert(0,'/fixture')
+from private_broker_bridge import create_private_mcp_server
 
 signal.alarm(80)
 native='/opt/codex/bin/codex'
@@ -17,22 +20,6 @@ home=Path('/scratch/codex-home');home.mkdir(mode=0o700)
 (home/'config.toml').write_bytes(Path('/fixture/config.toml').read_bytes())
 if list(home.glob('auth*')):raise RuntimeError('fixture home must have no auth files')
 task=json.loads(Path('/fixture/task.json').read_text())
-
-
-class MCP(BaseHTTPRequestHandler):
-    def log_message(self,*args):pass
-    def do_GET(self):self.send_error(405)
-    def do_POST(self):
-        length=int(self.headers.get('Content-Length','0'))
-        if not 0<length<=65536:self.send_error(413);return
-        request=json.loads(self.rfile.read(length))
-        with socket.socket(socket.AF_UNIX) as sock:
-            sock.settimeout(5);sock.connect('/bridge/broker.sock')
-            sock.sendall(json.dumps({'authorization':self.headers.get('Authorization'), 'request':request}).encode()+b'\n')
-            answer=sock.makefile('rb').readline(65537)
-        if 'id' not in request:self.send_response(202);self.end_headers();return
-        self.send_response(200);self.send_header('Content-Type','application/json')
-        self.send_header('Content-Length',str(len(answer)));self.end_headers();self.wfile.write(answer)
 
 
 class Provider(BaseHTTPRequestHandler):
@@ -58,7 +45,16 @@ class Provider(BaseHTTPRequestHandler):
             items=[{'type':'message','id':'msg_walk','role':'assistant','status':'completed',
                 'content':[{'type':'output_text','text':text,'annotations':[]}]}]
         for index,item in enumerate(items):
-            events.append(('response.output_item.added',{'type':'response.output_item.added','output_index':index,'item':item}))
+            added={**item,'content':[]} if item['type']=='message' else item
+            events.append(('response.output_item.added',{'type':'response.output_item.added','output_index':index,'item':added}))
+            if item['type']=='message':
+                text=item['content'][0]['text'];part={'type':'output_text','text':'','annotations':[]}
+                base={'item_id':item['id'],'output_index':index,'content_index':0}
+                events.append(('response.content_part.added',{'type':'response.content_part.added',**base,'part':part}))
+                for offset in range(0,len(text),4):
+                    events.append(('response.output_text.delta',{'type':'response.output_text.delta',**base,'delta':text[offset:offset+4]}))
+                events.append(('response.output_text.done',{'type':'response.output_text.done',**base,'text':text}))
+                events.append(('response.content_part.done',{'type':'response.content_part.done',**base,'part':item['content'][0]}))
             events.append(('response.output_item.done',{'type':'response.output_item.done','output_index':index,'item':item}))
         response={**response,'status':'completed','output':items,'usage':{'input_tokens':10,'output_tokens':5,'total_tokens':15}}
         events.append(('response.completed',{'type':'response.completed','response':response}))
@@ -71,10 +67,9 @@ if __name__=='__main__':
     # Both endpoints live in this isolated container's loopback namespace.
     child=os.fork()
     if child==0:
-        mcp=ThreadingHTTPServer(('127.0.0.1',8010),MCP)
+        mcp=create_private_mcp_server()
         threading.Thread(target=mcp.serve_forever,daemon=True).start()
         ThreadingHTTPServer(('127.0.0.1',8099),Provider).serve_forever()
         os._exit(0)
-    env={'PATH':'/usr/local/bin:/usr/bin:/bin','HOME':'/scratch','CODEX_HOME':str(home),
-        'LANG':'C.UTF-8','HEARTH_BROKER_CAPABILITY':os.environ['HEARTH_BROKER_CAPABILITY']}
+    env={'PATH':'/usr/local/bin:/usr/bin:/bin','HOME':'/scratch','CODEX_HOME':str(home),'LANG':'C.UTF-8'}
     os.execve(native,[native,'app-server','--listen','stdio://'],env)

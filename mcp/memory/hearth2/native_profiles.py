@@ -38,6 +38,16 @@ def codex_config(*,model):
         'required = true\nstartup_timeout_sec = 10\ntool_timeout_sec = 15\n')
 
 
+def codex_private_config(*,model):
+    """Root-private per-run socket bridge; worker has no bearer or token source.
+
+    The root driver must expose only the scoped socket and its fixed loopback
+    HTTP bridge. This does not authorize arbitrary unauthenticated HTTP servers.
+    The legacy environment builder remains for historical/offline fixtures only.
+    """
+    return codex_config(model=model).replace('bearer_token_env_var = "HEARTH_BROKER_CAPABILITY"\n','')
+
+
 def claude_arguments(*,model,session_id,context):
     model=_model(model)
     try:
