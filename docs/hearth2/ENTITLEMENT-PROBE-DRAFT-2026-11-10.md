@@ -21,6 +21,13 @@ seat, deliver a plan document, or start the seven-night window.
 
 ## Scheduling gate — not yet satisfied
 
+12 November review update: conditions3–5 passed as inactive components, not a
+live launcher. Claude's follow-up findings A–E are additional paid-turn blockers.
+A/C have an author fix candidate under review; B (a deliberate live timing
+policy) remains unresolved, and D/E (correlated denied reads/read budget) remain
+open. No component PASS or test count clears these gates. See
+`TURN-REVIEW-ABC-2026-11-12.md` for the exact dispositions.
+
 **Do not schedule the actual turn until conditions 3–5 below are implemented in
 the live execution path and pass independent review at the exact execution
 commit:** canonical reviewed `turn/start`, separately bounded streamed-event
@@ -103,9 +110,13 @@ to price a subscription turn, and no speculative dollar upper bound is claimed.
    provider requests (memory-tool step and final response), counting attempted
    native retries; a third request is denied, not retried. These are review
    requirements, not controls implemented by this draft.
-6. Proposed cutoffs:45s from turn dispatch,90s absolute whole-workload deadline,
-   whichever comes first; independent root stop covers every child. These are
-   proposed one-shot limits, not changes to the inactive900-second/full-run policy.
+6. Live cutoffs are unresolved: the earlier45s/90s figures have synthetic fixture
+   evidence only and must not silently become live policy. Native turns now
+   require an explicit timeout;45s remains the component ceiling, not evidence
+   of provider adequacy. A reviewed execution packet must name turn and absolute
+   whole-workload deadlines, their rationale and timing evidence, with independent
+   root stop covering every child. No real timing probe is authorized by this
+   draft and no larger limit or inactive900-second/full-run policy change is made.
    Request/byte/time bounds limit exposure, not money by themselves.
 7. On completion or any failure, stop the exact workload, observe exit and whole
    cgroup/container termination outside the worker, revoke the grant and remove

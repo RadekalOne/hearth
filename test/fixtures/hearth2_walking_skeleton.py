@@ -159,8 +159,8 @@ def cleanup(state,receipt):
     if state.get('private_channel'):attempt('cleanup private channel',state['private_channel'].close)
 
 
-def run_case(directory,mode):
-    state={'directory':directory}
+def run_case(directory,mode,*,stream_stress=False):
+    state={'directory':directory,'stream_stress':stream_stress}
     try:return _run_case(directory,mode,state)
     except Exception as error:
         receipt=state.get('receipt',{'mode':mode,'started_at':now(),'errors':[]})
@@ -218,7 +218,8 @@ def _run_case(directory,mode,state):
         'changed':'fixture only','unblocked':'none','memory-used':['drawer_fixture'],
         'checks-run':[{'name':'actual scoped memory read','passed':True,'evidence':'root-broker-read'}],
         'next':'independent review; no human acceptance implied'}
-    (assets/'task.json').write_text(json.dumps({'mode':mode,'closeout':closeout,'challenge':challenge}))
+    (assets/'task.json').write_text(json.dumps({'mode':mode,'closeout':closeout,'challenge':challenge,
+        'stream_stress':state.get('stream_stress',False)}))
     prior=TRIAL/'native-thread-launcher-raheblm6'
     config=codex_private_config(model='gpt-6.1-sol').replace('forced_login_method = "chatgpt"','forced_login_method = "api"')
     # Fixture-only transport substitution; never silently applied to a live profile.
@@ -255,7 +256,7 @@ def _run_case(directory,mode,state):
             attach=subprocess.Popen(['docker','start','--attach','--interactive',cid],
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,start_new_session=True)
         state['attach']=attach
-        client=NativeRpcClient(attach.stdout,attach.stdin)
+        client=NativeRpcClient(attach.stdout,attach.stdin,turn_timeout_seconds=45) # Synthetic policy only.
         client.initialize()
         spec=json.loads(command('docker','inspect',cid))[0];pid=spec['State']['Pid']
         if pid<=0:raise RuntimeError('fixture native process not running')
@@ -272,7 +273,10 @@ def _run_case(directory,mode,state):
         if not receipt['worker_bearer_absent'] or not receipt['worker_token_env_absent']:
             raise RuntimeError('private Broker delivery failed')
         journal=RootModelDecisionJournal(directory)
+        fence_calls=0
         def fence():
+            nonlocal fence_calls
+            fence_calls+=1
             channel.check()
             current=json.loads(command('docker','inspect',cid))[0]
             return (current['Id']==cid and current['State']['Running'] and current['State']['Pid']==pid
@@ -289,11 +293,13 @@ def _run_case(directory,mode,state):
             command('docker','wait',cid);attach.wait(timeout=5)
             current=json.loads(command('docker','inspect',cid))[0]['State']
             return not current['Running'] and current['Pid']==0 and (not cg.exists() or 'populated 0' in (cg/'cgroup.events').read_text())
+        turn_started=time.monotonic()
         turn=client.turn_start({'threadId':thread['thread']['id'],'input':[{'type':'text',
             'text':'Synthetic trial only: read drawer_fixture using Hearth memory, then return the structured fixture closeout.'}]},
             before_send=fence,record_event=journal.record,stop_workload=stop_workload)
         receipt.update(turn_id=turn.turn_id,native_event_count=turn.event_count,native_event_sha256=turn.event_sha256,
-            usage_provenance='synthetic_provider_reported')
+            usage_provenance='synthetic_provider_reported',turn_elapsed_seconds=time.monotonic()-turn_started,
+            expensive_fence_calls=fence_calls,synthetic_turn_timeout_seconds=45)
         (directory/'turn-result.json').write_text(json.dumps(turn.native_result,indent=2))
         client.writer.close();attach.wait(timeout=10)
     except Exception as error:
@@ -319,6 +325,7 @@ def _run_case(directory,mode,state):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute-trial-fixture',action='store_true')
+    parser.add_argument('--stream-stress',action='store_true',help='Synthetic whitespace deltas; no provider timing claim')
     parser.add_argument('--watch',nargs=3)
     args=parser.parse_args()
     require_trial_host(socket.gethostname(),os.geteuid())
@@ -328,14 +335,15 @@ def main():
     if digest(BINARY)!=BINARY_SHA:raise RuntimeError('fixture binary pin mismatch')
     command('docker','image','inspect',IMAGE)
     directory=TRIAL/('walking-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    results=[run_case(directory/'positive','positive'),run_case(directory/'missing-closeout','missing-closeout')]
+    results=[run_case(directory/'positive','positive',stream_stress=args.stream_stress),
+        run_case(directory/'missing-closeout','missing-closeout',stream_stress=args.stream_stress)]
     passed=(all(not r['errors'] and r.get('verified_empty') and r.get('container_removed') and r['exit_status']==0
                 and r.get('worker_bearer_absent') and r.get('worker_token_env_absent') for r in results)
-        and results[0].get('native_event_count',0)>64
+        and results[0].get('native_event_count',0)>(4000 if args.stream_stress else 64)
         and results[0]['task_state']=='review' and results[0]['registration_phase']=='released'
         and results[1]['task_state']=='ready' and results[1]['incident_count']==1
         and results[1]['record_run']['closeout_validation']=='missing')
-    summary={'directory':str(directory),'piece':2,'test_shapes':['A4','A8','A9'],'passed':passed,
+    summary={'directory':str(directory),'piece':2,'test_shapes':['A4','A8','A9'],'passed':passed,'stream_stress':args.stream_stress,
         'full_live_acceptance':False,'results':results}
     (directory/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     print(json.dumps({'directory':str(directory),'passed':passed,'runs':[{k:r.get(k) for k in

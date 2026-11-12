@@ -42,6 +42,7 @@ class Provider(BaseHTTPRequestHandler):
             if len(outputs)!=1 or 'synthetic-memory-'+task['challenge'] not in json.dumps(outputs):
                 self.send_error(400,'fixture memory output missing: '+json.dumps(outputs)[:900]);return
             text=json.dumps(task['closeout']) if task['mode']=='positive' else 'Synthetic completed turn with no structured closeout.'
+            if task.get('stream_stress') and task['mode']=='positive':text=' '*4096+text
             items=[{'type':'message','id':'msg_walk','role':'assistant','status':'completed',
                 'content':[{'type':'output_text','text':text,'annotations':[]}]}]
         for index,item in enumerate(items):
@@ -51,8 +52,9 @@ class Provider(BaseHTTPRequestHandler):
                 text=item['content'][0]['text'];part={'type':'output_text','text':'','annotations':[]}
                 base={'item_id':item['id'],'output_index':index,'content_index':0}
                 events.append(('response.content_part.added',{'type':'response.content_part.added',**base,'part':part}))
-                for offset in range(0,len(text),4):
-                    events.append(('response.output_text.delta',{'type':'response.output_text.delta',**base,'delta':text[offset:offset+4]}))
+                chunk=1 if task.get('stream_stress') else 4
+                for offset in range(0,len(text),chunk):
+                    events.append(('response.output_text.delta',{'type':'response.output_text.delta',**base,'delta':text[offset:offset+chunk]}))
                 events.append(('response.output_text.done',{'type':'response.output_text.done',**base,'text':text}))
                 events.append(('response.content_part.done',{'type':'response.content_part.done',**base,'part':item['content'][0]}))
             events.append(('response.output_item.done',{'type':'response.output_item.done','output_index':index,'item':item}))

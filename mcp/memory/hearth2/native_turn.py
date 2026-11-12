@@ -6,6 +6,11 @@ from .native_output import CodexTurn
 from .native_rpc import NativeRpcError,canonical_object,_decode
 
 
+class TurnFailure(ValueError):
+    """Only fixed internal cause labels, never provider/user error text."""
+    pass
+
+
 @dataclass(frozen=True)
 class NativeTurnResult:
     thread_id:str
@@ -26,20 +31,46 @@ class TurnEvents:
         self.deadline,self.fence=deadline,fence
         self.turn_id=None;self.reducer=None;self.pending=[]
         self.count=0;self.bytes=0;self.digest=hashlib.sha256()
+        self.last_fence=None
+        self.send_state='not_sent';self.bytes_written=0;self.request_written=False
+        self.rpc_id=None;self.response_sha256=None;self.stage='dispatch_fence'
+        self.failure_class=None
+
+    def write_progress(self,kind,count):
+        if kind=='attempt' and self.send_state=='not_sent':
+            self.send_state='send_attempted_outcome_unknown';self.request_written=None
+        elif kind=='written':
+            self.bytes_written+=count;self.send_state='partial_write_outcome_unknown'
+        elif kind=='complete':
+            self.send_state='request_written_outcome_unknown';self.request_written=True
+            self.stage='await_ack'
 
     def accept(self,value):
-        self.check()
-        raw=canonical_object(value)
-        self.count+=1;self.bytes+=len(raw)
-        if self.count>self.client.max_turn_events or self.bytes>self.client.max_turn_bytes:
-            raise ValueError('turn event bound')
-        self.digest.update(raw+b'\n')
-        if self.reducer is None:self.pending.append(raw)
-        else:self.reduce(value)
+        try:
+            self.check()
+            raw=canonical_object(value)
+            self.count+=1;self.bytes+=len(raw)
+            if self.count>self.client.max_turn_events or self.bytes>self.client.max_turn_bytes:
+                raise TurnFailure('event_bound_exceeded')
+            self.digest.update(raw+b'\n')
+            if self.reducer is None:self.pending.append(raw)
+            else:self.reduce(value)
+        except TurnFailure as error:
+            # The generic RPC envelope may sanitize this exception pre-ACK.
+            # Keep only our fixed cause label in the owned turn context.
+            self.failure_class=str(error);raise
 
-    def check(self):
-        if self.client.monotonic()>=self.deadline:raise TimeoutError()
-        if self.fence() is not True:raise ValueError('turn authority refused')
+    def check(self,*,force=False):
+        now=self.client.monotonic()
+        if now>=self.deadline:raise TurnFailure('deadline_exceeded')
+        # Event-flow cadence only. Idle reads are bounded by their own deadline;
+        # independent root cutoff still owns inactivity/escaped descendants.
+        if force or self.last_fence is None or now-self.last_fence>=.25:
+            try:allowed=self.fence()
+            except Exception:raise TurnFailure('authority_check_failed') from None
+            if allowed is not True:raise TurnFailure('authority_refused')
+            self.last_fence=self.client.monotonic()
+            if self.last_fence>=self.deadline:raise TurnFailure('deadline_exceeded')
 
     def bind(self,turn_id):
         self.turn_id=turn_id;self.reducer=CodexTurn(thread_id=self.thread_id,turn_id=turn_id)
@@ -86,28 +117,38 @@ def run_turn(client,request,*,before_send,record_event,stop_workload):
     with client._serialized('turn/start'):
         if client._turn_used:raise NativeRpcError('turn/start',None,'turn_already_consumed')
         client._turn_used=True
-        thread_id=turn_id=None;stream=None
+        thread_id=turn_id=request_sha256=None;stream=None;stage='request_validation'
         def audit(kind,**extra):
             row={'kind':kind,'rpc_session':client.session_id,'thread_id':thread_id,'turn_id':turn_id,**extra}
-            if record_event(row) is not True:raise ValueError('durable turn audit required')
+            try:recorded=record_event(row)
+            except Exception:raise TurnFailure('audit_unavailable') from None
+            if recorded is not True:raise TurnFailure('audit_unavailable')
         try:
             owned,thread_id=_request(client,request)
+            request_sha256=hashlib.sha256(canonical_object(owned)).hexdigest()
+            if client.turn_timeout_seconds is None:raise TurnFailure('timeout_policy_missing')
             deadline=client.monotonic()+client.turn_timeout_seconds
             stream=TurnEvents(client,thread_id,deadline,before_send)
             def dispatch():
-                if before_send() is not True:raise ValueError('turn authority refused')
-                audit('native_turn_dispatch_intent',rpc_id=client._next_id)
+                stream.check(force=True)
+                stream.stage='dispatch_audit'
+                audit('native_turn_dispatch_intent',rpc_id=client._next_id,
+                    request_sha256=request_sha256,send_state='possibly_sent_unconfirmed',
+                    timeout_seconds=client.turn_timeout_seconds,fence_interval_seconds=.25)
                 # Durable audit can block across expiry/revocation. Recheck the
                 # live authority after it, immediately before transport write.
-                stream.check()
+                stream.stage='dispatch_fence';stream.check(force=True)
             client._turn_context=stream
             reply=client._exchange('turn/start',owned,before_send=dispatch)
-            turn=reply.value.get('turn',{});turn_id=turn.get('id')
-            if (type(turn_id) is not str or not 1<=len(turn_id)<=256
+            stream.stage='turn_identity'
+            turn=reply.value.get('turn',{});candidate_turn_id=turn.get('id')
+            if (type(candidate_turn_id) is not str or not 1<=len(candidate_turn_id)<=256
                     or turn.get('status') not in {'inProgress','completed','failed','interrupted'}):raise ValueError('turn identity')
+            turn_id=candidate_turn_id
             stream.bind(turn_id)
+            stream.stage='started_audit'
             audit('native_turn_started',rpc_id=reply.rpc_id,response_sha256=reply.sha256)
-            stream.check()
+            stream.check(force=True);stream.stage='stream_events'
             while not stream.complete:
                 if client.monotonic()>=deadline:raise TimeoutError()
                 value=_decode(client._line(deadline))
@@ -115,22 +156,37 @@ def run_turn(client,request,*,before_send,record_event,stop_workload):
                     raise ValueError('unexpected native request or response')
                 if 'result' in value or 'error' in value:raise ValueError('ambiguous notification')
                 stream.accept(value)
-            stream.check()
+            stream.stage='terminal_fence';stream.check(force=True)
             result=stream.reducer.outcome()
             text=result.get('text')
             if text is not None and len(text.encode('utf-8'))>16384:raise ValueError('final text bound')
+            stream.stage='terminal_audit'
             audit('native_turn_terminal',rpc_id=reply.rpc_id,native_state=result['state'],
                 event_count=stream.count,event_sha256=stream.digest.hexdigest())
-            stream.check()
+            stream.stage='terminal_fence';stream.check(force=True)
             return NativeTurnResult(thread_id,turn_id,reply.rpc_id,client.session_id,stream.count,
                 stream.digest.hexdigest(),canonical_object(result))
-        except Exception:
+        except Exception as cause:
+            if isinstance(cause,TurnFailure):reason=str(cause)
+            elif stream is None:reason='request_contract'
+            elif stream.failure_class is not None:reason=stream.failure_class
+            elif isinstance(cause,NativeRpcError) and cause.code=='remote_error':reason='native_remote_error'
+            elif client.monotonic()>=stream.deadline:reason='deadline_exceeded'
+            else:reason='native_protocol_or_io_error'
+            failure={'rpc_session':client.session_id,'thread_id':thread_id,'turn_id':turn_id,
+                'request_sha256':request_sha256,'failure_class':reason,'stage':stream.stage if stream else stage,
+                'send_state':stream.send_state if stream else 'not_sent',
+                'request_written':stream.request_written if stream else False,
+                'bytes_written':stream.bytes_written if stream else 0,
+                'rpc_id':stream.rpc_id if stream else None,
+                'response_sha256':stream.response_sha256 if stream else None}
             try:confirmed=stop_workload() is True
             except Exception:confirmed=False
-            try:audit('native_turn_failure',stop_confirmed=confirmed,
+            try:audit('native_turn_failure',stop_confirmed=confirmed,**failure,
                 event_count=stream.count if stream else 0)
             except Exception:pass
-            error=NativeRpcError('turn/start',client.last_request_id,'turn_refused_or_incomplete')
+            error=NativeRpcError('turn/start',failure['rpc_id'],'turn_refused_or_incomplete',failure['response_sha256'])
             error.stop_confirmed=confirmed
+            error.failure_evidence=dict(failure)
             raise error from None
         finally:client._turn_context=None

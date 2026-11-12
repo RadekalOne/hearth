@@ -73,7 +73,7 @@ class NativeReply:
 class NativeRpcClient:
     def __init__(self,reader,writer,*,timeout_seconds=15,max_frame=1_000_000,
                  max_total=16_000_000,clock=None,monotonic=time.monotonic,
-                 max_turn_events=10000,max_turn_bytes=8_000_000,turn_timeout_seconds=45):
+                 max_turn_events=10000,max_turn_bytes=8_000_000,turn_timeout_seconds=None):
         if (os.name!='posix' or type(timeout_seconds) not in (int,float)
                 or not math.isfinite(timeout_seconds) or not 0<timeout_seconds<=30
                 or type(max_frame) is not int or not 128<=max_frame<=1_000_000
@@ -88,8 +88,9 @@ class NativeRpcClient:
         self._initialized=False;self._lock=threading.RLock()
         if (type(max_turn_events) is not int or not 1<=max_turn_events<=10000
                 or type(max_turn_bytes) is not int or not 1024<=max_turn_bytes<=16_000_000
-                or type(turn_timeout_seconds) not in (int,float) or not math.isfinite(turn_timeout_seconds)
-                or not 0<turn_timeout_seconds<=45):raise NativeRpcError('configuration',None,'invalid_turn_bounds')
+                or turn_timeout_seconds is not None and (type(turn_timeout_seconds) not in (int,float)
+                    or not math.isfinite(turn_timeout_seconds) or not 0<turn_timeout_seconds<=45)):
+            raise NativeRpcError('configuration',None,'invalid_turn_bounds')
         self.max_turn_events,self.max_turn_bytes=max_turn_events,max_turn_bytes
         self.turn_timeout_seconds=turn_timeout_seconds
         self._started_thread=None;self._started_request=None;self._turn_used=False;self._turn_context=None
@@ -105,17 +106,22 @@ class NativeRpcClient:
         try:yield
         finally:self._lock.release()
 
-    def _write(self,raw,deadline):
+    def _write(self,raw,deadline,*,progress=None):
         if len(raw)>self.max_frame:raise ValueError('request bound')
         with selectors.DefaultSelector() as selector:
             selector.register(self.writer,selectors.EVENT_WRITE)
             while raw:
                 remaining=deadline-self.monotonic()
                 if remaining<=0 or not selector.select(remaining):raise TimeoutError()
+                # Attempted is deliberately conservative if the syscall result
+                # cannot be observed. Pipe acceptance is not provider receipt.
+                if progress:progress('attempt',0)
                 try:n=os.write(self.writer.fileno(),raw)
                 except BlockingIOError:continue
                 if not n:raise EOFError()
+                if progress:progress('written',n)
                 raw=raw[n:]
+            if progress:progress('complete',0)
 
     def _line(self,deadline):
         with selectors.DefaultSelector() as selector:
@@ -150,7 +156,12 @@ class NativeRpcClient:
             try:
                 deadline=self.monotonic()+self.timeout
                 if method=='turn/start':deadline=min(deadline,self._turn_context.deadline)
-                self._write(canonical_object({'id':ident,'method':method,'params':params})+b'\n',deadline)
+                progress=None
+                if method=='turn/start':
+                    self._turn_context.rpc_id=ident
+                    self._turn_context.stage='request_write'
+                    progress=self._turn_context.write_progress
+                self._write(canonical_object({'id':ident,'method':method,'params':params})+b'\n',deadline,progress=progress)
                 while True:
                     value=_decode(self._line(deadline))
                     if 'id' not in value:
@@ -169,6 +180,9 @@ class NativeRpcClient:
                     now=self.clock()
                     if not isinstance(now,datetime) or now.tzinfo is None:raise ValueError('trusted UTC clock required')
                     reply=NativeReply(method,ident,self.session_id,raw,now.astimezone(timezone.utc).isoformat(),self.monotonic())
+                    if method=='turn/start':
+                        self._turn_context.response_sha256=reply.sha256
+                        self._turn_context.send_state='response_received'
                     if 'error' in value:raise NativeRpcError(method,ident,'remote_error',reply.sha256,response=reply)
                     if type(value['result']) is not dict:raise ValueError('result object required')
                     return reply
