@@ -68,3 +68,17 @@ trusted task settlement remains held with no successful memory read. All3exit0,
 external root empty/removal verified, bearer absent, understanding unknown and
 human acceptance false. Synthetic task-state changes only. The initial refusal
 control took0.177s; the evidence JSON records the final exact-source measurement.
+
+Canonical GitLF source b8d8fc12ee84c53c19b3d238904f37b8f8dda135 was checked
+byte-for-byte against all15 runtime/test pins, then rerun: full1,240PASS134.006s,
+exit0/networknone. Two CRLF checkout differences were the reason for this repeat;
+no semantic change was hidden. The canonical native controls are in
+`/root/hearth-runner-trial/walking-64a63e9aea924272a9e1cb730eec0e8c`:
+positive run_66ca76a7dc134708af2ba1a2c1196046 review;
+missing-closeout run_2e0cc124b35441c589b112c8483cb13f ready;
+refused-read run_3f7cb36881b24d1a90334299b700e3ca held.
+The refusal completed native error handling in0.242s under an explicit5s fixture
+limit, with no successful read. All3exit0/outside-root-observer empty/removed;
+309scoped baseline files unchanged, walking containers and private sockets absent.
+These canonical receipts supersede earlier measurements for exact-source review.
+No independently verified commit-signature or new Claude PASS is claimed.
