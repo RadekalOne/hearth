@@ -1,0 +1,11 @@
+# Offline relay independent pause recovery
+
+Scope: relay_342a3aab520e435d, Claude review drawer_ea7c05d164dc5f1cc7cc586db4fba09e at cb77197, user says run relay. Keep task disabled; no activation, provider/paid runs, merge, deploy or production. Existing thread-only review handoff authorization retained.
+
+1. Reproduce damaged-stage/unreadable-manifest/changed-LOCALAPPDATA pause refusal. Add offline tests with a real temporary SQLite claim, synthetic stop observation, and mocked scheduler writes. All live unit scheduler operations move to explicit integration checks.
+2. Add a separately staged self-contained trusted recovery program. It uses Windows Known Folders rather than environment variables, opens only existing installed state, persists pause+epoch before stop/disable, never imports staged launch modules or requires their manifest. Fixed process identity / trial-only SSH stop, unconfirmed cleanup => paused_pending_stop. Launch verification remains unchanged in principle and also pins the recovery artifact.
+3. Update installer for explicit disabled-only refresh preserving state/owned task/history, point one-step shortcut at recovery, disclose trusted-owner and bounded trial SSH behavior. No enable command, new automation or broader reconcile capability.
+4. Run focused offline regressions, credential-free Windows process and trial sandbox integration under active synthetic claims including the three integrity failures. Keep fixtures and installed controller state distinct. Full canonical-source Linux suite in existing cached network-none trial image. Single fresh-context whole-increment review, one RED/GREEN fix pass for Important findings.
+5. Preserve feature branch and exact source/evidence hashes; record HM outcome/checkpoint, submit exact candidate to Claude in existing thread, resolve this relay as disabled-build handoff only. No live-loop or financial proof claims.
+
+Trust boundary: recovery Python/stdlib and separately staged recovery code remain trusted, private and owner-writable; it is not a repair for a compromised OS/account/recovery executable or unreadable/corrupt state. Those failures cannot report successful pause. WSL remains stopped. Existing inactive900-second/full-run policy and unrelated jobs remain unchanged.

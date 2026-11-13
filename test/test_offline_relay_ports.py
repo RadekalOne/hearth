@@ -11,9 +11,11 @@ sys.path.insert(0,str(Path(__file__).parents[1]/'ops/hearth2'))
 
 
 class PortTests(unittest.TestCase):
-    @unittest.skipUnless(os.name=='nt','actual Windows exact-task pause check')
-    def test_windows_pause_handles_absent_or_owned_disabled_task(self):
-        self.assertTrue(importlib.import_module('offline_relay_ports').HostPorts().disable())
+    def test_scheduler_success_is_mocked_not_a_live_write(self):
+        import types
+        with patch('offline_relay_ports.subprocess.run',return_value=types.SimpleNamespace(returncode=0)) as call:
+            self.assertTrue(importlib.import_module('offline_relay_ports').HostPorts().disable())
+            self.assertIn('Hearth-Codex-Offline-Relay',call.call_args.args[0][-1])
     def test_scheduler_timeout_is_unconfirmed_not_success(self):
         ports=importlib.import_module('offline_relay_ports').HostPorts()
         with patch('offline_relay_ports.subprocess.run',side_effect=subprocess.TimeoutExpired('scheduler',30)):

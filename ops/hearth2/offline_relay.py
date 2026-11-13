@@ -25,6 +25,11 @@ def verify_install():
         path=program/name
         if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest()!=manifest['source_hashes'][name]:
             raise RuntimeError('installed source differs; refuse execution')
+    recovery=manifest.get('recovery_hashes',{})
+    if set(recovery)!={'offline_relay_pause.py'}:raise RuntimeError('recovery binding differs')
+    path=root/'recovery/offline_relay_pause.py'
+    if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest()!=recovery['offline_relay_pause.py']:
+        raise RuntimeError('installed recovery differs; refuse execution')
 
 
 verify_install()

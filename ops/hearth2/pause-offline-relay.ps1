@@ -1,7 +1,6 @@
 $ErrorActionPreference = 'Stop'
-if ($env:COMPUTERNAME -ne 'RSLABINSKI-PC') { throw 'Exact approved laptop required' }
-$root = Join-Path $env:LOCALAPPDATA 'Hearth\OfflineRelay'
-$manifest = Get-Content -LiteralPath (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
-if ($manifest.host -ne $env:COMPUTERNAME -or $manifest.task -ne 'Hearth-Codex-Offline-Relay') { throw 'Controller binding mismatch' }
-& $manifest.python -I (Join-Path $root 'program\offline_relay.py') pause --state (Join-Path $root 'relay.sqlite3')
+if ([Environment]::MachineName -ne 'RSLABINSKI-PC') { throw 'Exact approved laptop required' }
+# Recovery has no dependency on this program directory, the staged manifest or LOCALAPPDATA.
+$root=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Hearth\OfflineRelay'
+& 'C:\Python314\python.exe' -I (Join-Path $root 'recovery\offline_relay_pause.py')
 exit $LASTEXITCODE
