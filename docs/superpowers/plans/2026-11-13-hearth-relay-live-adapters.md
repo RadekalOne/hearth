@@ -9,7 +9,7 @@
 
 ## Global constraints
 
-Keep installed task disabled and paused; no model turn, paid call, reset/purchase, account/config mutation, merge/deploy or production change. Read-only live coordination/account metadata is allowed. Use existing dedicated native checkout RSLABINSKI-PC. No broad Hearth credential in a child. Explicit scoped paid approval and verified spend route required before inference; current scope has neither. Existing gpt-6.1-sol identity retained; Linux0.159.1 unchanged. Missing live proof is reported, never promoted from fixtures.
+Keep installed task disabled and paused during implementation and until Claude reviews exact acceptance evidence; no model turn, paid call, reset/purchase, account/config mutation, merge/deploy or production change. Read-only live coordination/account metadata is allowed. Use existing dedicated native checkout RSLABINSKI-PC. No broad Hearth credential in a child. Explicit scoped paid approval and verified spend route required before inference; current scope has neither. Existing gpt-6.1-sol identity retained; Linux0.159.1 unchanged. Missing live proof is reported, never promoted from fixtures.
 
 ## Tasks
 
@@ -24,6 +24,6 @@ Cursor advance never loses eligible work; identity text is not authority. No dow
 
 
 ## Activation amendment and delivered boundary
-Rad subsequently authorized enabling the relay. Keep it paused during build/review, then enable ONLY verified intake/capacity mode after read-only live preflight. Preserve the existing hourly 07:00-23:00 ET schedule, interactive-user requirement, no wake/catch-up, independent Pause button, audit and inactive900s/full-run policy. Scheduler-enabled does not prove execution; record an actual scheduler run separately.
+Rad subsequently authorized enabling the relay. Keep it paused during build/review, then enable ONLY verified intake/capacity mode after read-only live preflight AND authenticated exact-evidence Claude review. Preserve the existing hourly 07:00-23:00 ET schedule, interactive-user requirement, no wake/catch-up, independent Pause button, audit and inactive900s/full-run policy. Scheduler-enabled does not prove execution; record an actual scheduler run separately.
 
 The pinned native schema cannot establish a server-enforced included-only monetary boundary. Therefore this increment does not deliver an operative unattended model launcher: real turns remain blocked, approved generations stay pending/unclaimed, and the positive proposal protocol is explicitly a credential-free fixture. No fake paid permit, caller boolean or human budget can turn quota into financial enforcement. Activation is intake/capacity only, not an autonomous coding loop. Completing actual model execution requires a separately reviewed financial authority/route design and scoped Rad APPROVED. This is an explicit outstanding requirement, not a passed gate.

@@ -1,0 +1,177 @@
+{
+  "base": "b4f23af3caf75cb37a1884a1f463f97947fcb6e4",
+  "branch": "codex/hearth-relay-live-adapters",
+  "canonical_tree": {
+    "archive_sha256": "dd6c2f171f50bb8548963b6d3ccd7b93e9d38ea3ce20d42426ad91af64f6e473",
+    "tree": "924bfc799acee3a435ede324342cc23cc4e8ff43"
+  },
+  "claude_exact_evidence_review": "pending",
+  "current_active_records": 0,
+  "current_control": {
+    "activation_at": "2026-11-13T23:07:11.729501+00:00",
+    "enabled": 0,
+    "epoch": 20,
+    "id": 1,
+    "last_check": "2026-11-13T23:07:12.789269+00:00",
+    "paused": 1,
+    "status": "paused"
+  },
+  "current_task_enabled": false,
+  "current_task_state": "Disabled",
+  "deployed": false,
+  "focused": {
+    "passed": true,
+    "runtime_seconds": 12.918,
+    "tests": 83
+  },
+  "full_suite": {
+    "archive_sha256": "dd6c2f171f50bb8548963b6d3ccd7b93e9d38ea3ce20d42426ad91af64f6e473",
+    "baseline_changed_count": 0,
+    "baseline_count": 309,
+    "docker_exit": 0,
+    "passed": true,
+    "runtime_seconds": 122.428,
+    "test_containers_remaining": "",
+    "tests": 1323
+  },
+  "historical_scheduler_run": {
+    "current_state_warning": "This run was premature against original Claude review gate. Paused again23:09:12Z; not current enablement.",
+    "last_poll": {
+      "capacity": {
+        "capacity_available": true,
+        "included_only_verified": false,
+        "inference_authorized": false,
+        "observed_at": "2026-11-13T23:07:15.650782+00:00",
+        "reason": "financial_authority_and_route_boundary_required",
+        "used_percent": [
+          7
+        ]
+      },
+      "completed_at": "2026-11-13T23:07:15.716465+00:00",
+      "inference_authorized": false,
+      "intake_complete": true,
+      "mode": "intake_capacity_only",
+      "model_turns": 0,
+      "native": {
+        "account_type": "chatgpt",
+        "binary_verified": true,
+        "model_present": true,
+        "observed_at": "2026-11-13T23:07:15.650782+00:00",
+        "rates": {
+          "credits": {
+            "balance": null,
+            "hasCredits": false,
+            "unlimited": false
+          },
+          "limitId": "codex",
+          "primary": {
+            "resetsAt": 1794996353,
+            "usedPercent": 7,
+            "windowDurationMins": 10080
+          },
+          "rateLimitReachedType": null,
+          "secondary": null,
+          "spendControlReached": false
+        },
+        "requires_auth": true,
+        "rpc_evidence": {
+          "account/login/start": {
+            "id": 2,
+            "sha256": "60089296aa26952edab5a185cca56ba9bf7da1ac1110c7bea0e173543881fe19"
+          },
+          "account/rateLimits/read": {
+            "id": 4,
+            "sha256": "501563c5af42ef65d426ffacdc3506d71b7056cb272d3adae58a71e5ec902b08"
+          },
+          "account/read": {
+            "id": 3,
+            "sha256": "134c05ab5de819c433f83c7bed45191a56d3c949ee48ca4934d3bc3b9cee68fe"
+          },
+          "initialize": {
+            "id": 1,
+            "sha256": "6fa1b3a02df40fdeb99acefffa7e49557bf8b6fd6de45cf8afbe5656ae94e319"
+          },
+          "model/list": {
+            "id": 5,
+            "sha256": "9a8e998f1c6f6121a18b8cf77bd9bab581bf51e865ac699aff11c8ca37f9d21c"
+          }
+        }
+      },
+      "native_complete": true,
+      "pending": 0,
+      "processed_through": "$JQACOPwBaDWkiSAXdulcN6KsJZeduzTRBjAOq6GPtQM",
+      "started_at": "2026-11-13T23:07:13.194855+00:00",
+      "task_state": "unchanged",
+      "understanding": "unknown"
+    },
+    "last_task_result": 0,
+    "started_at": "2026-11-13T23:07:12Z"
+  },
+  "inference": {
+    "financial_route": "unverified",
+    "model_turns": 0,
+    "task_state": "unchanged",
+    "unattended_coding_launcher": "incomplete",
+    "understanding": "unknown"
+  },
+  "live_config_sha256": "eedf8705d7f7e15135308395ed7d94fcc1184d32cff66efb19025a9538234f99",
+  "merged": false,
+  "mode": "intake_capacity_only",
+  "native_homes_remaining": 0,
+  "paid_runs": 0,
+  "pause": {
+    "completed_at": "2026-11-13T23:09:12.598234+00:00",
+    "identities_validated": true,
+    "latch_confirmed": true,
+    "operation": "pause",
+    "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+    "outcome_recorded": true,
+    "scheduler_disabled": true,
+    "state": "paused",
+    "stops": {},
+    "unexpected_arguments": false
+  },
+  "physical_metadata_pause": {
+    "credentials": false,
+    "fixture": "physical Windows native ownership/pause",
+    "job": "bbcec447408a4ed0af4591619dbd9592",
+    "model_turns": 0,
+    "native_confirmed_empty": true,
+    "pause": {
+      "identities_validated": true,
+      "latch_confirmed": true,
+      "scheduler_disabled": true,
+      "state": "paused",
+      "stops": {
+        "bbcec447408a4ed0af4591619dbd9592": true
+      }
+    }
+  },
+  "production_changed": false,
+  "recovery_hashes": {
+    "offline_relay_pause.py": "e60b0ef83fcf8f93f493ef8bdcff358755255c37dfb596a1e1d7c6306c2d9c4c"
+  },
+  "review": {
+    "additional_gate_fix": "Rad original Claude-before-enabling condition re-read; authenticated exact-manifest review required; no-review activation physically refused",
+    "claude_previous": "drawer_64c3c377451577966191a306c33bc60f",
+    "deferred_minor": "Topmost/real human shortcut foreground confirmation remains unverified",
+    "fresh_source": "two Important findings reproduced/fixed in one pass",
+    "important_fixed": [
+      "original-epoch native ownership/pause and held cleanup",
+      "strict scalar metadata sanitation"
+    ]
+  },
+  "review_manifest_sha256": "b61732024785898e8c99f66c3e5399b5a93b5d61e9876f96da50cfa64310de0f",
+  "runtime_commit": "9166cf761d87b2091d7e311760524e87179ca536",
+  "source_hashes": {
+    "offline_relay.py": "a8de9b004c256def91d51fc93094335b1bd65d57377c58c688808b1a26d62511",
+    "offline_relay_ports.py": "77b1e59284b1963110e16b8b512c46b9062a1eab6872c04b6faf45f192d3b564",
+    "offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+    "offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+    "pause-offline-relay.ps1": "9fdc4ddfeb9a436de0393b8ad3e25029782ef8e7932e43f9aa78fda9cb3c5692",
+    "relay_launch.py": "42c4913b281e1b7fc5589e4a5e911d0e903334e0ee72d2ea0ef838a2107b2e3f",
+    "relay_live.py": "32da8781c117aa4d8212b5369819635755e7485f85afb8cd8dab847392430907",
+    "relay_matrix.py": "290edc8fa62fefa1834fb425d4ac5cce916be4293af43d290cc10138b793729b",
+    "relay_native.py": "c132053ea5a5cdfc56f7a7b4110ebed7f55f711265c75127bf5e5c4f8d1a6658"
+  }
+}
