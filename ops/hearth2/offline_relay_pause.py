@@ -183,6 +183,7 @@ def read_status(root):
     finally:db.close()
     # Current state outranks the last result; a saved receipt is not a new stop proof.
     state='paused' if control['paused']==1 and control['enabled']==0 and active==0 and control['status']=='paused' else 'paused_pending_stop'
+    if control['paused']==0:state='not_paused'
     return {'state':state,'control':control,'active_records':active,'operation':'status',
         'observed_at':datetime.now(timezone.utc).isoformat(),'stop_proof':'last recorded pause only; status performs no stop'}
 
@@ -205,6 +206,8 @@ def outcome_text(result):
     if state=='paused':text='Paused. Recorded workloads are confirmed stopped and the owned task is disabled.'
     elif state=='paused_pending_stop':text='Pause is pending. Workload termination or task disable is not confirmed. Do not resume; manual follow-up is required.'
     else:text='Recovery refused: the installed state could not be accessed. Workload termination is not confirmed.'
+    if result.get('operation')=='pause' or 'latch_confirmed' in result:
+        if result.get('latch_confirmed') is not True:text+=' The local pause latch was NOT set. New work may still be admitted; disable the task manually and investigate.'
     if result.get('operation')=='status':text='Recorded control status: '+state+'. This read does not perform a new stop or termination check.'
     if result.get('identities_validated') is False and result.get('latch_confirmed'):
         text+=' The local pause latch was committed, but the workload records could not be validated.'

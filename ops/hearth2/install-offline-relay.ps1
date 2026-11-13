@@ -32,7 +32,7 @@ if ($UpdateDisabled) {
     foreach($dir in @($program,$recovery)) {
         if(Test-Path -LiteralPath $dir){
             $backup=Join-Path $history (Split-Path $dir -Leaf);New-Item -ItemType Directory -Path $backup | Out-Null
-            foreach($name in @('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','offline_relay_pause.py')) {
+            foreach($name in @('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','offline_relay_pause.py')) {
                 $item=Join-Path $dir $name
                 if(Test-Path -LiteralPath $item){
                     if((Get-Item -LiteralPath $item).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Backup link refused'}
@@ -56,7 +56,7 @@ foreach($dir in @($root,$program,$recovery)) {
     } else {New-Item -ItemType Directory -Path $dir | Out-Null}
 }
 $hashes=@{};$recoveryHashes=@{}
-$files=@('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','offline_relay_pause.py')
+$files=@('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','offline_relay_pause.py')
 foreach($name in $files) {
     $source=Join-Path $SourceRoot $name
     if((Get-Item -LiteralPath $source).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Source link refused'}

@@ -29,18 +29,28 @@ class RemoteSandbox:
 
 
 class HostPorts:
-    def __init__(self,state=None):self.state=state
+    def __init__(self,state=None):self.state=state;self._live=None
     def host_identity(self):return os.name=='nt' and os.environ.get('COMPUTERNAME')=='RSLABINSKI-PC'
     def host_ok(self):
         if not self.host_identity():return False
         return subprocess.run(['tzutil','/g'],capture_output=True,text=True,timeout=5).stdout.strip()=='Eastern Standard Time'
 
-    def poll(self):raise RuntimeError('coordination_adapter_unverified')
-    def base_commit(self):raise RuntimeError('isolated_checkout_adapter_unverified')
-    def verify(self,work):raise RuntimeError('server_authorization_adapter_unverified')
-    def allowance(self):return {'source':'unavailable','included_only':False,'fresh':False,'fallback':False}
-    def launch(self,job):raise RuntimeError('included_only_unattended_launcher_unverified')
-    def post(self,room,thread,text):raise RuntimeError('coordination_adapter_unverified')
+    def live(self,*,diagnostic=False):
+        if self._live is None:
+            if self.state is None:raise RuntimeError('state_required')
+            from relay_live import LivePorts
+            self._live=LivePorts.installed(self.state,diagnostic=diagnostic)
+        return self._live
+    def poll(self):return self.live().poll()
+    def ready_for_claim(self):return self.live().ready_for_claim()
+    def poll_status(self):return self.live().poll_status()
+    def base_commit(self):return self.live().base_commit()
+    def verify(self,work):return self.live().verify(work)
+    def allowance(self):
+        try:return self.live().allowance()
+        except Exception:return {'source':'unavailable','included_only':False,'fresh':False,'fallback':False}
+    def launch(self,job):return self.live().launch(job)
+    def post(self,room,thread,text):return self.live().post(room,thread,text)
 
     def disable(self):
         # No registration or enable path; this action affects the exact named task only.

@@ -18,7 +18,7 @@ def verify_install():
     manifest_file=root/'manifest.json'
     if manifest_file.stat().st_size>32768:raise RuntimeError('bounded controller manifest required')
     manifest=json.loads(manifest_file.read_text(encoding='utf-8-sig'))
-    files={'offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1'}
+    files={'offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py'}
     if (manifest.get('host')!=os.environ.get('COMPUTERNAME') or manifest.get('task')!='Hearth-Codex-Offline-Relay'
         or set(manifest.get('source_hashes',{}))!=files):raise RuntimeError('controller binding differs')
     for name in files:
@@ -149,6 +149,9 @@ class Dispatcher:
                 'A verified controller adapter is required before work can proceed. seat_usage=unavailable; worker_launches=0.')
             self._post();self.state.tick(at,'blocked');return {'state':'blocked','launched':False}
         if type(events) is not list or len(events)>100:raise GateUnavailable('bounded_poll_unavailable')
+        ready=getattr(self.ports,'ready_for_claim',None)
+        if ready is not None and not ready():
+            status=self.ports.poll_status();self.state.tick(at,status);return {'state':status,'launched':False,'pending':len(events)}
         for work in events:
             try:
                 approved=admit(work,self.ports.verify(work),acceptance=self.acceptance)
@@ -200,7 +203,7 @@ class Dispatcher:
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['check','pause','status'])
+    parser.add_argument('command',choices=['check','pause','status','diagnose'])
     parser.add_argument('--state',type=Path,required=True)
     args=parser.parse_args()
     from offline_relay_ports import HostPorts
@@ -209,6 +212,8 @@ def main():
     if args.command=='pause' and not ports.host_identity():raise GateUnavailable('host_binding_unverified')
     state=State(args.state);runner=Dispatcher(state,HostPorts(state))
     if args.command=='status':result={'control':state.control(),'jobs':state.jobs(),'outbox':state.outbox()}
+    elif args.command=='diagnose':
+        live=runner.ports.live(diagnostic=True);live.bootstrap();live.poll();result=live.last
     else:result=getattr(runner,args.command)()
     print(json.dumps(result,sort_keys=True))
 

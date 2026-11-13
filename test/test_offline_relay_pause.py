@@ -77,7 +77,7 @@ class IndependentPauseTests(unittest.TestCase):
     def test_launch_verifier_refuses_changed_recovery_artifact(self):
         import hashlib,shutil,subprocess
         program=self.root/'program';program.mkdir();recovery=self.root/'recovery';recovery.mkdir()
-        names=['offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1']
+        names=['offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py']
         for n in names:shutil.copyfile(Path(__file__).parents[1]/'ops/hearth2'/n,program/n)
         shutil.copyfile(Path(__file__).parents[1]/'ops/hearth2/offline_relay_pause.py',recovery/'offline_relay_pause.py')
         manifest={'host':os.environ.get('COMPUTERNAME'),'task':'Hearth-Codex-Offline-Relay',
@@ -177,4 +177,10 @@ class IndependentPauseTests(unittest.TestCase):
             self.pause.subprocess,'run',side_effect=subprocess.TimeoutExpired('scheduler',30)):
             self.assertFalse(ports.disable())
 
+    def test_failed_latch_message_explicitly_warns_pause_not_set(self):
+        result=self.pause.pause(self.root/'missing',self.ports)
+        self.assertIn('NOT set',self.pause.outcome_text(result))
+    def test_read_status_distinguishes_enabled_from_pause_pending(self):
+        result=self.pause.read_status(self.root)
+        self.assertEqual(result['state'],'not_paused')
 if __name__=='__main__':unittest.main()
