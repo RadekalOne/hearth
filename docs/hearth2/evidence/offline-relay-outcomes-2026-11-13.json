@@ -1,0 +1,429 @@
+{
+  "relay_id": "relay_c5e87bf0e5744dae",
+  "source_review_drawers": [
+    "drawer_42c963977600d1011f698e51a05b6d6e",
+    "drawer_c628ca7697474941",
+    "drawer_c16687aa078d8e94deba973a3fa8045e"
+  ],
+  "source_review_event": "$bLwpuly7wI07ZRkSaMu2pPTgl6q1L6f3L2iqL3kmSR0",
+  "checked_at": "2026-11-13T22:08:34.292837+00:00",
+  "base_commit": "1eda058d96ccc9985706aa054b47be79d4b159b8",
+  "runtime_source_commit": "47d0069766587042823036cd4b721ebcf4251545",
+  "source_hashes": {
+    "docs/hearth2/OFFLINE-RELAY.md": "1a404d9533d0336db2d7916614d60919e185dfcf91d8923796593d45a4d590a0",
+    "docs/superpowers/plans/2026-11-13-hearth-offline-relay-outcomes.md": "dd987f3cff30b4b71eaa4fa81cb36077a2def99d78a99452fbb0bf635a4f0de9",
+    "ops/hearth2/offline_relay_pause.py": "0ba6c0ff4f26dd28f068a25cc2372172b64a8d3ebe9d9f7f77e2667201a91191",
+    "test/fixtures/offline_relay/pause_acceptance.py": "65df5033b3c87a5d551384a495072458afadfe966bb49342868502841d5ff98b",
+    "test/fixtures/offline_relay/pause_ui_acceptance.py": "99ac8d03a67374ee2a70a515d865873d386e5a74e1c4553b8301205c27b926f8",
+    "test/test_offline_relay_pause.py": "5ef6738d1e7f6f23c1510829fb2bd7e92051b3b69df3c0c91d20695abee6901a"
+  },
+  "archive_sha256": "d5524fbeeafda9cabf53bd7dc197618cf0a0d9a72d794e2c4d2e3e454c154402",
+  "full_suite": {
+    "tests": 1285,
+    "passed": 1285,
+    "skipped": 0,
+    "exit_code": 0,
+    "seconds": 129.825,
+    "network": "none",
+    "image": "sha256:cfdeef44fe8decfdec309404dbe541db5a3032a643cd2a2168d4a7b30e11f103",
+    "log_sha256": "cd62c9da187c4c11cafce36650fe68ba2717dc1eb9a7b95cf450946c126df6eb"
+  },
+  "focused_windows": {
+    "tests": 45,
+    "passed": 45,
+    "exit_code": 0,
+    "seconds": 8.889,
+    "OS_scheduler_UI_effects": "mocked"
+  },
+  "physical_acceptance": {
+    "windows-staged": {
+      "mode": "windows",
+      "failure": "staged",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "1d8054ba505f463b95462611eadcfa98",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:03:24.942983+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "1d8054ba505f463b95462611eadcfa98": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "keeper_exit": 137,
+      "elapsed_seconds": 6.556,
+      "relay_remained_disabled": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "windows-manifest": {
+      "mode": "windows",
+      "failure": "manifest",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "b3fad087f23c4061b2a2e923cad97c15",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:03:37.582383+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "b3fad087f23c4061b2a2e923cad97c15": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "keeper_exit": 137,
+      "elapsed_seconds": 12.154,
+      "relay_remained_disabled": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "windows-localappdata": {
+      "mode": "windows",
+      "failure": "localappdata",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "c0e197fbcf1742199aa4c30bc4ff87d9",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:03:51.046030+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "c0e197fbcf1742199aa4c30bc4ff87d9": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "keeper_exit": 137,
+      "elapsed_seconds": 12.862,
+      "relay_remained_disabled": true,
+      "decoy_untouched": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "windows-renamedhost": {
+      "mode": "windows",
+      "failure": "renamedhost",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "3b79a59b045d4da2b2c0360d91aa2f2a",
+      "active_before": true,
+      "launch_verification_refused": false,
+      "host_rename_simulated": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:04:00.900286+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "3b79a59b045d4da2b2c0360d91aa2f2a": true
+        },
+        "unexpected_arguments": false
+      },
+      "stop_observations": [
+        {
+          "active_at_stop_entry": 3,
+          "confirmed_empty": true,
+          "empty_after": true,
+          "stop_seconds": 0.0005
+        }
+      ],
+      "observed_empty": true,
+      "keeper_exit": 137,
+      "elapsed_seconds": 9.37,
+      "relay_remained_disabled": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "trial-staged": {
+      "mode": "trial",
+      "failure": "staged",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "5268e456856344518d7e58c07118c4ed",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:04:10.950914+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "5268e456856344518d7e58c07118c4ed": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "elapsed_seconds": 9.943,
+      "relay_remained_disabled": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "trial-manifest": {
+      "mode": "trial",
+      "failure": "manifest",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "4d19282181e948f1a0f9d804e9c5d59f",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:04:21.516152+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "4d19282181e948f1a0f9d804e9c5d59f": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "elapsed_seconds": 9.063,
+      "relay_remained_disabled": true,
+      "passed": true,
+      "final_empty": true
+    },
+    "trial-localappdata": {
+      "mode": "trial",
+      "failure": "localappdata",
+      "synthetic": true,
+      "model_calls": 0,
+      "activation": false,
+      "production_contact": false,
+      "job": "7823cd1364a84191b84dfa5ddb6da81a",
+      "active_before": true,
+      "launch_verification_refused": true,
+      "recovery_exit": 0,
+      "pause": {
+        "completed_at": "2026-11-13T22:04:34.054537+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {
+          "7823cd1364a84191b84dfa5ddb6da81a": true
+        },
+        "unexpected_arguments": false
+      },
+      "observed_empty": true,
+      "elapsed_seconds": 11.544,
+      "relay_remained_disabled": true,
+      "decoy_untouched": true,
+      "passed": true,
+      "final_empty": true
+    }
+  },
+  "visible_dialog_acceptance": {
+    "synthetic_renderer_cases": true,
+    "dialogs": {
+      "paused": {
+        "title": "Hearth relay pause",
+        "visible": true,
+        "text": "OK\nPaused. Recorded workloads are confirmed stopped and the owned task is disabled."
+      },
+      "paused_pending_stop": {
+        "title": "Hearth relay pause",
+        "visible": true,
+        "text": "OK\nPause is pending. Workload termination or task disable is not confirmed. Do not resume; manual follow-up is required."
+      },
+      "refused": {
+        "title": "Hearth relay pause",
+        "visible": true,
+        "text": "OK\nRecovery refused: the installed state could not be accessed. Workload termination is not confirmed."
+      },
+      "installed_default": {
+        "title": "Hearth relay pause",
+        "visible": true,
+        "text": "OK\nPaused. Recorded workloads are confirmed stopped and the owned task is disabled.\n\nObserved: 2026-11-13T22:02:30.280729+00:00\nSaved result: C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json"
+      },
+      "installed_result": {
+        "completed_at": "2026-11-13T22:02:30.280729+00:00",
+        "identities_validated": true,
+        "latch_confirmed": true,
+        "operation": "pause",
+        "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+        "outcome_recorded": true,
+        "scheduler_disabled": true,
+        "state": "paused",
+        "stops": {},
+        "unexpected_arguments": false,
+        "visible_result": true
+      }
+    },
+    "model_calls": 0
+  },
+  "independent_damaged_stage_status": {
+    "active_records": 0,
+    "control": {
+      "enabled": 0,
+      "epoch": 17,
+      "paused": 1,
+      "status": "paused"
+    },
+    "observed_at": "2026-11-13T22:05:02.434109+00:00",
+    "operation": "status",
+    "state": "paused",
+    "stop_proof": "last recorded pause only; status performs no stop"
+  },
+  "installed_readback": {
+    "enabled": false,
+    "last_run": "1999-11-30T00:00:00.0000000-05:00",
+    "task": "Hearth-Codex-Offline-Relay",
+    "last_result": 267011,
+    "shortcut_target": "C:\\Python314\\python.exe",
+    "source_hashes": {
+      "offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+      "offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+      "offline_relay_ports.py": "9c555577a6c15073897d4efd2bf2cff501a195625be183fd0218e3d70ba2ae44",
+      "pause-offline-relay.ps1": "eba7df74e1f69bec7fa668b6c8f786058624f04ec5544eb07106bfbe89c8b1d8",
+      "offline_relay.py": "4ddddc599718ddaef26e3ac464069d6a44dbda66e7dcea80aa475e86677062f7"
+    },
+    "state": "Disabled",
+    "shortcut_arguments": "-I \"C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\recovery\\offline_relay_pause.py\"",
+    "recovery_hashes": {
+      "offline_relay_pause.py": "0ba6c0ff4f26dd28f068a25cc2372172b64a8d3ebe9d9f7f77e2667201a91191"
+    }
+  },
+  "installed_control": {
+    "activation_at": null,
+    "enabled": 0,
+    "epoch": 18,
+    "id": 1,
+    "last_check": "2026-11-12T22:28:34.531913+00:00",
+    "paused": 1,
+    "status": "paused"
+  },
+  "installed_paused_fixture_audit_count": 14,
+  "installed_active_jobs": 0,
+  "installed_outbox_count": 0,
+  "installed_pause": {
+    "completed_at": "2026-11-13T22:05:08.827822+00:00",
+    "identities_validated": true,
+    "latch_confirmed": true,
+    "operation": "pause",
+    "outcome_path": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\pause-result.json",
+    "outcome_recorded": true,
+    "scheduler_disabled": true,
+    "state": "paused",
+    "stops": {},
+    "unexpected_arguments": false
+  },
+  "task_preservation": {
+    "count_before": 241,
+    "count_after": 241,
+    "existing_hearth_definitions_unchanged": true,
+    "all_enabled_flags_unchanged": true,
+    "other_definition_drift": [
+      {
+        "name": "ZoomUpdateTaskUser-*",
+        "path": "\\",
+        "definition_hash_changed": true,
+        "enabled_before": true,
+        "enabled_after": true,
+        "cause": "unverified; no write to this task performed by this increment"
+      }
+    ]
+  },
+  "trial_observer": {
+    "host": "srv2065995",
+    "baseline_count": 309,
+    "baseline_changed_paths": [],
+    "fixture_containers": [],
+    "suite_containers": [],
+    "fixture_watchdogs": [],
+    "fixture_helper_sha256": "60dfb5b7b5572d5871add8bdddd84b3f142cc6016f54746b60752ea8567cd89a"
+  },
+  "windows_observer": {
+    "helper_pids": [],
+    "observed_at": "2026-11-13T22:05:46.7545379Z"
+  },
+  "fresh_review": {
+    "tests_run": 44,
+    "critical": 0,
+    "important": 0,
+    "minor": 1,
+    "finding": "late dialog close could overwrite a newer receipt",
+    "author_regrade": "Important: old paused observation could replace new pending",
+    "one_fix_pass": "RED reproduced paused-over-pending, remove post-dialog write, final 45 focused and 1285 full pass",
+    "rereview": false,
+    "claude_revised_commit_review": "pending"
+  },
+  "failed_fixture_diagnostics": [
+    "Initial GUI observer assumed direct IDOK child; actual nested OK control read and selected in final passing harness",
+    "Earlier renamed-host total elapsed included scheduler wait; final fixture independently observes 3 active processes at actual stop entry and immediate empty after stop"
+  ],
+  "open_gates": [
+    "OS/Python/stdlib/recovery artifact/private owner and SSH config/known-hosts remain trusted",
+    "malformed/ambiguous workload identities need manual follow-up after committed latch; no generic reconcile/adoption/retry added",
+    "synthetic audit rows retained; clean live-state choice deferred to enablement",
+    "live authenticated coordination/checkout/allowance/unattended launch remain unavailable/refuse",
+    "new Claude exact-commit review and explicit APPROVED before activation or paid runs"
+  ],
+  "worker_model_calls": 0,
+  "manual_seat_usage": "unavailable",
+  "first_week_usage_window": "not_started",
+  "WSL": "all_stopped",
+  "activation": false,
+  "paid_runs": false,
+  "merge": false,
+  "deploy": false,
+  "production_contact": false,
+  "understanding": "unknown",
+  "human_acceptance": false
+}
