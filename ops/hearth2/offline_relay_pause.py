@@ -4,6 +4,7 @@ Installed separately in recovery/. Trust the OS, interpreter and this artifact.
 The staged manifest and environment path hints are deliberately not authority.
 """
 import ctypes
+from datetime import datetime,timezone
 from ctypes import wintypes as W
 import json
 import os
@@ -63,16 +64,20 @@ def latch(root):
             raise ValueError('control unavailable')
         rows=[dict(r) for r in db.execute("SELECT id,body FROM jobs WHERE state IN ('claimed','dispatching','active','held') LIMIT 2")]
         db.commit() # Persist the latch even if a recorded identity is malformed.
-        if len(rows)>1:raise ValueError('ambiguous active records')
-        jobs=[]
-        for row in rows:
-            if type(row['id']) is not str or not re.fullmatch('[0-9a-f]{32}',row['id']) or len(row['body'])>16384:
-                raise ValueError('recorded identity unavailable')
-            body=json.loads(row['body'])
-            if type(body) is not dict or body.get('kind') not in {'windows','trial'}:raise ValueError('unknown workload kind')
-            jobs.append({'id':row['id'],'kind':body['kind']})
-        return jobs
+        return rows
     finally:db.close()
+
+
+def recorded_jobs(rows):
+    if len(rows)>1:raise ValueError('ambiguous active records')
+    jobs=[]
+    for row in rows:
+        if type(row['id']) is not str or not re.fullmatch('[0-9a-f]{32}',row['id']) or len(row['body'])>16384:
+            raise ValueError('recorded identity unavailable')
+        body=json.loads(row['body'])
+        if type(body) is not dict or body.get('kind') not in {'windows','trial'}:raise ValueError('unknown workload kind')
+        jobs.append({'id':row['id'],'kind':body['kind']})
+    return jobs
 
 
 def settle(root,jobs,stops,disabled):
@@ -136,7 +141,7 @@ class RecoveryPorts:
         ident=job['id']
         if type(ident) is not str or not re.fullmatch('[0-9a-f]{32}',ident):return False
         if job['kind']=='windows':return stop_windows(ident)
-        if job['kind']!='trial':return False
+        if job['kind']!='trial' or not host_identity():return False
         command=[str(system_directory()/'OpenSSH/ssh.exe'),'-T','-o','BatchMode=yes','-o','IdentityAgent=none','-o','IdentitiesOnly=yes',
             '-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=8','-i',str(known_folder('profile')/'.ssh/hermes-key'),
             'root@179.236.82.242',f'python3 {REMOTE} stop {ident}']
@@ -149,10 +154,12 @@ class RecoveryPorts:
 
 
 def pause(root,ports):
-    jobs=[];stops={};latched=False
-    try:jobs=latch(root);latched=True
+    jobs=[];stops={};latched=False;valid=False
+    try:
+        rows=latch(root);latched=True
+        jobs=recorded_jobs(rows);valid=True
     except Exception:pass
-    if latched:
+    if valid:
         for job in jobs:
             try:stops[job['id']]=ports.stop(job) is True
             except Exception:stops[job['id']]=False
@@ -162,15 +169,85 @@ def pause(root,ports):
     if latched:
         try:status=settle(root,jobs,stops,disabled)
         except Exception:pass
-    return {'state':status,'scheduler_disabled':disabled,'latch_confirmed':latched,'stops':stops}
+    return {'state':status,'scheduler_disabled':disabled,'latch_confirmed':latched,'identities_validated':valid,'stops':stops}
+
+
+def read_status(root):
+    path=Path(root).absolute()/'relay.sqlite3'
+    if path.parent.resolve()!=path.parent or path.is_symlink() or not path.is_file():raise OSError('state unavailable')
+    db=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=3)
+    try:
+        db.row_factory=sqlite3.Row
+        control=dict(db.execute('SELECT paused,enabled,epoch,status FROM control WHERE id=1').fetchone())
+        active=db.execute("SELECT count(*) FROM jobs WHERE state IN ('claimed','dispatching','active','held')").fetchone()[0]
+    finally:db.close()
+    # Current state outranks the last result; a saved receipt is not a new stop proof.
+    state='paused' if control['paused']==1 and control['enabled']==0 and active==0 and control['status']=='paused' else 'paused_pending_stop'
+    return {'state':state,'control':control,'active_records':active,'operation':'status',
+        'observed_at':datetime.now(timezone.utc).isoformat(),'stop_proof':'last recorded pause only; status performs no stop'}
+
+
+def write_outcome(root,result):
+    import uuid
+    root=Path(root).absolute();target=root/'pause-result.json'
+    if root.resolve()!=root or not root.is_dir() or target.is_symlink():raise OSError('result path unavailable')
+    temp=root/('pause-result-'+uuid.uuid4().hex+'.tmp')
+    try:
+        with temp.open('x',encoding='utf-8') as stream:
+            json.dump(result,stream,sort_keys=True);stream.flush();os.fsync(stream.fileno())
+        os.replace(temp,target)
+    finally:
+        if temp.exists():temp.unlink()
+
+
+def outcome_text(result):
+    state=result['state']
+    if state=='paused':text='Paused. Recorded workloads are confirmed stopped and the owned task is disabled.'
+    elif state=='paused_pending_stop':text='Pause is pending. Workload termination or task disable is not confirmed. Do not resume; manual follow-up is required.'
+    else:text='Recovery refused: the installed state could not be accessed. Workload termination is not confirmed.'
+    if result.get('operation')=='status':text='Recorded control status: '+state+'. This read does not perform a new stop or termination check.'
+    if result.get('identities_validated') is False and result.get('latch_confirmed'):
+        text+=' The local pause latch was committed, but the workload records could not be validated.'
+    if result.get('outcome_recorded') is False:text+=' The result could not be saved.'
+    stamp=result.get('completed_at') or result.get('observed_at')
+    if stamp:text+='\n\nObserved: '+stamp
+    if result.get('outcome_path'):text+='\nSaved result: '+result['outcome_path']
+    return text
+
+
+def show_result(result):
+    user=ctypes.WinDLL('user32',use_last_error=True)
+    user.MessageBoxW.argtypes=[W.HWND,W.LPCWSTR,W.LPCWSTR,W.UINT]
+    user.MessageBoxW.restype=ctypes.c_int
+    icon=0x40 if result['state']=='paused' else 0x30
+    return user.MessageBoxW(None,outcome_text(result),'Hearth relay pause',icon|0x10000)==1
 
 
 def main():
-    if len(sys.argv)!=1 or not host_identity():return 3
-    try:root=installed_root();result=pause(root,RecoveryPorts(root))
-    except Exception:result={'state':'paused_pending_stop','scheduler_disabled':False,'latch_confirmed':False,'stops':{}}
+    args=sys.argv[1:];headless='--json' in args
+    unexpected=any(x not in {'--json','--status'} for x in args) or len(args)!=len(set(args))
+    status='--status' in args and not unexpected
+    root=None
+    try:
+        root=installed_root()
+        result=read_status(root) if status else pause(root,RecoveryPorts(root))
+    except Exception:
+        result={'state':'refused','scheduler_disabled':False,'latch_confirmed':False,'stops':{}}
+    if not status:
+        result.update(operation='pause',completed_at=datetime.now(timezone.utc).isoformat(),unexpected_arguments=unexpected)
+        if root is not None:
+            result['outcome_path']=str(root/'pause-result.json');result['outcome_recorded']=True
+            try:write_outcome(root,result)
+            except Exception:result['outcome_recorded']=False
+    visible=True
+    if not headless:
+        try:visible=show_result(result) is True
+        except Exception:visible=False
+        result['visible_result']=visible
+        # Do not rewrite an older pause observation when its dialog closes.
     print(json.dumps(result,sort_keys=True))
-    return 0 if result['state']=='paused' else 2
+    if result['state']=='refused':return 3
+    return 0 if result['state']=='paused' and visible and result.get('outcome_recorded') is not False else 2
 
 
 if __name__=='__main__':raise SystemExit(main())

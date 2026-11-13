@@ -12,6 +12,20 @@ The desktop action **Pause Hearth relay** runs a separately staged, trusted, sta
 
 Pause persists a paused epoch in the **existing** SQLite state before stopping recorded identities and disabling only the root-level owned task with the expected action. Windows workloads stop through their Job Object. **For any recorded trial workload, the button also makes a bounded root SSH stop call to the fixed trial VPS `srv2065995` (`179.236.82.242`), using the existing host-side SSH key; it is not purely local.** SSH has a 25-second command deadline and 8-second connection timeout; the owned-task scheduler check has a 30-second deadline. An unreachable trial host, denied access, unknown process state or unavailable state leaves `paused_pending_stop`; successful pause requires independently confirmed workload termination, not just a disable request. There is no enable or automatic reclaim command.
 
+The shortcut shows a visible result dialog: **Paused**, **Pause pending**, or **Recovery refused**. Pending/refused never means a workload stopped. Each pause also saves a timestamped `pause-result.json` beside the private SQLite state; if saving or showing the result fails, the command does not return success. The saved receipt is an observation at its recorded time, not a permanent health claim. It is written before the dialog opens and is not rewritten when an older dialog closes.
+
+For a read-only status independent of damaged staged files, use the fixed interpreter with the recovery program and `--status --json`, for example:
+
+```powershell
+& 'C:\Python314\python.exe' -I 'C:\Users\rslabinski\AppData\Local\Hearth\OfflineRelay\recovery\offline_relay_pause.py' --status --json
+```
+
+This reads the current control row and active-record count without pausing, stopping, disabling or rewriting state. It performs no new termination check. `--json` alone performs a pause and prints its result without opening a dialog, for explicit automation/integration checks. Unexpected arguments never select another state path and never block the local pause latch; they are reported in the result and force the safe fixed-profile pause operation.
+
+A laptop rename no longer prevents local pause, verified Windows stop or exact owned-task disable. Only the fixed trial SSH operation requires the approved host identity; a mismatch suppresses SSH and retains pending status for trial work. This does not rename the machine or expand authority to contact another host.
+
+Malformed or ambiguous workload records still commit the local pause latch and attempt the exact task disable, but cannot authorize a targeted stop. The result reports `latch_confirmed=true`, `identities_validated=false` and pending cleanup, requiring manual follow-up. No guarded reconcile/adoption/retry command has been added. Existing synthetic acceptance audit rows remain historical evidence; any decision to begin with clean live state belongs to separately approved enablement. SSH still reads the trusted owner's configuration and known-hosts files; this increment does not alter them.
+
 The recovery program, fixed Python interpreter/stdlib, OS identity and private local state remain trusted. This is not protection against compromise of the owner/OS/recovery code; read-only flags and private ACLs do not make owner-writable files immutable. If the state is unreadable, recovery still attempts the exact owned-task disable but cannot claim workload cleanup. The default recovery CLI accepts no caller-supplied state path. The legacy staged `offline_relay.py pause` path is not the emergency button and may refuse integrity failures.
 
 The installer supports an explicit `-UpdateDisabled` refresh only for the exact owned disabled task and paused state without active work; it preserves prior program/manifest/shortcut history. It does not enable or recreate the existing task. Source copies normalize LF to match the recorded Git-blob hashes. Status inspection remains available through installed `offline_relay.py status --state <private relay.sqlite3>` while launch integrity is intact. Protect these coordination records.

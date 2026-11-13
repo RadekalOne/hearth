@@ -64,6 +64,15 @@ class IndependentPauseTests(unittest.TestCase):
         result=self.pause.pause(self.root,self.ports)
         self.assertEqual(result['state'],'paused_pending_stop');self.assertEqual(self.calls,[('disable',)])
         self.assertTrue(self.state.control()['paused'])
+        self.assertTrue(result['latch_confirmed'])
+
+    def test_ambiguous_records_keep_committed_latch_and_require_manual_followup(self):
+        with self.state.tx() as db:
+            db.execute('DROP INDEX one_active')
+            db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,NULL)',('e'*32,'second',1,'held',0,json.dumps({'kind':'windows'})))
+        result=self.pause.pause(self.root,self.ports)
+        self.assertTrue(result['latch_confirmed']);self.assertFalse(result['identities_validated'])
+        self.assertEqual(result['state'],'paused_pending_stop');self.assertEqual(self.calls,[('disable',)])
 
     def test_launch_verifier_refuses_changed_recovery_artifact(self):
         import hashlib,shutil,subprocess
@@ -83,9 +92,77 @@ class IndependentPauseTests(unittest.TestCase):
 
     def test_cli_uses_fixed_installed_root_no_manifest_or_launch_import(self):
         with patch.object(self.pause,'installed_root',return_value=self.root),patch.object(self.pause,'host_identity',return_value=True),patch.object(
-            self.pause,'RecoveryPorts',return_value=self.ports),patch.object(sys,'argv',['pause']),patch('builtins.print'):
+            self.pause,'RecoveryPorts',return_value=self.ports),patch.object(sys,'argv',['pause']),patch.object(self.pause,'show_result',create=True,return_value=True),patch('builtins.print'):
             self.assertEqual(self.pause.main(),0)
         self.assertEqual(self.state.jobs()[0]['state'],'paused')
+
+    def main_fixture(self,args,*,host=False):
+        import contextlib,io
+        output=io.StringIO()
+        with patch.object(self.pause,'installed_root',return_value=self.root),patch.object(self.pause,'host_identity',return_value=host),patch.object(
+            self.pause,'RecoveryPorts',return_value=self.ports),patch.object(sys,'argv',['pause']+args),contextlib.redirect_stdout(output):
+            code=self.pause.main()
+        return code,json.loads(output.getvalue())
+
+    def test_renamed_host_still_latches_and_stops_local_work(self):
+        code,result=self.main_fixture(['--json'],host=False)
+        self.assertEqual(code,0);self.assertEqual(result['state'],'paused')
+        self.assertEqual(self.state.jobs()[0]['state'],'paused');self.assertIn(('disable',),self.calls)
+
+    def test_unexpected_arguments_never_prevent_local_latch(self):
+        code,result=self.main_fixture(['--json','--unexpected'],host=True)
+        self.assertTrue(result['latch_confirmed']);self.assertEqual(result['state'],'paused')
+        self.assertTrue(result['unexpected_arguments'])
+
+    def test_host_mismatch_blocks_only_trial_ssh(self):
+        import types
+        ports=self.pause.RecoveryPorts(self.root)
+        with patch.object(self.pause,'host_identity',return_value=False),patch.object(self.pause,'system_directory',return_value=Path('system')),patch.object(
+            self.pause,'known_folder',return_value=self.root),patch.object(self.pause.subprocess,'run',return_value=types.SimpleNamespace(
+            stdout=json.dumps({'job':'a'*32,'confirmed_empty':True}).encode())) as run:
+            self.assertFalse(ports.stop({'id':'a'*32,'kind':'trial'}));run.assert_not_called()
+
+    def test_default_button_presents_pending_and_persists_readable_outcome(self):
+        self.ports.stop=lambda job:False
+        with patch.object(self.pause,'show_result',create=True,return_value=True) as show:
+            code,result=self.main_fixture([],host=True)
+        self.assertEqual(code,2);self.assertEqual(result['state'],'paused_pending_stop')
+        self.assertEqual(show.call_count,1);self.assertEqual(show.call_args.args[0]['state'],'paused_pending_stop')
+        saved=json.loads((self.root/'pause-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(saved['state'],'paused_pending_stop');self.assertIn('completed_at',saved)
+
+    def test_unavailable_root_reports_visible_refusal(self):
+        import contextlib,io
+        out=io.StringIO()
+        with patch.object(self.pause,'installed_root',side_effect=OSError('private detail')),patch.object(sys,'argv',['pause']),patch.object(
+            self.pause,'show_result',create=True,return_value=True) as show,contextlib.redirect_stdout(out):
+            code=self.pause.main()
+        result=json.loads(out.getvalue());self.assertEqual(code,3);self.assertEqual(result['state'],'refused')
+        self.assertEqual(show.call_args.args[0]['state'],'refused');self.assertNotIn('private detail',out.getvalue())
+
+    def test_recovery_status_reads_current_control_despite_damaged_stage(self):
+        self.pause.pause(self.root,self.ports)
+        (self.root/'manifest.json').mkdir()
+        with self.state.tx() as db:db.execute("UPDATE control SET status='paused_pending_stop'")
+        epoch=self.state.control()['epoch']
+        with patch.object(self.pause,'pause',side_effect=AssertionError('read only')):
+            code,result=self.main_fixture(['--status','--json'],host=False)
+        self.assertEqual(code,2);self.assertEqual(result['state'],'paused_pending_stop')
+        self.assertEqual(self.state.control()['epoch'],epoch)
+
+    def test_closing_older_dialog_does_not_overwrite_newer_pending_result(self):
+        def newer_pause(result):
+            with self.state.tx() as db:
+                db.execute("UPDATE jobs SET state='active' WHERE id=?",(self.job['id'],))
+                db.execute("UPDATE control SET status='paused_pending_stop'")
+            self.ports.stop=lambda job:False
+            code,newer=self.main_fixture(['--json'],host=True)
+            self.assertEqual(newer['state'],'paused_pending_stop')
+            return True
+        with patch.object(self.pause,'show_result',side_effect=newer_pause):
+            self.main_fixture([],host=True)
+        saved=json.loads((self.root/'pause-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(saved['state'],'paused_pending_stop')
 
     def test_scheduler_unit_port_is_mocked_and_exact_root_task_is_bound(self):
         import subprocess,types
