@@ -125,8 +125,8 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(self.stopped,[job['id']]);self.assertIsNone(self.state.claim(work))
 
     def test_live_mode_rejects_fixture_attestation_even_if_it_says_included(self):
-        self.enable_fixture();runner=self.core.Dispatcher(self.state,self.ports,acceptance=False)
-        runner.check();self.assertEqual(self.launched,[])
+        self.enable_fixture();runner=self.core.Dispatcher(self.state,self.ports,acceptance=False,clock=self.runner.clock)
+        self.assertEqual(runner.check()['state'],'idle');self.assertEqual(self.launched,[])
 
     def test_unknown_exhausted_and_stale_allowance_all_refuse(self):
         self.enable_fixture()
@@ -142,7 +142,7 @@ class RelayTests(unittest.TestCase):
         from dataclasses import replace
         self.enable_fixture();old=self.ports.verify
         self.ports.verify=lambda work:replace(old(work),source='server_authenticated')
-        runner=self.core.Dispatcher(self.state,self.ports,acceptance=False)
+        runner=self.core.Dispatcher(self.state,self.ports,acceptance=False,clock=self.runner.clock)
         self.assertEqual(runner.check()['state'],'blocked');self.assertEqual(self.launched,[])
 
     def test_lost_post_can_only_reconcile_with_matching_verified_receipt(self):
