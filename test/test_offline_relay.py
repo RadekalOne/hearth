@@ -73,6 +73,33 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(self.runner.check()['state'],'idle')
         self.assertEqual(self.sent,[]);self.assertEqual(self.launched,[])
 
+    def test_operating_hours_boundaries_use_new_york_time_before_poll_or_claim(self):
+        # Explicit UTC instants cover both EST and EDT without using the host clock.
+        cases=[
+            ('2026-11-12T11:59:00+00:00','outside_window'), # 06:59 EST
+            ('2026-11-12T12:00:00+00:00','idle'),           # 07:00 EST
+            ('2026-11-13T04:59:00+00:00','idle'),           # 23:59 EST
+            ('2026-11-13T05:00:00+00:00','outside_window'), # 00:00 EST
+            ('2026-06-12T10:59:00+00:00','outside_window'), # 06:59 EDT
+            ('2026-06-12T11:00:00+00:00','idle'),           # 07:00 EDT
+            ('2026-06-13T03:59:00+00:00','idle'),           # 23:59 EDT
+            ('2026-06-13T04:00:00+00:00','outside_window'), # 00:00 EDT
+        ]
+        for index,(instant,expected) in enumerate(cases):
+            with self.subTest(instant=instant):
+                state=self.state_mod.State(Path(self.tmp.name)/f'window-{index}.db')
+                with state.tx() as db:db.execute('UPDATE control SET paused=0,enabled=1')
+                polls=[]
+                def poll():polls.append(True);return []
+                self.ports.poll=poll
+                at=datetime.fromisoformat(instant)
+                runner=self.core.Dispatcher(state,self.ports,acceptance=True,clock=lambda at=at:at)
+                result=runner.check()
+                self.assertEqual(result['state'],expected)
+                self.assertEqual(len(polls),0 if expected=='outside_window' else 1)
+                self.assertEqual(state.jobs(),[])
+                self.assertEqual(self.launched,[])
+
     def test_generation_executes_once_and_status_has_usage_and_fixed_thread(self):
         self.enable_fixture();self.runner.check();self.runner.check()
         self.assertEqual(len(self.launched),1);self.assertEqual(len(self.sent),1)
