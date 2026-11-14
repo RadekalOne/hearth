@@ -62,3 +62,9 @@ for label,kind in [('fixed',original),('missing-clock negative control',MissingC
  assert (result.wasSuccessful() if label=='fixed' else len(result.failures)==2 and not result.errors)
  print(label+': expected outcome verified')
 ```
+
+### Final source-review closure and timezone prerequisite
+
+Claude desktop and laptop closed the boundary coverage, trigger/guard wording and reproduction notes at `7847c4a` (HC events `$qif57BnU6EUFrUwfdLTxqkI_DbR8gZ_5Qi-kO3U7aHM` and `$ev1R2ubCZEubUArs6LhX3YmhBRxgFIvQ7esNEPsN_60`). Both were source-only reviews; neither claimed an independent test run.
+
+Their remaining nonblocking portability note is addressed by requiring `ZoneInfo('America/New_York')` to load before the boundary test runs. Missing zone data now produces an explicit test-environment failure instead of silently exercising Windows host-local fallback. No runtime dependency or installed relay change. Windows module rerun: 20 passed; mocked missing-zone control: one expected prerequisite failure, zero errors. These checks supplement the earlier 91-test Windows/Linux evidence; no new full-suite or Linux rerun is claimed for this test-only prerequisite.

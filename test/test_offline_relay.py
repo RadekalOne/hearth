@@ -74,6 +74,10 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(self.sent,[]);self.assertEqual(self.launched,[])
 
     def test_operating_hours_boundaries_use_new_york_time_before_poll_or_claim(self):
+        from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+        try:ZoneInfo('America/New_York')
+        except ZoneInfoNotFoundError:
+            self.fail('Boundary test requires America/New_York zone data; provide tzdata in the test environment')
         # Explicit UTC instants cover both EST and EDT without using the host clock.
         cases=[
             ('2026-11-12T11:59:00+00:00','outside_window'), # 06:59 EST
