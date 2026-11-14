@@ -34,3 +34,31 @@ A new test injects UTC instants corresponding to06:59,07:00,23:59 and00:00 ET, i
 All **91 relay tests pass on Windows (13.894s) and network-none Linux (2.187s), actualexit0**. [Coverage evidence](evidence/relay-hours-coverage-2026-11-14.json) identifies the test commit and canonical source archive. This focused run does not relabel the prior1330-test full run as a new1331-test result.
 
 Wording is now precise: the operating-hours guard permits07:00–23:59ET, while the existing17 hourly triggers are scheduled07:00–23:00ET. No schedule, installation, runtime, account, paid/model or production change is involved. The original Cowork intake-only PASS remains valid; this is test coverage, not a new activation or human-approval gate.
+
+
+## Reproduce the overnight clock check
+
+Follow-up source review `$0U7Kj8PYZRrzyl-EUHdUg1uxvk9DVamcsjsDPr0fT3k` also requested the clock-forcing mechanism. From the repository root in the test environment, run the Python code below (for example save it to a private temporary file and execute `python <file>`). Only the test process's `offline_relay.datetime.now` is patched to05:57UTC =00:57ET; fixture clocks remain explicit. The negative control removes the two explicit constructor clocks in memory while retaining the stronger assertions; it should report exactly two expected failures. No source file, installed runtime or OS clock is edited.
+
+```python
+import sys,unittest
+from datetime import datetime,timezone
+from unittest.mock import patch
+sys.path[:0]=['test','ops/hearth2']
+import offline_relay as relay
+import test_offline_relay as tests
+class Overnight(datetime):
+ @classmethod
+ def now(cls,tz=None):return datetime(2026,11,14,5,57,tzinfo=timezone.utc)
+original=relay.Dispatcher
+class MissingClock(original):
+ def __init__(self,*args,**kwargs):
+  if kwargs.get('acceptance') is False:kwargs.pop('clock',None)
+  super().__init__(*args,**kwargs)
+names=['test_fixture_allowance_cannot_pass_production_even_with_server_work_proof','test_live_mode_rejects_fixture_attestation_even_if_it_says_included']
+for label,kind in [('fixed',original),('missing-clock negative control',MissingClock)]:
+ with patch.object(relay,'datetime',Overnight),patch.object(relay,'Dispatcher',kind):
+  result=unittest.TextTestRunner(verbosity=1).run(unittest.TestSuite(tests.RelayTests(name) for name in names))
+ assert (result.wasSuccessful() if label=='fixed' else len(result.failures)==2 and not result.errors)
+ print(label+': expected outcome verified')
+```

@@ -78,6 +78,13 @@
     }
   },
   "relay_mode": "intake_capacity_only",
+  "reproduction": {
+    "command": "python <private file containing the documented recipe>, from repo root in the test environment",
+    "mechanism": "Patch offline_relay.datetime.now inside test process to2026-11-14T05:57:00Z (00:57ET); explicit fixture clocks unchanged.",
+    "negative_control": "In-memory Dispatcher subclass removes clock kwarg only when acceptance=False, retaining neighbouring idle assertion; exactly2expected failures.",
+    "recipe": "docs/hearth2/COWORK-LINUX-CLOSEOUT-2026-11-14.md#reproduce-the-overnight-clock-check",
+    "source_os_and_installed_runtime_changed": false
+  },
   "reviewed_runtime": "f13de43f0be982e884cb77cae3bbe74e659420a4",
   "status_correction": "Earlier interactive pending statement was stale and wrong. Cowork review is complete; its non-blocking clock test finding is now fixed.",
   "test_fix_commit": "08e88c1b6e4bf22061d8fac4ebae022d4d537183"
