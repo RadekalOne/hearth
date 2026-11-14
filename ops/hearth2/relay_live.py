@@ -33,12 +33,11 @@ def load_configuration(root):
 def verify_activation_review(client,event_id,manifest_sha256):
     """Review is evidence, never paid authority. Bind exact installed bytes."""
     from relay_matrix import content,CLAUDE
-    import re
     try:
         event=client.event(event_id);body=content(event)
         if event.get('sender')!=CLAUDE or not body.startswith('[REVIEW]'):raise ValueError()
-        match=re.search(r'```json\s*(\{.*\})\s*```',body,re.S)
-        packet=decode(match.group(1) if match else body[len('[REVIEW]'):].strip())
+        from relay_matrix import review_packet
+        packet=review_packet(body)
         expected={'hearth_relay_activation_review':{'verdict':'pass','mode':MODE,'manifest_sha256':manifest_sha256}}
         if packet!=expected:raise ValueError()
         return True

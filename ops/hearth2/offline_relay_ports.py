@@ -29,6 +29,7 @@ class RemoteSandbox:
 
 
 class HostPorts:
+    allow_posting=False # Intake-only: no room send/reply/react/read-marker writes.
     def __init__(self,state=None):self.state=state;self._live=None
     def host_identity(self):return os.name=='nt' and os.environ.get('COMPUTERNAME')=='RSLABINSKI-PC'
     def host_ok(self):

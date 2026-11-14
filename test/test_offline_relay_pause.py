@@ -77,7 +77,7 @@ class IndependentPauseTests(unittest.TestCase):
     def test_launch_verifier_refuses_changed_recovery_artifact(self):
         import hashlib,shutil,subprocess
         program=self.root/'program';program.mkdir();recovery=self.root/'recovery';recovery.mkdir()
-        names=['offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py']
+        names=['offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','relay_install.py','activate-offline-relay.ps1','install-offline-relay.ps1']
         for n in names:shutil.copyfile(Path(__file__).parents[1]/'ops/hearth2'/n,program/n)
         shutil.copyfile(Path(__file__).parents[1]/'ops/hearth2/offline_relay_pause.py',recovery/'offline_relay_pause.py')
         manifest={'host':os.environ.get('COMPUTERNAME'),'task':'Hearth-Codex-Offline-Relay',

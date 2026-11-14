@@ -97,6 +97,14 @@ def content(event):
     return c['body']
 
 
+def review_packet(body):
+    """The whole review is the verdict; quotations in refusing prose never pass."""
+    if type(body) is not str or not body.startswith('[REVIEW]'):raise ValueError('review required')
+    raw=body[len('[REVIEW]'):].strip()
+    if raw.startswith('```json\n') and raw.endswith('\n```'):raw=raw[8:-4].strip()
+    return decode(raw)
+
+
 class MatrixIntake:
     def __init__(self,state,client):
         self.state,self.client=state,client
@@ -119,6 +127,7 @@ class MatrixIntake:
         admit(work,proof)
         review=self.client.event(work['review_event']);review_body=content(review)
         if review.get('sender')!=CLAUDE or not review_body.startswith('[REVIEW]'):raise ValueError('review provenance differs')
+        if review_packet(review_body)!={'hearth_relay_work_review':{'verdict':'pass','work':{k:v for k,v in work.items() if k!='review_event'}}}:raise ValueError('passing review for exact work required')
         return work,proof,review_body
     def verify(self,work):
         key=work['work_id']+':'+str(work['generation'])

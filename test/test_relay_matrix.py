@@ -11,7 +11,7 @@ class MatrixTests(unittest.TestCase):
   self.m=m;self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.state=State(Path(self.tmp.name)/'state.db')
   self.work={'work_id':'work','aliases':['relay-alias'],'generation':1,'review_event':'$review','base_commit':'a'*40,'paths':['mcp/memory/hearth2/broker.py'],'scope':'hearth2-offline'}
   def event(i,sender,body):return {'event_id':i,'sender':sender,'type':'m.room.message','content':{'body':body,'m.relates_to':{'rel_type':'m.thread','event_id':THREAD}}}
-  self.old=event('$old',m.ACTOR,'[STATUS] seed');self.review=event('$review',m.CLAUDE,'[REVIEW] scoped work')
+  self.old=event('$old',m.ACTOR,'[STATUS] seed');self.review=event('$review',m.CLAUDE,'[REVIEW] '+json.dumps({'hearth_relay_work_review':{'verdict':'pass','work':{k:v for k,v in self.work.items() if k!='review_event'}}}))
   self.approval=event('$approval',m.RAD,'[APPROVED]\n'+json.dumps({'hearth_relay_work':self.work}))
   owner=self
   class Client:
@@ -52,12 +52,17 @@ class MatrixTests(unittest.TestCase):
  def test_conflicting_generation_rolls_back_staging_and_cursor(self):
   self.intake.bootstrap('$old');self.intake.poll()
   with self.state.tx() as db:db.execute('UPDATE relay_cursor SET event_id=?',('$old',))
-  self.work['paths']=['test/test_hearth2_other.py'];self.approval['content']['body']='[APPROVED] '+json.dumps({'hearth_relay_work':self.work})
+  self.work['paths']=['test/test_hearth2_other.py'];self.review['content']['body']='[REVIEW] '+json.dumps({'hearth_relay_work_review':{'verdict':'pass','work':{k:v for k,v in self.work.items() if k!='review_event'}}});self.approval['content']['body']='[APPROVED] '+json.dumps({'hearth_relay_work':self.work})
   with self.assertRaises(self.m.IntakeUnavailable):self.intake.poll()
   with self.state.connect() as db:self.assertEqual(db.execute('SELECT event_id FROM relay_cursor').fetchone()[0],'$old')
  def test_duplicate_json_keys_never_authorize(self):
   self.intake.bootstrap('$old');self.approval['content']['body']='[APPROVED] {"hearth_relay_work":{},"hearth_relay_work":{}}'
   self.assertEqual(self.intake.poll(),[])
+
+ def test_work_review_binds_work_without_requiring_its_own_future_event_id(self):
+  body={'hearth_relay_work_review':{'verdict':'pass','work':{k:v for k,v in self.work.items() if k!='review_event'}}}
+  self.review['content']['body']='[REVIEW] '+json.dumps(body)
+  self.intake.bootstrap('$old');self.assertEqual(self.intake.poll(),[self.work])
 
 class MatrixHTTPTests(unittest.TestCase):
  def test_real_http_transport_fixture_refuses_redirects_and_wrong_identity(self):

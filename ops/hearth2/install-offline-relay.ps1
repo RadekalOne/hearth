@@ -32,7 +32,7 @@ if ($UpdateDisabled) {
     foreach($dir in @($program,$recovery)) {
         if(Test-Path -LiteralPath $dir){
             $backup=Join-Path $history (Split-Path $dir -Leaf);New-Item -ItemType Directory -Path $backup | Out-Null
-            foreach($name in @('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','offline_relay_pause.py')) {
+            foreach($name in @('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','relay_install.py','activate-offline-relay.ps1','install-offline-relay.ps1','offline_relay_pause.py')) {
                 $item=Join-Path $dir $name
                 if(Test-Path -LiteralPath $item){
                     if((Get-Item -LiteralPath $item).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Backup link refused'}
@@ -42,6 +42,11 @@ if ($UpdateDisabled) {
         }
     }
     Copy-Item -LiteralPath (Join-Path $root 'manifest.json') -Destination $history
+    $oldConfig=Join-Path $root 'live-config.json'
+    if(Test-Path -LiteralPath $oldConfig){
+        if((Get-Item -LiteralPath $oldConfig).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Configuration link refused'}
+        Copy-Item -LiteralPath $oldConfig -Destination $history
+    }
     Copy-Item -LiteralPath $link -Destination $history
 } else {
     if ($existing -or (Test-Path -LiteralPath $root) -or (Test-Path -LiteralPath $link)) { throw 'Preserve existing task/state/pause shortcut; use explicit disabled refresh only for owned installation' }
@@ -56,7 +61,7 @@ foreach($dir in @($root,$program,$recovery)) {
     } else {New-Item -ItemType Directory -Path $dir | Out-Null}
 }
 $hashes=@{};$recoveryHashes=@{}
-$files=@('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','offline_relay_pause.py')
+$files=@('offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','relay_install.py','activate-offline-relay.ps1','install-offline-relay.ps1','offline_relay_pause.py')
 foreach($name in $files) {
     $source=Join-Path $SourceRoot $name
     if((Get-Item -LiteralPath $source).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Source link refused'}
@@ -72,10 +77,9 @@ foreach($name in $files) {
     if($name -eq 'offline_relay_pause.py'){$recoveryHashes[$name]=$hash}else{$hashes[$name]=$hash}
     (Get-Item -LiteralPath $target).IsReadOnly=$true
 }
-$manifest=@{host=$env:COMPUTERNAME;model=(Get-CimInstance Win32_ComputerSystem).Model;task=$taskName;
-    program=$program;state=$state;python=$python;source_hashes=$hashes;recovery_hashes=$recoveryHashes;installed_disabled=$true;
-    live_coordination='unavailable';included_allowance='unverified';unattended_launcher='unverified'}
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $root 'manifest.json') -Encoding UTF8
+# This committed stdlib producer writes both exact non-secret artifacts.
+& $python -I (Join-Path $program 'relay_install.py') --root $root --model (Get-CimInstance Win32_ComputerSystem).Model
+if($LASTEXITCODE -ne 0){throw 'Reproducible live artifact generation failed; task remains disabled'}
 & $python -I (Join-Path $program 'offline_relay.py') status --state $state | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Paused state verification failed'}
 if(-not $UpdateDisabled) {

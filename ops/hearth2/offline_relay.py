@@ -18,7 +18,7 @@ def verify_install():
     manifest_file=root/'manifest.json'
     if manifest_file.stat().st_size>32768:raise RuntimeError('bounded controller manifest required')
     manifest=json.loads(manifest_file.read_text(encoding='utf-8-sig'))
-    files={'offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py'}
+    files={'offline_relay.py','offline_relay_state.py','offline_relay_ports.py','offline_relay_windows.py','pause-offline-relay.ps1','relay_matrix.py','relay_native.py','relay_launch.py','relay_live.py','relay_install.py','activate-offline-relay.ps1','install-offline-relay.ps1'}
     if (manifest.get('host')!=os.environ.get('COMPUTERNAME') or manifest.get('task')!='Hearth-Codex-Offline-Relay'
         or set(manifest.get('source_hashes',{}))!=files):raise RuntimeError('controller binding differs')
     for name in files:
@@ -109,6 +109,7 @@ class Dispatcher:
         return 7<=local.hour<=23
 
     def _post(self):
+        if getattr(self.ports,'allow_posting',True) is not True:return
         row=self.state.take_post()
         if row:
             try:
@@ -145,6 +146,8 @@ class Dispatcher:
             self.state.tick(at,status);return {'state':status,'launched':False}
         try:events=self.ports.poll()
         except Exception:
+            if getattr(self.ports,'allow_posting',True) is not True:
+                self.state.tick(at,'intake_unavailable_or_gap');return {'state':'intake_unavailable_or_gap','launched':False}
             self.state.notice('coordination_unavailable','[BLOCKED] I could not read the authorized coordination source. '
                 'A verified controller adapter is required before work can proceed. seat_usage=unavailable; worker_launches=0.')
             self._post();self.state.tick(at,'blocked');return {'state':'blocked','launched':False}
