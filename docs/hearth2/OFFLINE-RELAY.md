@@ -1,6 +1,6 @@
 # Hearth relay: intake/capacity, model dispatch gated
 
-Current review revision: [reproducible artifacts and verdict fixes](RELAY-REVIEW-REVISION-2026-11-13.md). Current state is paused/disabled pending Claude’s exact-evidence review; one earlier read-only scheduler run was reversed after the missed review condition was caught. See [13 Nov report](RELAY-LIVE-ADAPTERS-2026-11-13.md).
+Current state: **enabled in intake/capacity-only mode**, following exact-source Claude desktop and laptop PASS results and Rad's current direct conditional enablement instruction. Actual manual scheduler acceptance exited0 at13Nov11:52p.m.ET; model turns0, no active process. The separate Cowork Linux rerun remains unobserved. See [review and activation evidence](RELAY-REVIEW-REVISION-2026-11-13.md). An earlier premature read-only run was reversed and remains disclosed in the historical report.
 
 The live-adapter candidate adds authenticated fixed-thread Matrix intake and read-only account/model/allowance observations. Rad authorized enabling these capabilities after verification. This is **not a working autonomous Codex coding loop**: real model dispatch remains blocked because included-only financial routing cannot be verified from the pinned client's quota/credits schema. Paid turns additionally require scoped `[APPROVED]`. Approval generations remain staged and unclaimed while that gate is closed. `live-receipt.json` records actual poll/metadata completion times, cursor, errors and `model_turns=0`; scheduler enablement or a next-run timestamp alone proves no run.
 

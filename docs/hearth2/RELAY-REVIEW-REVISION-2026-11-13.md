@@ -1,6 +1,6 @@
 # Intake-only relay — Claude review revision
 
-This follows Claude's desktop review `$gxLSTtKeu_b4RyiBBwOSI-66h8FnBgYanmVdrvYBM2I` and Cowork review `$ccJiyaQvyafIv0n-DFOB6ZDAE20FK9a308PitLXf8X0` of head `af4e934` / runtime `9166cf7`. The relay remains paused while the revised evidence is reviewed. Model turns and paid runs remain blocked; production is unchanged.
+This follows Claude's desktop review `$gxLSTtKeu_b4RyiBBwOSI-66h8FnBgYanmVdrvYBM2I` and Cowork review `$ccJiyaQvyafIv0n-DFOB6ZDAE20FK9a308PitLXf8X0` of head `af4e934` / runtime `9166cf7`. The revised source received two Claude PASS reviews and intake-only mode is now enabled under Rad’s current direct instruction. See the activation receipt below. Model turns and paid runs remain blocked; production is unchanged.
 
 Rad's current direct instruction in the existing Hearth v2 chat is: “Check Claude’s review, address any findings, and enable the intake-only relay once it passes. Keep model turns and paid runs gated on my [APPROVED], and production unchanged.” This is recorded as conditional intake-only enablement authority. Claude's relayed Cowork approval remains attributed context, not a substitute for Rad's own instruction. Review and human authorization remain distinct; this report imposes no escalation rule on another reviewer.
 
@@ -60,3 +60,16 @@ After reviewing the exact revised artifacts, a passing Claude review for intake-
 Only after authenticated review passes may the user's conditional intake-only enable instruction be executed using the installed, pinned activation script. Existing hourly 07:00–23:00 ET triggers remain unchanged. An enabled schedule or future next-run timestamp is never proof that a timer run executed. Manual diagnostics and manually triggered scheduler checks are labelled as such. Outside-window checks must remain outside-window; do not alter the clock/window for acceptance.
 
 Intake-only is not an autonomous coding loop. No task generation is claimed, no model or paid run is authorized, understanding remains unknown and task completion is unchanged.
+
+
+## Actual activation — 13 November,11:52p.m. ET
+
+Claude's desktop analysis `$2jFKjWvtxbOeycnDN7eiBe4t-PV4ObgxjahsbuY-CII` and laptop analysis `$YYoI-9ZrXQtzjEFxmQ9DCrqC5uCm4X5inI-S1j-nbM8` both passed the exact revised intake-only source. Both were source reviews; neither ran the new tests. The separate Cowork Linux rerun has not been observed. The desktop pass packet `$iPpI7hkqAGrdu0mApksvcgh7_211u-yR-B_Q2wyOW48` was fetched in full and verified against actual installed manifest SHA17ff37…aa8c8. The second matching packet is `$WdbdX0Qpu9Ycqwh8Yra3jJCc6vHQai5ZbmxwHDeDFwg`.
+
+Human enablement authority is Rad's **current direct instruction in this active Hearth v2 laptop chat**, quoted above, conditional on review passing. It is not Claude's review packet or the relayed Cowork approval. Earlier relayed wording about an additional on-commit approval is attributed context; the current direct instruction supplies the conditional intake-only action. No model/paid authority is inferred.
+
+The installed, pinned activation script verified the exact manifest, authenticated Claude packet and fresh live diagnostic, backed up SQLite and enabled only the existing owned task. Actual activation timestamp `2026-11-14T04:52:49.600208Z`; epoch21, paused0/enabled1. The manually triggered Task Scheduler invocation started04:52:50Z and exited0. Its intake poll ran04:52:51.126846Z–04:52:54.127030Z, processed through `$WdbdX0Qpu9Ycqwh8Yra3jJCc6vHQai5ZbmxwHDeDFwg`, no pending work, no outbox rows, zero model turns, no active process and no remaining native home. State: `enabled_inference_gated`. [Activation receipt](evidence/relay-intake-activation-2026-11-13.json).
+
+The existing17 hourly07:00–23:00 ET triggers, limited interactive user, no-wake/no-catch-up settings are unchanged. A next-run time is not execution proof. The desktop **Pause Hearth relay** action remains the single-step stop/disable control. No production change, paid run, model turn, merge, deploy, global credential/account setting or unrelated job change occurred.
+
+Remaining non-blocking notes: the unused installer hash variables and duplicated fixed-path constants are retained; normalization mismatch or constant drift fails closed. Task's legacy “disabled candidate” identity text is retained for recovery matching. Cursor recovery and continuous review revalidation remain absent. Original review edits do not revoke the original event; redaction does. If configuration or a credential source fails before the live adapter is constructed, `control.last_check/status` updates but `live-receipt.json` may retain its previous successful poll; operators must inspect both, and silence is not health proof. No claim of actual unattended coding or independent Cowork Linux acceptance is made.

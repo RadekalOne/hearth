@@ -1,0 +1,97 @@
+{
+  "active_records": 0,
+  "control": {
+    "activation_at": "2026-11-14T04:52:49.600208+00:00",
+    "enabled": 1,
+    "epoch": 21,
+    "id": 1,
+    "last_check": "2026-11-14T04:52:50.689667+00:00",
+    "paused": 0,
+    "status": "enabled_inference_gated"
+  },
+  "cowork_linux_rerun": "not observed; desktop and laptop source-only PASS verified",
+  "deferred_notes": [
+    "Legacy task description string retained for recovery identity.",
+    "No automatic cursor recovery/continuous review revalidation.",
+    "Pre-adapter configuration or credential-source failures update control last_check/status but can leave last good live-receipt.json; read both.",
+    "Unused installer hash variables and duplicated path constants; drift fails closed.",
+    "Original review event edits do not revoke it; redaction does."
+  ],
+  "human_authority": "Rad current direct instruction in existing Hearth v2 chat: Check Claude review, address findings, enable intake-only once it passes; model turns and paid runs gated on APPROVED, production unchanged.",
+  "invocation": "manually_triggered_Task_Scheduler_acceptance",
+  "manifest_sha256": "17ff37f50dcc2dffe0d8b33b933a68aefa679356c8de79930cb5464fb86aa8c8",
+  "native_homes_remaining": 0,
+  "observed_at": "2026-11-14T04:53:17.137919+00:00",
+  "outbox_rows": 0,
+  "poll": {
+    "capacity": {
+      "capacity_available": true,
+      "included_only_verified": false,
+      "inference_authorized": false,
+      "observed_at": "2026-11-14T04:52:54.053052+00:00",
+      "reason": "financial_authority_and_route_boundary_required",
+      "used_percent": [
+        8
+      ]
+    },
+    "completed_at": "2026-11-14T04:52:54.127030+00:00",
+    "inference_authorized": false,
+    "intake_complete": true,
+    "mode": "intake_capacity_only",
+    "model_turns": 0,
+    "native": {
+      "account_type": "chatgpt",
+      "binary_verified": true,
+      "model_present": true,
+      "observed_at": "2026-11-14T04:52:54.053052+00:00",
+      "rates": {
+        "credits": {
+          "balance": null,
+          "hasCredits": false,
+          "unlimited": false
+        },
+        "limitId": "codex",
+        "primary": {
+          "resetsAt": 1794996353,
+          "usedPercent": 8,
+          "windowDurationMins": 10080
+        },
+        "rateLimitReachedType": null,
+        "secondary": null,
+        "spendControlReached": false
+      },
+      "requires_auth": true
+    },
+    "native_complete": true,
+    "pending": 0,
+    "processed_through": "$WdbdX0Qpu9Ycqwh8Yra3jJCc6vHQai5ZbmxwHDeDFwg",
+    "started_at": "2026-11-14T04:52:51.126846+00:00",
+    "task_state": "unchanged",
+    "understanding": "unknown"
+  },
+  "review_analysis_events": [
+    "$2jFKjWvtxbOeycnDN7eiBe4t-PV4ObgxjahsbuY-CII",
+    "$YYoI-9ZrXQtzjEFxmQ9DCrqC5uCm4X5inI-S1j-nbM8"
+  ],
+  "review_event": "$iPpI7hkqAGrdu0mApksvcgh7_211u-yR-B_Q2wyOW48",
+  "runtime_commit": "f13de43f0be982e884cb77cae3bbe74e659420a4",
+  "scheduler": {
+    "enabled": true,
+    "last_result": 0,
+    "last_run_utc": "2026-11-14T04:52:50Z",
+    "note": "Manual scheduler invocation proved execution; the next scheduled run is not inferred.",
+    "start_when_available": false,
+    "state": "Ready",
+    "trigger_count": 17,
+    "triggers": "hourly07:00-23:00 America/New_York",
+    "wake_to_run": false
+  },
+  "separate_linux_cowork_rerun": "not observed; conditional enable based on current direct Rad instruction plus both exact-source Claude PASS results",
+  "source_head": "602718ac91526b33fc9cf47cd151f274cb1af1a2",
+  "trial_baseline": {
+    "baseline_changed_count": 0,
+    "baseline_count": 309,
+    "linux_source_regeneration_matches_windows": true,
+    "test_containers_remaining": ""
+  }
+}
