@@ -12,7 +12,7 @@ The interactive statement that this review was still pending was wrong: it relie
 
 ## Clock finding and fix
 
-`test_fixture_allowance_cannot_pass_production_even_with_server_work_proof` constructed a Dispatcher without a clock. Outside the real07:00–23:00 ET window, it returned `outside_window` before reaching the allowance refusal that the test intended to check. Production behavior was correct.
+`test_fixture_allowance_cannot_pass_production_even_with_server_work_proof` constructed a Dispatcher without a clock. Outside the permitted07:00–23:59 ET window, it returned `outside_window` before reaching the allowance refusal that the test intended to check. Production behavior was correct.
 
 The audit found another real-clock constructor in `test_live_mode_rejects_fixture_attestation_even_if_it_says_included`. That assertion could silently pass outside the window without exercising source refusal. Both constructors now reuse the fixture's fixed in-window clock; the neighbour also asserts the intended `idle` result. Every other unit-test Dispatcher constructor already supplies a clock. No production operating hours, operating-system clock or runtime implementation changed.
 
@@ -23,3 +23,14 @@ Post-fix reruns are Codex's tests, separate from Cowork's original independent r
 ## Scope retained
 
 The existing intake-only installation, source/configuration pins, schedule, pause action and financial guards are unchanged. No reinstall, activation change, service rollout, merge, model turn, paid run or account/credential setting change occurred; application production remained unchanged. Understanding remains unknown and task completion is not inferred from receipt. Any proposal to let the relay do more than read requires Rad's separate approval; this closeout requests none.
+
+
+## Follow-up review and operating-hours coverage
+
+Claude's source-only follow-up `$qQCoNIC8hRSBsjDL2IdioNlgq-s4xJXkWPAZPii8brE` confirmed that `08e88c1` closes the clock finding. It identified one non-blocking coverage gap: no test directly exercised the operating-hours gate. This follow-up was requested formally as `[REVIEW]` after the earlier `[STATUS]` closeout had been seen but was not treated as a review candidate.
+
+A new test injects UTC instants corresponding to06:59,07:00,23:59 and00:00 ET, in both standard and daylight time. It checks `outside_window` and no polling/claim outside the window, and polling inside. Existing correct runtime behavior passes all eight cases. Controlled always-open and always-closed guard mutations each fail four cases, confirming the coverage detects both failures; no production source or OS clock was mutated.
+
+All **91 relay tests pass on Windows (13.894s) and network-none Linux (2.187s), actualexit0**. [Coverage evidence](evidence/relay-hours-coverage-2026-11-14.json) identifies the test commit and canonical source archive. This focused run does not relabel the prior1330-test full run as a new1331-test result.
+
+Wording is now precise: the operating-hours guard permits07:00–23:59ET, while the existing17 hourly triggers are scheduled07:00–23:00ET. No schedule, installation, runtime, account, paid/model or production change is involved. The original Cowork intake-only PASS remains valid; this is test coverage, not a new activation or human-approval gate.

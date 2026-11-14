@@ -1,0 +1,46 @@
+{
+  "active_records": 0,
+  "base": "e335b23a57f3cdb82ca418015423dcc96e3194f2",
+  "changes": "One boundary test: EST/EDT UTC instants at06:59,07:00,23:59,00:00ET; no poll or claim outside, proceeds to poll inside.",
+  "control": [
+    0,
+    1,
+    21,
+    "enabled_inference_gated"
+  ],
+  "hourly_triggers_ET": "07:00 through23:00;17triggers",
+  "installed_manifest_unchanged": true,
+  "linux_focused": {
+    "archive_sha256": "3fed3dccb6a6b7bd888b3732cd9d6e1fe95e2d72b1dc1d220ce024374da5fb12",
+    "completed_at": "2026-11-14T19:53:34.580103+00:00",
+    "docker_exit": 0,
+    "elapsed_seconds": 3.765483831986785,
+    "log_sha256": "fd4f31fb6b01c3a155ee6f207f3d80659bfe8c666fd78f6b505a0d892db8014b",
+    "network": "none",
+    "passed": true,
+    "source_read_only": true,
+    "started_at": "2026-11-14T19:53:30.814607+00:00",
+    "test_runner_seconds": 2.187,
+    "tests": 91,
+    "tree": "c1d2c809b24978e2e1400c5e7f5663be529f9b41"
+  },
+  "model_turns": 0,
+  "mutation_controls": {
+    "always_closed_expected_failures": 4,
+    "always_open_expected_failures": 4,
+    "unmodified_guard_all_eight_subtests_pass": true
+  },
+  "note": "Current validation is91focusedWindows/Linux; prior full1330clockfix run remains prior evidence, not a new1331-test full-suite claim.",
+  "operating_hours_ET": "07:00 through23:59 inclusive minute",
+  "paid_runs": 0,
+  "production_changed": false,
+  "review_event": "$qQCoNIC8hRSBsjDL2IdioNlgq-s4xJXkWPAZPii8brE",
+  "review_kind": "Claude desktop source-only; clock finding closed, nonblocking operating-hours coverage follow-up",
+  "runtime_changes": false,
+  "test_commit": "658e69479f62f128bad22e615fec1cf997224096",
+  "windows_focused": {
+    "passed": true,
+    "seconds": 13.894,
+    "tests": 91
+  }
+}
