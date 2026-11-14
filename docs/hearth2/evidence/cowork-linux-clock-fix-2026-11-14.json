@@ -1,0 +1,84 @@
+{
+  "active_records": 0,
+  "baseline": {
+    "baseline_files": 309,
+    "changed": 0,
+    "remaining_test_containers": ""
+  },
+  "changed_runtime_files": false,
+  "control": {
+    "activation_at": "2026-11-14T04:52:49.600208+00:00",
+    "enabled": 1,
+    "epoch": 21,
+    "id": 1,
+    "last_check": "2026-11-14T15:00:01.990368+00:00",
+    "paused": 0,
+    "status": "enabled_inference_gated"
+  },
+  "cowork_review": {
+    "artifact_pins_match": true,
+    "author": "claude @ cowork",
+    "drawer": "drawer_ab50e51c2398c8fa3a5e17a34870576a",
+    "ended_at": "2026-11-14T05:58:53Z",
+    "focused": {
+      "collected": 90,
+      "failures": 1,
+      "passed": 89
+    },
+    "full": {
+      "clock_test_failures": 1,
+      "collected": 1330,
+      "known_Hearth1_environment_errors": 54,
+      "passed": 1275
+    },
+    "posted_at": "2026-11-14T05:59:39.312Z",
+    "python": "3.13.17",
+    "scope_verdict": "PASS intake/capacity-only",
+    "source_event": "$LIMRSPCz77TQ9rUNMDf5TiT3RI53wp-AaXMpHXVOZWY",
+    "started_at": "2026-11-14T05:57:35Z"
+  },
+  "fix": "Both non-acceptance Dispatcher constructions reuse fixed in-window clock; neighbouring fixture-source refusal asserts idle to exclude outside-window false passes. Other unit constructors audited, already explicit clocks.",
+  "installed_manifest_sha256": "17ff37f50dcc2dffe0d8b33b933a68aefa679356c8de79930cb5464fb86aa8c8",
+  "model_turns": 0,
+  "monitor_acknowledgment": {
+    "at": "2026-11-14T11:01:18.932Z",
+    "source_event": "$gnj0LkBr-ApLtcNTBghUc3z9Hg8JMXjz34HDHgyc4Tw"
+  },
+  "note": "Post-fix reruns are Codex tests; no claim Cowork reran the modified test commit. Prior independent scoped PASS remains recorded.",
+  "paid_runs": 0,
+  "production_changed": false,
+  "regression": {
+    "after": "Both pass; no production or OS clock altered.",
+    "before": "Two target assertions fail with real/default clock forced00:57ET.",
+    "daytime_relay_tests": {
+      "elapsed_seconds": 12.658,
+      "passed": true,
+      "tests": 90
+    },
+    "full_suite": {
+      "archive_sha256": "d99dd9b528f9efe121773bc46eba84d05fbe74c31fa2e689657d4def2d9d7495",
+      "completed_at": "2026-11-14T15:00:39.018663+00:00",
+      "docker_exit": 0,
+      "elapsed_seconds": 145.2418247158639,
+      "log_sha256": "17589823c11746e0e7df47f87334f376f1e35ed0270d654ca0e8f775e4024f53",
+      "network": "none",
+      "operating_system_clock_changed": false,
+      "passed": true,
+      "relay_default_clock": "2026-11-14T05:57:00Z (00:57 ET)",
+      "source_read_only": true,
+      "started_at": "2026-11-14T14:58:13.776840+00:00",
+      "test_runner_seconds": 140.311,
+      "tests": 1330,
+      "tree": "4a8e3ac49334faf7be605b17db0f0a8273ca8b94"
+    },
+    "overnight_relay_tests": {
+      "elapsed_seconds": 12.35,
+      "passed": true,
+      "tests": 90
+    }
+  },
+  "relay_mode": "intake_capacity_only",
+  "reviewed_runtime": "f13de43f0be982e884cb77cae3bbe74e659420a4",
+  "status_correction": "Earlier interactive pending statement was stale and wrong. Cowork review is complete; its non-blocking clock test finding is now fixed.",
+  "test_fix_commit": "08e88c1b6e4bf22061d8fac4ebae022d4d537183"
+}
