@@ -1,0 +1,11 @@
+{
+  "auth": "C:/Users/rslabinski/.codex/auth.json",
+  "binary": "C:/Users/rslabinski/AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+  "binary_sha256": "6f267830b029ee25d9339864aa867cd45de9f8fd4c5ea007d2e63c13a0c66d36",
+  "host": "RSLABINSKI-PC",
+  "matrix_env": "C:/Users/rslabinski/AI Projects/.hearth-matrix-codex.env",
+  "mode": "intake_capacity_only",
+  "repo": "C:/Users/rslabinski/Projects/hearth2-transfer",
+  "seed_event": "$LOWDdF8e9IbDvwo36BkoFITMNzmEpB08jfdJMb1JxKg",
+  "version": 1
+}

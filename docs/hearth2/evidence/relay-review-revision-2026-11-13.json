@@ -1,0 +1,124 @@
+{
+  "active_records": 0,
+  "artifact_directory": "relay-live-adapters-2026-11-13",
+  "base_commit": "af4e9342567cd3264d8b7cc5dde753146cbde449",
+  "claude_review": "revised candidate pending",
+  "control": {
+    "activation_at": "2026-11-13T23:07:11.729501+00:00",
+    "enabled": 0,
+    "epoch": 20,
+    "id": 1,
+    "last_check": "2026-11-13T23:07:12.789269+00:00",
+    "paused": 1,
+    "status": "paused"
+  },
+  "focused": {
+    "elapsed_seconds": 12.162,
+    "passed": true,
+    "tests": 90
+  },
+  "full_suite": {
+    "archive_sha256": "e0824ccfce0b1aaf6a72e364462abf7cfee6292fd3639ff957da743e5bf0ce77",
+    "completed_at": "2026-11-14T04:43:34.377474+00:00",
+    "docker_exit": 0,
+    "elapsed_seconds": 138.85883281193674,
+    "log_sha256": "d0bf5f2ffcaeeaa2ae824f91605be163f3ffa2762b726f0452f87f59bb65c7d6",
+    "network": "none",
+    "passed": true,
+    "source_read_only": true,
+    "started_at": "2026-11-14T04:41:15.518619+00:00",
+    "test_runner_seconds": 133.737,
+    "tests": 1330,
+    "tree": "63a7905e036f808feb963af7fa90dfbfd10d6e8c"
+  },
+  "generator": "ops/hearth2/relay_install.py",
+  "installed_artifact_bytes_match_source_regeneration": true,
+  "live_config_sha256": "4ee9fa2a008bd70353a9e99444ff83d2c751b679412d401ef7c9787cfc26b51e",
+  "manifest_sha256": "17ff37f50dcc2dffe0d8b33b933a68aefa679356c8de79930cb5464fb86aa8c8",
+  "model_turns": 0,
+  "notes": [
+    "No credentials or raw RPC response hashes in exported evidence.",
+    "Activation/installer/generator now included in source pins.",
+    "Task legacy description retained for exact independent recovery identity.",
+    "Review is procedural trusted-owner guard, not continuous authorization monitor.",
+    "Gap refuses without cursor adoption; local receipts replace room notices."
+  ],
+  "paid_runs": 0,
+  "paused_diagnostic": {
+    "capacity": {
+      "capacity_available": true,
+      "included_only_verified": false,
+      "inference_authorized": false,
+      "observed_at": "2026-11-14T04:40:14.755814+00:00",
+      "reason": "financial_authority_and_route_boundary_required",
+      "used_percent": [
+        8
+      ]
+    },
+    "completed_at": "2026-11-14T04:40:14.813632+00:00",
+    "inference_authorized": false,
+    "intake_complete": true,
+    "mode": "intake_capacity_only",
+    "model_turns": 0,
+    "native": {
+      "account_type": "chatgpt",
+      "binary_verified": true,
+      "model_present": true,
+      "observed_at": "2026-11-14T04:40:14.755814+00:00",
+      "rates": {
+        "credits": {
+          "balance": null,
+          "hasCredits": false,
+          "unlimited": false
+        },
+        "limitId": "codex",
+        "primary": {
+          "resetsAt": 1794996353,
+          "usedPercent": 8,
+          "windowDurationMins": 10080
+        },
+        "rateLimitReachedType": null,
+        "secondary": null,
+        "spendControlReached": false
+      },
+      "requires_auth": true
+    },
+    "native_complete": true,
+    "pending": 0,
+    "processed_through": "$pOmlw84cAs99Dgv3LD4sJ5iRKmKtIMdBCuBRmwh4U5U",
+    "started_at": "2026-11-14T04:40:11.674811+00:00",
+    "task_state": "unchanged",
+    "understanding": "unknown"
+  },
+  "previous_run_chronology": {
+    "note": "File metadata observed retrospectively; original runner did not record explicit start/end. New timed run supersedes chronology evidence.",
+    "original_log_created_and_last_written": "2026-11-13 23:11:31.406170638 +0000|2026-11-13 23:13:35.953020568 +0000",
+    "original_runtime_commit_time": "2026-11-13T18:13:57-05:00"
+  },
+  "production_changed": false,
+  "recovery_hashes": {
+    "offline_relay_pause.py": "e60b0ef83fcf8f93f493ef8bdcff358755255c37dfb596a1e1d7c6306c2d9c4c"
+  },
+  "review_sources": [
+    "$gxLSTtKeu_b4RyiBBwOSI-66h8FnBgYanmVdrvYBM2I",
+    "$ccJiyaQvyafIv0n-DFOB6ZDAE20FK9a308PitLXf8X0"
+  ],
+  "runtime_commit": "f13de43f0be982e884cb77cae3bbe74e659420a4",
+  "source_hashes": {
+    "activate-offline-relay.ps1": "2068c36d08307c8d5b078ade688db179975dba2a9a07219bcb7e3c7c5d526785",
+    "install-offline-relay.ps1": "56c714297ba9d573eaca65aa4461c6217257cbe009750ddebaefe2bd86504fde",
+    "offline_relay.py": "c9fc77297098d218b62619fd169f5ee74fa6a9ae9bde7378036a854ee9c3fc5f",
+    "offline_relay_ports.py": "71188c60801bd59a40eb1c3c148e050b99d50ba4e2224bdae040bb67de2bd3d0",
+    "offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+    "offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+    "pause-offline-relay.ps1": "9fdc4ddfeb9a436de0393b8ad3e25029782ef8e7932e43f9aa78fda9cb3c5692",
+    "relay_install.py": "aa17fe9621112cba47dc6a302399375449d4041ae009411fb8e6f62bdd874894",
+    "relay_launch.py": "42c4913b281e1b7fc5589e4a5e911d0e903334e0ee72d2ea0ef838a2107b2e3f",
+    "relay_live.py": "ab750c51879e58116d97b90f29b673b07ee78f6c71897090474c5eaebc8359b2",
+    "relay_matrix.py": "237264a8c5a8de59ea177f863c2a76440b27f237949ca75eb9f80473135a3798",
+    "relay_native.py": "c132053ea5a5cdfc56f7a7b4110ebed7f55f711265c75127bf5e5c4f8d1a6658"
+  },
+  "task_completion": "unchanged",
+  "task_enabled": false,
+  "understanding": "unknown"
+}

@@ -1,0 +1,30 @@
+{
+  "host": "RSLABINSKI-PC",
+  "included_allowance": "capacity_only_not_financial_authority",
+  "installed_disabled": true,
+  "live_config_sha256": "4ee9fa2a008bd70353a9e99444ff83d2c751b679412d401ef7c9787cfc26b51e",
+  "live_coordination": "authenticated_fixed_thread",
+  "model": "21HM000SUS",
+  "program": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\program",
+  "python": "C:\\Python314\\python.exe",
+  "recovery_hashes": {
+    "offline_relay_pause.py": "e60b0ef83fcf8f93f493ef8bdcff358755255c37dfb596a1e1d7c6306c2d9c4c"
+  },
+  "source_hashes": {
+    "activate-offline-relay.ps1": "2068c36d08307c8d5b078ade688db179975dba2a9a07219bcb7e3c7c5d526785",
+    "install-offline-relay.ps1": "56c714297ba9d573eaca65aa4461c6217257cbe009750ddebaefe2bd86504fde",
+    "offline_relay.py": "c9fc77297098d218b62619fd169f5ee74fa6a9ae9bde7378036a854ee9c3fc5f",
+    "offline_relay_ports.py": "71188c60801bd59a40eb1c3c148e050b99d50ba4e2224bdae040bb67de2bd3d0",
+    "offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
+    "offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
+    "pause-offline-relay.ps1": "9fdc4ddfeb9a436de0393b8ad3e25029782ef8e7932e43f9aa78fda9cb3c5692",
+    "relay_install.py": "aa17fe9621112cba47dc6a302399375449d4041ae009411fb8e6f62bdd874894",
+    "relay_launch.py": "42c4913b281e1b7fc5589e4a5e911d0e903334e0ee72d2ea0ef838a2107b2e3f",
+    "relay_live.py": "ab750c51879e58116d97b90f29b673b07ee78f6c71897090474c5eaebc8359b2",
+    "relay_matrix.py": "237264a8c5a8de59ea177f863c2a76440b27f237949ca75eb9f80473135a3798",
+    "relay_native.py": "c132053ea5a5cdfc56f7a7b4110ebed7f55f711265c75127bf5e5c4f8d1a6658"
+  },
+  "state": "C:\\Users\\rslabinski\\AppData\\Local\\Hearth\\OfflineRelay\\relay.sqlite3",
+  "task": "Hearth-Codex-Offline-Relay",
+  "unattended_launcher": "blocked_financial_boundary_unverified"
+}

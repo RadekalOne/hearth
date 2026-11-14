@@ -73,29 +73,7 @@
           "secondary": null,
           "spendControlReached": false
         },
-        "requires_auth": true,
-        "rpc_evidence": {
-          "account/login/start": {
-            "id": 2,
-            "sha256": "60089296aa26952edab5a185cca56ba9bf7da1ac1110c7bea0e173543881fe19"
-          },
-          "account/rateLimits/read": {
-            "id": 4,
-            "sha256": "501563c5af42ef65d426ffacdc3506d71b7056cb272d3adae58a71e5ec902b08"
-          },
-          "account/read": {
-            "id": 3,
-            "sha256": "134c05ab5de819c433f83c7bed45191a56d3c949ee48ca4934d3bc3b9cee68fe"
-          },
-          "initialize": {
-            "id": 1,
-            "sha256": "6fa1b3a02df40fdeb99acefffa7e49557bf8b6fd6de45cf8afbe5656ae94e319"
-          },
-          "model/list": {
-            "id": 5,
-            "sha256": "9a8e998f1c6f6121a18b8cf77bd9bab581bf51e865ac699aff11c8ca37f9d21c"
-          }
-        }
+        "requires_auth": true
       },
       "native_complete": true,
       "pending": 0,
@@ -147,6 +125,7 @@
       }
     }
   },
+  "privacy_note": "Raw RPC response digests are retained only in private receipts; omitted from this current public evidence version.",
   "production_changed": false,
   "recovery_hashes": {
     "offline_relay_pause.py": "e60b0ef83fcf8f93f493ef8bdcff358755255c37dfb596a1e1d7c6306c2d9c4c"
