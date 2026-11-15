@@ -1,211 +1,71 @@
-# Piece 2 — one real-turn request, draft for review
+# Piece 2 — one supervised Codex seat turn, prepare-only
 
-The credential-free walking skeleton passes at its stated scope; real account
-execution and real-model behaviour remain unknown. This request is prepared,
-not executable: Rad's usage evidence and the reviewed live execution safeguards
-below are still pending, and no paid turn or activation is authorized.
+Updated 14 November 2026 for Claude's task `$vfe2S_7ChyF2Fz72_J13uRlUUp3nOfLP0PuxS_1u96k` and Rad's amended decision B. This packet requests one run, not relay model activation. No run has been authorized or scheduled by this revision. The exact execution commit, artifact pins, timeout policy and live-path review remain required before scheduling or sending.
 
-## Decision requested later
+## Requested exercise
 
-Authorize **one supervised task / one native user turn**, exact `gpt-6.1-sol`,
-isolated Codex0.159.1 on trial `srv2065995` only. Replace only the fake provider
-in the walking path with the explicitly approved existing ChatGPT seat route.
-Keep the Broker's memory data synthetic for this entitlement test; do not add
-real HM credentials, production access, shell, write tools, agents or retries.
-The real model must choose the scoped memory read and compose its own closeout;
-failure to do either is recorded, not corrected by a scripted provider.
+One task, one native user turn, exact `gpt-6.1-sol`, pinned isolated Codex 0.159.1 on trial `srv2065995` only. Use the existing Climate Central ChatGPT Business **Premium** seat. Keep the Broker's data synthetic; the real model must choose the scoped memory read and produce its own closeout. No real HM credential in a worker, shell, write tools, subagents, automatic retry, model substitution, provider fallback, service installation or production contact. No Claude turn is requested.
 
-This would answer whether that account can execute the exact model through the
-reviewed path. It would not accept piece2 or full A4–A9/N2/N3, validate Claude's
-seat, deliver a plan document, or start the seven-night window.
+This checks account entitlement and real-model behaviour for this narrow path. It does not accept Piece 2, the full A4–A9/N2/N3 matrix, Claude's runner, a plan-document implementation or the seven-night window.
 
-## Scheduling gate — not yet satisfied
+## Account-side financial boundary
 
-12 November review update: conditions3–5 passed as inactive components, not a
-live launcher. Claude's follow-up findings A–E are additional paid-turn blockers.
-A/C independently passed at6170160 and B was accepted as partial in Claude's
-`drawer_6aa3493f61c23d6f9d823b3cecfd1123`. B (a deliberate live timing policy)
-remains unresolved. D/E and interruption/repeated-thread cleanup now have a new
-inactive candidate awaiting exact-commit review; see
-`BROKER-DENIALS-BUDGET-2026-11-12.md`. No component PASS or test count clears
-the scheduling, live-composition or financial gates. See
-`TURN-REVIEW-ABC-2026-11-12.md` for the exact dispositions.
+The boundary is OpenAI's **0 credits/month per-user override for Rad Slabinski's exact Climate Central Business Premium seat**, not a new locally designed monetary ceiling. Claude observed the saved override in the admin console after Rad set it; automatic reload was OFF and workspace credits spent in the last 30 days were 0. Those are dated, attributed observations, not a current dispatch readback.
 
-**Do not schedule the actual turn until conditions 3–5 below are implemented in
-the live execution path and pass independent review at the exact execution
-commit:** canonical reviewed `turn/start`, separately bounded streamed-event
-handling, and private Broker-capability delivery. The fixture subclass is not
-that implementation. Two provider requests can each stream many notifications;
-the request cap does not satisfy condition 4 or fix the 64-notification limit.
+Before the one send, the trusted controller/operator must:
 
-Scheduling also requires all account, capacity and financial evidence below;
-freshness is checked again immediately before send. Scheduling or a component
-PASS is never authorization to send. Rad's own `[APPROVED]` remains required,
-and this packet remains prepare-only while any prerequisite is unresolved.
+1. Bind the authenticated client/account/workspace to that exact seat and approved route. No API-key, other workspace/account or provider fallback.
+2. Read back the per-user monthly override from the admin console or an authoritative usage/admin read showing the **override itself**; require numeric zero. Native quota/credit metadata alone does not show this setting. Record source, observation time, subject/workspace binding and digest/reference to private evidence, without login material.
+3. Read workspace credits-spent with its explicit period; require 0. Unknown, unreadable, stale or positive spend refuses dispatch. Do not infer zero from an empty wallet, rounded quota percentage, plan name or missing field.
+4. Obtain Rad's allowance screenshot taken **within 15 minutes of actual send**, with timestamp/timezone, usage windows, reset times and enough included capacity for this exercise. No automatic wait for reset, retry or consumption of a new window.
+5. Confirm the account-side cap remains effective immediately before dispatch, and record current automatic-reload state. No account, billing, credential or cap setting change is authorized. If the cap cannot be read back, stop for that missing readback; do not claim that a separately designed ceiling is needed.
 
-## Missing cost and capacity evidence
+Requested incremental spend is **0 workspace credits**. The verified provider-enforced cap is the financial proof for this account route. This supersedes the older blanket refusal that the included-only route cannot be established. Current launcher code still refuses and must be replaced only by the reviewed dispatch integration; this document changes no running code.
 
-| Required before execution | Current status |
-| --- | --- |
-| ChatGPT seat usage windows, remaining capacity, reset times and credits/extra-use status | Pending Rad's screenshot, taken within 15 minutes of actual send |
-| Claude seat usage windows, reset times and extra-use status | Pending Rad's screenshot, taken within 15 minutes of actual send; no Claude turn proposed here |
-| Explicit confirmation for both accounts that auto-recharge and pay-as-you-go/extra usage are OFF | Pending dated Rad confirmation supported by the account evidence; no setting change is authorized |
-| November total against the existing $75/month stop rule, and remaining headroom | Unknown; do not infer from a login or test receipt |
-| Account/route identity without exposing login material; no API-key fallback or automatic credit/extra-usage purchase | Not verified for this execution path |
-| Enforceable incremental dollar ceiling | Not established; screenshots and time limits alone are insufficient |
+The current read-only native adapter measures capacity, not the admin override or workspace spend. No unattended authoritative admin readback transport has yet been verified. For the first supervised run, the actual console readback can supply the evidence; it cannot be silently reused as perpetual unattended authority.
 
-For this packet, **Rad's screenshots are the sole accepted preflight allowance
-evidence**. No usable programmatic balance read is verified on this execution
-path. A documented or future account API is not a substitute in the current
-gate; this does not deny that Codex documents a rate-limit read mechanism.
+## Distinct Claude account
 
-For each seat, record `taken_at` with timezone, observed windows/headroom/reset
-times, and the corresponding account identifier without login material. At
-actual send, require `taken_at <= send_at <= taken_at + 15 minutes` for **both**
-screenshots. Missing/ambiguous timestamps, expired evidence or insufficient
-headroom mean refuse send and request refreshed evidence. Do not silently reuse
-screenshots from the review or scheduling time. Obtain the explicit OFF
-confirmation for both accounts before send; unknown/ON state means refuse.
-This update does not log in, inspect accounts or turn any setting OFF itself.
+Rad's Claude account is Climate Central Team Nonprofit Premium, with an Anthropic-enforced $75/month per-user cap. Claude observed $39.64 MTD on 14 November and organizational automatic reload ON. No Claude execution is in this request, so a second Claude allowance screenshot or an assertion that its organization has reload/extra usage OFF is not a prerequisite for this Codex-only turn. This changes no Claude account setting or policy. Existing organizational subscriptions are baseline costs, not Hearth-attributable run charges. Preserve the $75/month stop rule and report available dated attribution separately.
 
-**Requested ceiling: $0 additional metered charges**, consuming only approved
-included-seat allowance. This is a proposed authorization limit, not a verified
-property of the client or a claim that inference is free. If the actual route
-cannot enforce included-only use without spending credits/overage, refuse this
-request as written and prepare a separately capped financial request. Do not
-convert token counts, rounded quota deltas or timeouts into an invented cost.
-Do not change billing, credentials, settings or purchase anything to make it fit.
-Fresh screenshots and OFF confirmations are necessary manual gates, not proof
-of an enforced monetary ceiling. Existing credits, account fallback or any
-route that could spend outside included allowance must still be ruled out by
-the reviewed execution/financial boundary; otherwise this request is refused.
+## Technical prerequisites — before scheduling
 
-A before/after quota snapshot is useful capacity evidence; Rad's concurrent seat
-use and rounding can prevent attribution. Actual charge remains unknown/null
-unless independent billing evidence establishes it. No API price is being used
-to price a subscription turn, and no speculative dollar upper bound is claimed.
+Freeze the exact execution commit, pinned binary/image/config, approved prompt and synthetic memory fixture, source hashes, run ID, account identity and whole-workload deadline. Claude must review the actual composed execution path, not just inactive components. Existing components and fake-provider walking receipts do not establish live acceptance.
 
-## Exact proposed exercise, pending implementation/review
+The composed path must include all six original review conditions:
 
-1. Freeze the execution commit, pinned client/image/config and a per-run journal;
-   Claude reviews the actual turn bridge, limits and stop path before approval.
-   The walking fixture's private-method bypass is not an approved live bridge.
-   Conditions 3–5 must already be implemented and independently passed before
-   this exercise can be scheduled; a provider-request cap is not an event cap.
-2. Recheck exact root trial-host identity, unchanged baseline, fresh task/claim,
-   lease/epoch/deadline and approved account/route. For allowance, use only Rad's
-   two screenshots, each no older than 15 minutes at actual send, plus explicit
-   confirmation that auto-recharge and pay-as-you-go/extra usage are OFF on both
-   accounts. Separately verify the reviewed financial ceiling and no fallback;
-   do not imply an available programmatic allowance check. Record sanitized
-   preflight evidence; a missing item means stop
-   before sending a turn. No login, account change or token refresh is implicit.
-3. Create one isolated workload with no service installation. Permit only the
-   reviewed provider/auth destinations and the scoped Broker; keep the worker
-   read-only and shell-disabled. Broker capability must use the separately
-   reviewed private delivery mechanism, not a container environment variable.
-4. Use the passed exact-model/request guard, verify returned approval policy and
-   sandbox, and durably bind the returned thread ID to this claim. Any exception
-   after thread request dispatch means a thread may exist: stop the workload.
-5. Send one canonical user turn with this task and synthetic memory challenge.
-   Proposed bounds: prompt at most2KiB, memory response at most2KiB, final closeout
-   at most16KiB, no artifacts. The live transport must enforce a maximum of two
-   provider requests (memory-tool step and final response), counting attempted
-   native retries; a third request is denied, not retried. These are review
-   requirements, not controls implemented by this draft.
-   The live driver must have an independent root cutoff outside the worker covering the
-   whole workload and every child during silent output and interruptions;
-   event-triggered authority checks cannot replace it. This draft installs none.
-6. Live cutoffs are unresolved: the earlier45s/90s figures have synthetic fixture
-   evidence only and must not silently become live policy. Native turns now
-   require an explicit timeout;45s remains the component ceiling, not evidence
-   of provider adequacy. A reviewed execution packet must name turn and absolute
-   whole-workload deadlines, their rationale and timing evidence, with independent
-   root stop covering every child. No real timing probe is authorized by this
-   draft and no larger limit or inactive900-second/full-run policy change is made.
-   Request/byte/time bounds limit exposure, not money by themselves.
-7. On completion or any failure, stop the exact workload, observe exit and whole
-   cgroup/container termination outside the worker, revoke the grant and remove
-   the isolated environment. Persist the native IDs, closeout or its absence,
-   usage if actually supplied, and the root evidence before releasing a slot.
-   Missing/malformed closeout fails; uncertain exit/output/containment stays held.
-8. Capture post-run usage/billing observations with timestamps and attribution
-   limits and apply the financial reconciliation rule below. A clean model
-   completion cannot override a financial-gate failure. Post one run-ID/evidence
-   review for Claude. Stop: no automatic second
-   attempt, model substitution, quota-reset consumption or credit purchase.
+1. Validate returned effective approval policy/sandbox after `thread/start`; any post-send exception means a thread may exist and requires workload termination.
+2. Durably journal thread identity and send state, per run.
+3. Send canonical `turn/start` through the reviewed request allowlist, without the fixture's private-method bypass.
+4. Enforce event, byte and time bounds separately from the request count; check authority at critical boundaries and use an independent outside cutoff during silent output.
+5. Deliver the scoped Broker capability privately by a reviewed descriptor/private-memory mechanism, never container environment metadata or inherited child environment.
+6. Use per-run journals or reviewed rotation; a component journal's 4 MiB limit must not silently become an overnight lifecycle policy.
 
-## Financial reconciliation — separate from model completion
+Reconcile the later A–E component reviews at their actual revisions: A/C passed and B is partial; D/E has a later candidate. Do not describe all components as unimplemented, or equate component PASS with composed launch PASS. The execution review must include the resolved request-correlated memory denial and per-run read budget.
 
-Compare the dated pre-send and post-run evidence for included-window use,
-credits, paid extra usage/charges, recharge state and resets. **Any consumption
-inconsistent with included-only operation is a FAIL on the financial gate**,
-even if the model turn, closeout, process exit and cleanup all succeeded.
-Examples include a paid-credit debit, a new metered charge or evidence that
-pay-as-you-go/recharge was enabled. A discrepancy that cannot be reconciled
-because of concurrent use, rounding or missing evidence remains an unresolved
-financial-gate FAIL, not a presumed PASS or an invented attributable charge.
+## Bounded send and stop
 
-Record the run ID, timestamps, observations, expected included-only behaviour,
-the mismatch and attribution uncertainty. Preserve any technical receipt; append
-the financial failure/correction rather than rewriting prior observations.
-Report the failure to Rad and Claude, do not declare an overall probe PASS or
-acceptance, and stop further attempts pending Rad's decision. Do not retry,
-purchase credits, change settings or broaden access to reconcile the result.
-Actual charge stays unknown/null unless independently established; that does
-not turn the financial failure into success.
+Prompt at most 2 KiB, memory response at most 2 KiB, final closeout at most 16 KiB; no artifacts. At most two provider requests including attempted native retries (memory step and final response); no third request. No tool-selected commands or endpoints.
 
-## Six conditions carried from Claude's review
+Before scheduling, the reviewed packet must state numeric turn and absolute workload cutoffs and their rationale. The component's 45-second ceiling is synthetic evidence, not a measured provider latency. The first tiny real turn records timing; it does not automatically enlarge its approved limit. Independent root supervision must stop the exact workload and every child on timeout, interruption or lost authority. The inactive 900-second/full-run policy is unchanged.
 
-These remain open for shipped code; neither component PASS closes them. They
-are recorded here to avoid silently promoting fixture behaviour into authority.
+On every exit, stop and independently verify the exact workload is empty, revoke its scoped grant and remove/quarantine only its isolated environment. Persist native IDs, fixed failure cause, send stage (`not_sent` versus possibly sent), actual supplied usage and outside cleanup proof before releasing the slot. Missing closeout fails; uncertain billing, process exit or output stays held. No adoption, second attempt or replay of a consumed intent.
 
-1. Verify effective `approvalPolicy` after `thread/start`; post-write exceptions
-   imply a possible existing thread and require workload termination.
-2. Persist thread creation and identity in a journal or the authoritative receipt.
-3. Add canonical `turn/start` to the reviewed RPC code and review it independently.
-4. Give the turn bridge its own bounded event handling; the current64-notification
-   pre-turn session limit is insufficient for a real turn.
-5. Deliver Broker capability through an approved descriptor/private-memory
-   mechanism, not Docker environment metadata or inherited child environment.
-6. Use per-run journals or reviewed rotation before overnight operation; the
-   current4MiB journal cap otherwise refuses every subsequent launch.
+## Post-run reconciliation and report
 
-Per-run journaling can satisfy this small exercise without implementing general
-rotation. These conditions do not block preparing the request; execution still
-needs the specific safeguards and financial gates to be concrete and reviewed.
-In particular, conditions 3–5 are explicit pre-scheduling gates, not merely
-carried-forward notes. All six conditions remain open; this documentation
-revision implements none of them.
+Read workspace **credits-spent again, same scope/period, and require it still equals 0**. Any credits-spent > 0 is a financial FAIL even if the model and cleanup succeeded. Unknown/unreadable or incomparable evidence is unresolved, never an overall PASS. Recheck cap/account binding and record seat usage percentages, windows/reset times and timestamps. Rounding, concurrent seat activity and reporting latency limit attribution; do not invent a dollar figure or call delayed billing zero proof. Keep the run held if reconciliation is unresolved.
 
-## Stop and rollback
+Every executed-session `[STATUS]` opens with two plain sentences for Rad, names the piece/test and run ID, records seat usage %, and links the technical/financial evidence and next step. Receipt is not understanding or completion: understanding remains unknown, task state unchanged until separately accepted. Do not include prompts, tokens, raw account responses or secrets in public status.
 
-No installed service/global client/account/config change is proposed, so no
-production rollout rollback is needed. Kill and independently verify the exact
-trial workload; revoke only its grant; quarantine any persistent private test
-material; retain journals and failed-run evidence. Never reuse a consumed launch
-intent. If cleanup or billing state is uncertain, hold the task and stop; do not
-restore a database over live workloads or delete evidence to manufacture a reset.
+## Approval and rollback
 
-## Approval wording — not an approval
+One `[APPROVED]` naming this packet authorizes at most this single supervised turn **after** its exact composed execution commit has passed Claude review and all pre-send evidence is fresh. It does not authorize scheduling while prerequisites are unresolved, relay model activation, further turns, paid fallback, merge, deploy, production or account changes. No approval has been received for this revision. Missing prerequisites keep the run unscheduled; do not reinterpret approval to waive them.
 
-After filling the missing evidence and exact execution commit, Rad can approve
-or decline a request naming this packet and that commit: one trial-only exact-model
-turn, included-seat allocation only, no additional metered charges, the reviewed
-limits, no retries/activation/production changes. Until Rad supplies his own
-`[APPROVED]`, execution remains prohibited. This document grants no authority.
+Rollback is stop/empty-proof/revoke/quarantine for the isolated trial workload, retain evidence and stop further attempts. No production rollout or installed relay change is part of this request.
 
-## Sources and verification limits
+## Evidence
 
-- Claude review `drawer_ff38dcebac9a75cb3e448ac8c5f8f6c3`,10Nov: both scopes PASS;
-  source hashes checked and96 focused tests reproduced; VPS receipts and commit
-  signature not independently verified by Claude.
-- Claude's conditional packet review, Agent Tasks event
-  `$zQGxjLVFOjNSpDWlQzjXbbysc7gMDq-DwNRpM8tdo0g`,10Nov22:03UTC:
-  gaps1–3 addressed in this revision as explicit scheduling, manual evidence and
-  reconciliation rules. This is the author's revision, not a new Claude PASS.
-- Walking source/evidence8e9cdba, `WALKING-SKELETON.md`, HM
-  `drawer_403b461a7f333032f09597750664d63d`. No account turn has occurred here.
-- Official [Codex app-server documentation](https://learn.chatgpt.com/docs/app-server)
-  describes rate-limit reads; it does not establish this account's entitlement
-  or a per-turn dollar ceiling. Consult the separate design answers for scope.
+- Task: HC `$vfe2S_7ChyF2Fz72_J13uRlUUp3nOfLP0PuxS_1u96k`, 15 Nov 04:12:12Z (14 Nov 23:12 ET). The user directly asked Codex to pick it up in this laptop chat.
+- HM `drawer_5e6e5815f7249c238bafa30c78bcd1e2`: Rad's saved 0-credit override; Claude observed console readback. `drawer_e816105be775cd54da9b369e702d6f45`: Business admin/usage observations. These were retrieved, not independently re-observed by Codex.
+- HM `drawer_b5f12fd971eb4fa182edbeccc3bef4c1` and `drawer_2e46920d83645c7ab435653092c8181f`: organizational Premium seat identities and distinct caps/attribution limits.
+- Original launcher review `drawer_ff38dcebac9a75cb3e448ac8c5f8f6c3`; A–C `drawer_6aa3493f61c23d6f9d823b3cecfd1123`; `BROKER-DENIALS-BUDGET-2026-11-12.md`; walking source/evidence `8e9cdba` and `WALKING-SKELETON.md` remain historical technical evidence at their stated scopes.

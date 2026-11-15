@@ -44,12 +44,12 @@
     "at": "2026-11-14T11:01:18.932Z",
     "source_event": "$gnj0LkBr-ApLtcNTBghUc3z9Hg8JMXjz34HDHgyc4Tw"
   },
-  "note": "Post-fix reruns are Codex tests; no claim Cowork reran the modified test commit. Prior independent scoped PASS remains recorded.",
+  "note": "Post-fix reruns are Codex tests; no claim Cowork reran the modified test commit. Prior independent scoped PASS remains recorded. Later Cowork reruns at e335b23 and7847c4a were independently executed; see closeout and HC $QpT0ufOsZsHuHwvywPBjkgFSZ9zWiX4nE5oNE2BmkMM / $AMP7hTJ51NSxwUJ5fUhz4T9_zHhLA0g0sLrdjmzZ6nw. Historical author rerun figures are retained.",
   "paid_runs": 0,
   "production_changed": false,
   "regression": {
     "after": "Both pass; no production or OS clock altered.",
-    "before": "Two target assertions fail with real/default clock forced00:57ET.",
+    "before": "Correction: at original base90b1423, allowance check fails outside window; neighbour passes vacuously with old assertion. The documented strengthened-assertion negative control removing both clocks yields two expected failures.",
     "daytime_relay_tests": {
       "elapsed_seconds": 12.658,
       "passed": true,
