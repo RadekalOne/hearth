@@ -1,0 +1,12 @@
+model = "gpt-6.1-sol"
+model_provider = "openai"
+approval_policy = "never"
+sandbox_mode = "read-only"
+web_search = "disabled"
+[features]
+shell_tool = false
+apps = false
+plugins = false
+[mcp_servers.hearth-memory]
+url = "http://127.0.0.1:8010/mcp"
+enabled_tools = ["memory_search", "memory_get"]
