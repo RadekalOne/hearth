@@ -1,0 +1,59 @@
+{
+  "auth_supplied": false,
+  "broker_read_and_normal_stop": {
+    "channel_revoked": true,
+    "cid": "1289e161752117097865aa856f971b04de5a41b65ef53ff305d0f43ac9a0acfc",
+    "reads": 1,
+    "removed": true
+  },
+  "driver_killed_watchdog_survived": {
+    "cid": "03072c946ec222fe0ad20caf30e09394b5b63ad5f8e13d9b7202f674995abec7",
+    "driver_exit": -9,
+    "removed": true,
+    "watchdog": {
+      "kill": 0,
+      "rm": 0
+    }
+  },
+  "ended_at": 1794923218.6373367,
+  "image": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+  "model_turns": 0,
+  "started_at": 1794923126.4601629,
+  "source_archive_sha256": "eb81a6674dd80fb84ea78fe1428297beaef1ef56c2da557025418e14a779872a",
+  "native_binary_sha256": "f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97",
+  "binary_executed": false,
+  "provider_credentials_used": false,
+  "candidate": {
+    "state": "exited",
+    "exit_code": 0,
+    "container_removed": true,
+    "input": "synthetic fixed marker; not model output"
+  },
+  "windows_relay": {
+    "tests": 100,
+    "passed": 100,
+    "seconds": 17.412
+  },
+  "linux_relay": {
+    "tests": 100,
+    "passed": 100,
+    "seconds": 2.756,
+    "source": "initial review-fix archive"
+  },
+  "linux_native_broker": {
+    "tests": 67,
+    "passed": 67,
+    "seconds": 6.346,
+    "source": "archive above, before stricter received-at check"
+  },
+  "full_suite": {
+    "tests": 1340,
+    "passed": 1243,
+    "errors": 97,
+    "failures": 0,
+    "seconds": 53.705,
+    "docker_exit": 1,
+    "limitations": "Minimal Python image lacks Git and /usr/bin/python3 expected by older root-command fixtures; offline embedding downloads unavailable. Not a green full suite or a verified regression-free baseline.",
+    "log_sha256": "f98cf2af664d9c4c4f10c9208d9aed496b745bbf433ada1bc6f5ded3adfe2634"
+  }
+}

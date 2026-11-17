@@ -38,7 +38,7 @@ class ComposedTests(unittest.TestCase):
   from unittest.mock import patch
   from types import SimpleNamespace
   now=datetime.now(timezone.utc)
-  record=dict(observed_at=now.isoformat(),workspace='cc',seat='rad',override_credits=0,workspace_credits_spent=0,period=now.strftime('%Y-%m'),usage_percent=10,screenshot_sha256='a'*64)
+  record=dict(observed_at=(now-timedelta(seconds=2)).isoformat(),workspace='cc',seat='rad',override_credits=0,workspace_credits_spent=0,period=now.strftime('%Y-%m'),usage_percent=10,screenshot_sha256='a'*64)
   package=dict(approval_event='$approval',disabled=True,workspace='cc',seat='rad',run_id='test',binary_path='/fixture',binary_sha256='b'*64,catalog_sha256='c'*64,prompt='Synthetic challenge')
   for fail in (False,True):
    events=[]
@@ -52,7 +52,7 @@ class ComposedTests(unittest.TestCase):
     def client(self,**kw):events.append('client');return Client()
     def active(self):return True
     def memory_read_verified(self):return True
-    def stop(self):events.append('stop');return True
+    def stop(self):events.append('stop');record.update(observed_at=datetime.now(timezone.utc).isoformat(),screenshot_sha256='d'*64);return True
    class Launcher:
     def __init__(self,*a,**kw):self.fence=kw['pre_thread_fence']
     def launch_thread(self,request):
@@ -69,3 +69,36 @@ class ComposedTests(unittest.TestCase):
     self.assertEqual(events,['client','thread','turn','stop'])
     self.assertTrue(rows[-1]['confirmed_empty'])
     if fail:self.assertEqual(rows[-1]['send_state'],'turn_may_be_sent')
+
+class ReviewFixTests(unittest.TestCase):
+ def test_post_turn_evidence_must_be_after_send_and_new_screenshot(self):
+  from relay_financial import check_after
+  send=datetime(2026,11,17,13,tzinfo=timezone.utc)
+  before={'observed_at':send.isoformat(),'period':'2026-11','screenshot_sha256':'a'*64}
+  for after in [before,{**before,'observed_at':(send+timedelta(seconds=1)).isoformat()}]:
+   with self.assertRaises(ValueError):check_after(before,after,send)
+  after={**before,'observed_at':(send+timedelta(seconds=1)).isoformat(),'screenshot_sha256':'b'*64}
+  check_after(before,after,send)
+ def test_candidate_remove_attempted_even_if_kill_hangs(self):
+  from unittest.mock import patch
+  from types import SimpleNamespace
+  import subprocess
+  import relay_candidate_tests as m
+  calls=[]
+  def run(argv,**kw):
+   calls.append(argv[1])
+   if argv[1]=='kill':raise subprocess.TimeoutExpired(argv,5)
+   return SimpleNamespace(returncode=0)
+  with tempfile.TemporaryDirectory() as td,patch.object(m,'supervised_process',return_value={'state':'exited','exit_code':0,'empty':True}),patch.object(m.subprocess,'run',run):
+   result=m.run('sha256:'+'a'*64,Path(td),'hearth-entitlement-fixture')
+  self.assertEqual(calls,['kill','rm']);self.assertTrue(result['container_removed'])
+ def test_expired_shared_workload_clock_refuses_before_client(self):
+  from relay_entitlement import execute
+  class W:
+   outside_deadline_seconds=90;armed_at=0
+   def stop(self):return True
+   def active(self):return True
+   def client(self,**kw):raise AssertionError('expired workload opened client')
+  with tempfile.TemporaryDirectory() as td,self.assertRaisesRegex(ValueError,'workload_deadline'):
+   execute({'approval_event':'a','disabled':True},enabled=True,approval='a',read_financial=lambda:None,
+       workload=W(),journal_path=Path(td)/'j',monotonic=lambda:71)

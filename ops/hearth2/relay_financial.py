@@ -29,3 +29,8 @@ def read_manual(record_path,screenshot_path):
     record=json.loads(p.read_text(encoding='utf-8'))
     if record.get('screenshot_sha256')!=hashlib.sha256(s.read_bytes()).hexdigest():raise ValueError('screenshot_hash_mismatch')
     return record
+
+def check_after(before,after,sent_at):
+    if (before['period']!=after['period'] or datetime.fromisoformat(after['observed_at'])<=sent_at
+            or before['screenshot_sha256']==after['screenshot_sha256']):
+        raise ValueError('post_send_financial_evidence_required')

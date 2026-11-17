@@ -37,7 +37,8 @@ def supervised_process(argv,*,timeout):
 def run(image,source,name):
     """Container cutoff/removal is outside the candidate process, even on CLI hang."""
     result=supervised_process(command(image,source,name),timeout=30)
-    subprocess.run(['docker','kill',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
+    try:subprocess.run(['docker','kill',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5)
+    except subprocess.TimeoutExpired:pass # Still force-remove; never abandon cleanup on kill timeout.
     removed=subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=5)
     if removed.returncode:raise ValueError('candidate_removal_unconfirmed')
     result['container_removed']=True

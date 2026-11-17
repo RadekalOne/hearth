@@ -4,7 +4,7 @@ No CLI, scheduler wiring, auth discovery or automatic execution. Uses reviewed n
 import hashlib,json,os,time
 from datetime import datetime,timezone
 from pathlib import Path
-from relay_financial import check
+from relay_financial import check,check_after
 
 TURN_SECONDS=45
 WORKLOAD_SECONDS=70
@@ -27,13 +27,16 @@ def execute(package,*,enabled=False,approval=None,read_financial=None,workload=N
     if workload is None or read_financial is None:raise ValueError('trusted_workload_required')
     if package.get('disabled') is not True:raise ValueError('review_package_required')
     if workload.outside_deadline_seconds!=OUTSIDE_SECONDS:raise ValueError('outside_supervisor_required')
-    start=monotonic();journal=Journal(journal_path)
+    if package.get('native_container_image') and workload.image!=package['native_container_image']:
+        raise ValueError('native_image_pin_mismatch')
+    start=getattr(workload,"armed_at",monotonic());journal=Journal(journal_path)
     state='not_sent';tid=None;empty=False
     def active():return monotonic()-start<WORKLOAD_SECONDS and workload.active() is True
     def financial():
         return check(read_financial(),clock(),workspace=package['workspace'],seat=package['seat'],supervised=True)
     def record(row):return journal.write(**row)
     try:
+        if not active():raise ValueError("workload_deadline_or_revoked")
         before=financial()
         journal.write(kind='preflight',run_id=package['run_id'],financial=before,send_state=state)
         # Root-selected workload provides an already contained client with its Broker mounted privately.
@@ -51,10 +54,12 @@ def execute(package,*,enabled=False,approval=None,read_financial=None,workload=N
         tid=thread['thread']['id']
         if thread.get('approvalPolicy')!='never':raise ValueError('effective_policy_mismatch')
         journal.write(kind='thread_started',thread_id=tid,send_state='thread_received')
-        state='turn_may_be_sent';journal.write(kind='turn_dispatch_intent',thread_id=tid,send_state=state)
+        sent_at=clock()
+        state='turn_may_be_sent';journal.write(kind='turn_dispatch_intent',thread_id=tid,send_state=state,sent_at=sent_at.isoformat())
         result=client.turn_start({'threadId':tid,'input':[{'type':'text','text':package['prompt']}]},
             before_send=fence,record_event=record,stop_workload=workload.stop)
-        journal.write(kind='turn_received',thread_id=tid,turn_id=result.turn_id,send_state='response_received')
+        received_at=clock()
+        journal.write(kind='turn_received',thread_id=tid,turn_id=result.turn_id,send_state='response_received',received_at=received_at.isoformat())
         native=result.native_result
         if native.get('state')!='completed':raise ValueError('turn_not_completed')
         # Exact synthetic challenge must have been read through the private Broker.
@@ -74,7 +79,7 @@ def execute(package,*,enabled=False,approval=None,read_financial=None,workload=N
             tests=run(package['candidate_image'],target.resolve(),'hearth-entitlement-'+package['run_id'])
             journal.write(kind='candidate_tests',result=tests)
         after=financial()
-        if before['period']!=after['period']:raise ValueError('financial_period_changed')
+        check_after(before,after,received_at)
         line=f"Entitlement turn finished; human acceptance is pending. No further turn is authorized. Seat usage: {after['usage_percent']}%; run {package['run_id']}."
         journal.write(kind='receipt',thread_id=tid,usage=native.get('usage'),financial=after,status=line,
             understanding='unknown',task_state='unchanged',confirmed_empty=empty)
@@ -96,6 +101,7 @@ class ContainerWorkload:
         import re,subprocess,sys
         if os.name!='posix' or not re.fullmatch('[0-9a-f]{64}',cid):raise ValueError('trial_linux_exact_cid_required')
         self.cid,self.channel,self.memory_reads=cid,channel,memory_reads
+        self.image=image
         self.process=None;self.closed=False
         p=subprocess.run(['docker','inspect',cid],capture_output=True,check=True,timeout=5)
         row=json.loads(p.stdout)[0]
@@ -103,6 +109,9 @@ class ContainerWorkload:
             raise ValueError('enrolled_container_mismatch')
         h=row['HostConfig']
         if not h.get('ReadonlyRootfs') or h.get('Privileged') or row['Config']['User']!='1000:1000':raise ValueError('container_profile_mismatch')
+        mounted=subprocess.run(['docker','exec',cid,'sha256sum','/opt/codex'],capture_output=True,check=True,timeout=5).stdout.decode().split()[0]
+        if mounted!='f1cd7fa4ac866c724122f173d408a95385257cbcc9ac5ce5ddba42669c74ba97':
+            raise ValueError('mounted_native_binary_pin_mismatch')
         # Config and native client are root-enrolled mounts, not model-supplied files.
         got=subprocess.run(['docker','exec',cid,'sha256sum','/scratch/codex-home/config.toml'],capture_output=True,check=True,timeout=5).stdout.decode().split()[0]
         if got!=config_sha256:raise ValueError('config_pin_mismatch')
@@ -115,6 +124,7 @@ for op in ('kill','rm'):
 with open(sys.argv[2],'x') as f:
  json.dump(r,f);f.flush();os.fsync(f.fileno())
 """
+        self.armed_at=time.monotonic()
         self.watchdog=subprocess.Popen([sys.executable,'-I','-c',code,cid,str(watchdog_receipt)],start_new_session=True,
             stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     def active(self):return not self.closed and self.watchdog.poll() is None and self.channel.check() is True
