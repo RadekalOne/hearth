@@ -1,7 +1,7 @@
 {
   "disabled": true,
   "run_id": "entitlement-20261116-01",
-  "execution_commit": "efffbedc4b0c9503a2663c893c680b75a4b0648a",
+  "execution_commit": "99970299354a82e374b3733af962098fbc898899",
   "approval_event": "user-chat-20261116-option-A-confirmation",
   "approval_conditions": [
     "Claude PASS exact review commit",
@@ -30,8 +30,8 @@
   "expected_memory_marker": "HEARTH-RECEIPT-16NOV",
   "candidate_fixture": "docs/hearth2/entitlement-run/test_entitlement_fixture.py",
   "candidate_fixture_sha256": "8226c13bfa8f788cbe994bc52c9cf3f0c70cac8745975a96db1205563182ad9e",
-  "candidate_image": "sha256:8dd6062553ce6d14439fbcc1d972e19e1c2acd0f259f1893f6a26eaea80c1972",
-  "native_container_image": "UNCONFIGURED: root must bind original enrolled native workload; no image substitution",
+  "candidate_image": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+  "native_container_image": "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
   "source_hashes": {
     "docs/hearth2/entitlement-run/config.toml": "50983c4dcb4e433c18c3fa9243ca75d46d13591063545c061fcdf2c1dabd4721",
     "docs/hearth2/entitlement-run/test_entitlement_fixture.py": "8226c13bfa8f788cbe994bc52c9cf3f0c70cac8745975a96db1205563182ad9e",
@@ -101,13 +101,23 @@
     "ops/hearth2/offline_relay_state.py": "d72b2ada4ce04eaf5669ae2e852f975e0c82e516791a605db153d344673e8ca8",
     "ops/hearth2/offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
     "ops/hearth2/receipt_pilot_ops.py": "d61c45be14dcbb0a2ce61a496195e7be6e99098c533f5cef116a87b82479a4cc",
-    "ops/hearth2/relay_candidate_tests.py": "f995d3aaa5ec5595612a61b01a933a4316a19320510133038b535f916d21abe0",
-    "ops/hearth2/relay_entitlement.py": "2a4bf0284be9ebc73296801342fcfc4fc78a652fa3617e1928c332d9132ad37f",
-    "ops/hearth2/relay_financial.py": "90b51935d911487fca41d99005fac09adf24fb9f3b96dfa3f68554478a30ab33",
+    "ops/hearth2/relay_candidate_tests.py": "a42e968a6661b136a197ba432120e0d239ad34e3587a204db85d2c4781306e25",
+    "ops/hearth2/relay_entitlement.py": "a556a2248d1da4e1425cee6981925a6daf2904185750bac7a3290fc6104aad45",
+    "ops/hearth2/relay_financial.py": "cd9b39da06e2690dd1aae7e5c4d1f1a2543cc48f2306d5055d9f24d0a2331150",
     "ops/hearth2/relay_install.py": "aa17fe9621112cba47dc6a302399375449d4041ae009411fb8e6f62bdd874894",
     "ops/hearth2/relay_launch.py": "42c4913b281e1b7fc5589e4a5e911d0e903334e0ee72d2ea0ef838a2107b2e3f",
     "ops/hearth2/relay_live.py": "ab750c51879e58116d97b90f29b673b07ee78f6c71897090474c5eaebc8359b2",
     "ops/hearth2/relay_matrix.py": "237264a8c5a8de59ea177f863c2a76440b27f237949ca75eb9f80473135a3798",
     "ops/hearth2/relay_native.py": "c132053ea5a5cdfc56f7a7b4110ebed7f55f711265c75127bf5e5c4f8d1a6658"
+  },
+  "approval_provenance": {
+    "source": "direct Rad instruction in this chat, 16 November 2026",
+    "confirmation": "my “let’s go with A” on 15 Nov is my approval of option A on your card, under the card’s own conditions.",
+    "not_a_hearth_event": true,
+    "conditions": [
+      "exact-commit Claude PASS",
+      "fresh financial/usage screenshots",
+      "single supervised turn only"
+    ]
   }
 }

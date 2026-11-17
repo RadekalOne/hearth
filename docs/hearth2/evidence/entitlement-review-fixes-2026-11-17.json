@@ -55,5 +55,13 @@
     "docker_exit": 1,
     "limitations": "Minimal Python image lacks Git and /usr/bin/python3 expected by older root-command fixtures; offline embedding downloads unavailable. Not a green full suite or a verified regression-free baseline.",
     "log_sha256": "f98cf2af664d9c4c4f10c9208d9aed496b745bbf433ada1bc6f5ded3adfe2634"
+  },
+  "final_source_check": {
+    "execution_commit": "99970299354a82e374b3733af962098fbc898899",
+    "tests": 67,
+    "passed": 67,
+    "seconds": 6.286,
+    "network": "none",
+    "scope": "native turn/thread, private Broker, entitlement; fake protocol and actual fixture processes only"
   }
 }
