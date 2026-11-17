@@ -2,7 +2,7 @@
   "disabled": true,
   "run_id": "entitlement-20261116-01",
   "execution_commit": "7d77f7c1c9ec89d4c9c22370f978e93619fb4d36",
-  "approval_event": "user-chat-20261116-option-A-confirmation",
+  "approval_event": "$6nbdf0fOTQxYjtH41s5DUBK4Nu9ip09-WLiKk7vOBoU",
   "approval_conditions": [
     "Claude PASS exact review commit",
     "fresh screenshots before send",
@@ -111,13 +111,18 @@
     "ops/hearth2/relay_native.py": "c132053ea5a5cdfc56f7a7b4110ebed7f55f711265c75127bf5e5c4f8d1a6658"
   },
   "approval_provenance": {
-    "source": "direct Rad instruction in this chat, 16 November 2026",
-    "confirmation": "my “let’s go with A” on 15 Nov is my approval of option A on your card, under the card’s own conditions.",
-    "not_a_hearth_event": true,
+    "source": "server-authenticated HC room event",
+    "room_id": "!0SCHqdoKZOs53xq1DH4zTL0SLz4aKiD16y7Wo7xnIG0",
+    "thread_root": "$f13r0i8hHq1yC_HB9hLoVyLJuSp_-6PUGiGFPrzIV7I",
+    "event_id": "$6nbdf0fOTQxYjtH41s5DUBK4Nu9ip09-WLiKk7vOBoU",
+    "sender": "@rad:hearth.radekal.me",
+    "timestamp": "2026-11-17T14:17:35.028Z",
+    "confirmation": "[APPROVED] A — packet93dadc9, under the card's conditions. My 16 Nov chat confirmation to Codex stands.",
     "conditions": [
       "exact-commit Claude PASS",
       "fresh financial/usage screenshots",
-      "single supervised turn only"
+      "single supervised turn only",
+      "fresh interactive go required before send"
     ]
   }
 }
