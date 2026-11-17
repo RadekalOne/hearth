@@ -1,0 +1,32 @@
+[
+  {
+    "path": "ledgers/2026-11-08-independent-recovery/progress.md",
+    "bytes": 1467,
+    "sha256": "65011849427705db89b6b92d115a495a07bcc06287ec62c21614dbce38c1b6cb"
+  },
+  {
+    "path": "ledgers/2026-11-12-broker-denials-budget/progress.md",
+    "bytes": 4042,
+    "sha256": "78cd7751a5448cf6ef3c679087d21c0fa412ae4162f1069555a2e2d16b880d4d"
+  },
+  {
+    "path": "ledgers/2026-11-13-hearth-offline-relay-outcomes/progress.md",
+    "bytes": 4546,
+    "sha256": "c1c5080bf7962c30ed7643a3501f0b982f488e820357b7e4509f997732c2da5f"
+  },
+  {
+    "path": "helpers/check-lifecycle-verification.py",
+    "bytes": 908,
+    "sha256": "ede568293ede17e4aecd1114ef573e0c36bdfa0065ffabcfac10dc2313528e5f"
+  },
+  {
+    "path": "helpers/post-lifecycle-verification.py",
+    "bytes": 650,
+    "sha256": "c1f5e50642efdde878ae317a87144756d3df201abcaac36c824f905c931dccdf"
+  },
+  {
+    "path": "helpers/stop-superseded-lifecycle-tests.py",
+    "bytes": 463,
+    "sha256": "b9e57421d4f64561eff5ac83d1e4eda61872ee549f96df26788e11f37f8ebc66"
+  }
+]
