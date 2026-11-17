@@ -18,7 +18,7 @@ class Journal:
     def close(self):self.file.close()
 
 def execute(package,*,enabled=False,approval=None,read_financial=None,workload=None,
-            journal_path=None,clock=lambda:datetime.now(timezone.utc),monotonic=time.monotonic):
+            journal_path=None,clock=lambda:datetime.now(timezone.utc)):
     """workload is root-owned containment/session/Broker composition, never a model callback.
     Outside supervisor must already cover workload; this function cannot arm its own failsafe.
     """
@@ -29,9 +29,12 @@ def execute(package,*,enabled=False,approval=None,read_financial=None,workload=N
     if workload.outside_deadline_seconds!=OUTSIDE_SECONDS:raise ValueError('outside_supervisor_required')
     if package.get('native_container_image') and workload.image!=package['native_container_image']:
         raise ValueError('native_image_pin_mismatch')
-    start=getattr(workload,"armed_at",monotonic());journal=Journal(journal_path)
+    try:start,monotonic=workload.armed_at,workload.monotonic
+    except AttributeError:raise ValueError('workload_clock_origin_required') from None
+    if not callable(monotonic):raise ValueError('workload_clock_origin_required')
+    journal=Journal(journal_path)
     state='not_sent';tid=None;empty=False
-    def active():return monotonic()-start<WORKLOAD_SECONDS and workload.active() is True
+    def active():return 0<=monotonic()-start<WORKLOAD_SECONDS and workload.active() is True
     def financial():
         return check(read_financial(),clock(),workspace=package['workspace'],seat=package['seat'],supervised=True)
     def record(row):return journal.write(**row)
@@ -124,7 +127,8 @@ for op in ('kill','rm'):
 with open(sys.argv[2],'x') as f:
  json.dump(r,f);f.flush();os.fsync(f.fileno())
 """
-        self.armed_at=time.monotonic()
+        self.monotonic=time.monotonic
+        self.armed_at=self.monotonic()
         self.watchdog=subprocess.Popen([sys.executable,'-I','-c',code,cid,str(watchdog_receipt)],start_new_session=True,
             stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     def active(self):return not self.closed and self.watchdog.poll() is None and self.channel.check() is True

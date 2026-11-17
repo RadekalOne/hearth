@@ -1,4 +1,4 @@
-import sys,unittest,tempfile,json
+import sys,unittest,tempfile,json,time
 from pathlib import Path
 from datetime import datetime,timezone,timedelta
 sys.path.insert(0,str(Path(__file__).parents[1]/'ops/hearth2'))
@@ -49,6 +49,7 @@ class ComposedTests(unittest.TestCase):
      return SimpleNamespace(turn_id='turn-1',native_result={'state':'completed','usage':{'state':'unknown'}})
    class Workload:
     outside_deadline_seconds=90
+    monotonic=staticmethod(time.monotonic);armed_at=monotonic()
     def client(self,**kw):events.append('client');return Client()
     def active(self):return True
     def memory_read_verified(self):return True
@@ -96,9 +97,37 @@ class ReviewFixTests(unittest.TestCase):
   from relay_entitlement import execute
   class W:
    outside_deadline_seconds=90;armed_at=0
+   monotonic=staticmethod(lambda:71)
    def stop(self):return True
    def active(self):return True
    def client(self,**kw):raise AssertionError('expired workload opened client')
   with tempfile.TemporaryDirectory() as td,self.assertRaisesRegex(ValueError,'workload_deadline'):
    execute({'approval_event':'a','disabled':True},enabled=True,approval='a',read_financial=lambda:None,
-       workload=W(),journal_path=Path(td)/'j',monotonic=lambda:71)
+       workload=W(),journal_path=Path(td)/'j')
+ def test_missing_clock_origin_never_grants_fresh_budget(self):
+  from relay_entitlement import execute
+  calls=[]
+  class W:
+   outside_deadline_seconds=90
+   def active(self):calls.append('active');return True
+   def client(self,**kw):calls.append('client');raise AssertionError('client opened')
+   def stop(self):calls.append('stop');return True
+  with tempfile.TemporaryDirectory() as td:
+   journal=Path(td)/'journal'
+   with self.assertRaisesRegex(ValueError,'workload_clock_origin_required'):
+    execute({'approval_event':'a','disabled':True},enabled=True,approval='a',
+       workload=W(),read_financial=lambda:calls.append('financial'),journal_path=journal)
+   self.assertEqual(calls,[]);self.assertFalse(journal.exists())
+ def test_driver_uses_the_workloads_own_clock_domain(self):
+  from relay_entitlement import execute
+  from unittest.mock import patch
+  class W:
+   outside_deadline_seconds=90;armed_at=0
+   monotonic=staticmethod(lambda:1)
+   def active(self):return True
+   def stop(self):return True
+  def financial():raise RuntimeError('valid_origin_reached_preflight')
+  with tempfile.TemporaryDirectory() as td,patch('relay_entitlement.time.monotonic',side_effect=AssertionError('different clock used')):
+   with self.assertRaisesRegex(RuntimeError,'valid_origin_reached_preflight'):
+    execute({'approval_event':'a','disabled':True},enabled=True,approval='a',read_financial=financial,
+        workload=W(),journal_path=Path(td)/'journal')
