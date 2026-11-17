@@ -1,7 +1,7 @@
 {
   "disabled": true,
   "run_id": "entitlement-20261116-01",
-  "execution_commit": "99970299354a82e374b3733af962098fbc898899",
+  "execution_commit": "7d77f7c1c9ec89d4c9c22370f978e93619fb4d36",
   "approval_event": "user-chat-20261116-option-A-confirmation",
   "approval_conditions": [
     "Claude PASS exact review commit",
@@ -102,7 +102,7 @@
     "ops/hearth2/offline_relay_windows.py": "65b9dba5211a15119a4ca5606bf843eb0acbff5e3fd8eedb4f06f06958e44882",
     "ops/hearth2/receipt_pilot_ops.py": "d61c45be14dcbb0a2ce61a496195e7be6e99098c533f5cef116a87b82479a4cc",
     "ops/hearth2/relay_candidate_tests.py": "a42e968a6661b136a197ba432120e0d239ad34e3587a204db85d2c4781306e25",
-    "ops/hearth2/relay_entitlement.py": "a556a2248d1da4e1425cee6981925a6daf2904185750bac7a3290fc6104aad45",
+    "ops/hearth2/relay_entitlement.py": "306fe05bbb26e32997be1c577568db80508e10e1d5a0776bec4ce93719a17933",
     "ops/hearth2/relay_financial.py": "cd9b39da06e2690dd1aae7e5c4d1f1a2543cc48f2306d5055d9f24d0a2331150",
     "ops/hearth2/relay_install.py": "aa17fe9621112cba47dc6a302399375449d4041ae009411fb8e6f62bdd874894",
     "ops/hearth2/relay_launch.py": "42c4913b281e1b7fc5589e4a5e911d0e903334e0ee72d2ea0ef838a2107b2e3f",
