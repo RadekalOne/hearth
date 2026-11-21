@@ -2732,13 +2732,54 @@ def work_context(task_id: str) -> dict:
 
 @mcp.tool(annotations=READ_ONLY_TOOL)
 def brief(task_id: str) -> dict:
-    """Read a task and return sourced HM excerpts across wings, missing evidence and readiness questions."""
+    """Read a task and return sourced HM excerpts across wings, missing evidence and readiness questions.
+    Separates open_points (readiness), not_found (real gaps) and limits (search/citation/excerpt caps);
+    search_window discloses the bounds. Asks for the category only when the project has none.
+    """
     context = work_context(task_id)
 
     def search(query):
-        return search_drawers(query, None, None, 8, 0.50)["results"]
+        return search_drawers(query, None, None, _librarian.SEARCH_LIMIT,
+                              _librarian.SEARCH_MAX_DISTANCE)["results"]
 
     return _librarian.build_brief(context, search, _drawer_detail)
+
+
+@mcp.tool(name="file", annotations=CREATE_TOOL)
+def file_progress(task_id: str, note: dict) -> dict:
+    """Task owner or a human files a progress note: {did, learned: [facts], left, files_touched: [paths]}.
+    Each learned fact is classified against current sourced knowledge in the task project's wing:
+    duplicate (nothing written, matched drawer returned), correction (saved with supersedes) or new
+    (saved). Never deletes or retracts; never writes outside the project wing. Note text is stored as
+    data only. Then replaces the task's progress_note and records a progress_noted event.
+    """
+    _work_payload({"note": note})
+    board = _work_call(work_store.board_for_task, task_id)
+    task = next((t for t in board["tasks"] if t["id"] == task_id), None)
+    if task is None:
+        raise ValueError("task not found")
+    human = _work_human()
+    if not human and _principal() != task["assignee"]:
+        raise ValueError("only the task owner or a human can file its progress note")
+    project = next(p for p in board["projects"] if p["id"] == task["project_id"])
+    clean = _librarian.normalize_note(note)
+    wing = project["memory_wing"]
+    source = f"hearth-work:{task_id}; filed by {_principal()} via Librarian file"
+
+    def search(fact):
+        return search_drawers(fact, wing, None, _librarian.FILE_SEARCH_LIMIT,
+                              _librarian.SAME_SUBJECT_DISTANCE)["results"]
+
+    def save(fact, supersedes, key):
+        saved = memory_add(wing=wing, room=_librarian.FILE_ROOM, content=fact, source=source,
+                           supersedes=supersedes, on_duplicate="warn", idempotency_key=key)
+        if not _drawer_detail(saved["drawer_id"]):
+            raise ValueError("memory write could not be read back; retry the identical note")
+        return saved
+
+    filed = _librarian.file_note(task, project, clean, search, _drawer_detail, save)
+    updated = _work_call(work_store.progress_note, _principal(), human, task_id, {**clean, "filed": filed})
+    return {"task_id": task_id, "wing": wing, "filed": filed, "progress_note": updated["progress_note"]}
 
 
 @mcp.tool(annotations=CREATE_TOOL)
@@ -3877,6 +3918,15 @@ async def api_work_phase(project_id: str, request: Request):
         raise HTTPException(403, "cross-site request rejected")
     payload = _work_payload(await request.json())
     return _work_call(work_store.project_phase, _principal(), _work_human(), project_id, payload.get("phase"))
+
+
+@app.post("/api/work/projects/{project_id}/category")
+async def api_work_category(project_id: str, request: Request):
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-site request rejected")
+    payload = _work_payload(await request.json())
+    return _work_call(work_store.project_category, _principal(), _work_human(), project_id,
+                      payload.get("category"))
 
 
 @app.post("/api/work/projects/{project_id}/tasks")
