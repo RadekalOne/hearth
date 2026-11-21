@@ -1,8 +1,8 @@
 """Librarian: read-only task briefs and deterministic filing of task notes.
 
 No model calls. Filing classifies each learned fact against current sourced
-knowledge in the task project's memory wing with fixed thresholds, and records
-the thresholds in every reason so a reviewer can audit the decision.
+knowledge in the task project's memory wing. Search distance retrieves related
+records; the claim comparison determines whether to drop or supersede one.
 """
 import hashlib
 import re
@@ -15,18 +15,20 @@ SEARCH_LIMIT = 8
 SEARCH_MAX_DISTANCE = 0.50
 
 # Filing thresholds (cosine distance; lower is closer).
-DUPLICATE_DISTANCE = 0.18     # same as memory_add's near-duplicate threshold
-SAME_SUBJECT_DISTANCE = 0.25  # closer than this but not a duplicate: a correction
-DUPLICATE_WORD_OVERLAP = 0.6  # minimum word Jaccard for a duplicate
+SAME_SUBJECT_DISTANCE = 0.25  # related-candidate search cutoff
 FILE_SEARCH_LIMIT = 5
 FILE_ROOM = "facts"
 NOTE_FIELDS = ("did", "learned", "left", "files_touched")
 MAX_LEARNED = 20
 MAX_FACT = 2000
 
-_WORD = re.compile(r"[A-Za-z0-9_@.'-]+")
-_NEGATIONS = {"not", "no", "never", "none", "without", "cannot", "isn't", "aren't", "wasn't",
-              "weren't", "doesn't", "don't", "didn't", "won't", "can't", "unverified", "unknown"}
+# Compare values only in an otherwise identical, single declarative claim.
+# Numbers in identifiers, subjects or arbitrary prose are never value slots.
+_RUNTIME = re.compile(
+    r"(?P<subject>[\w -]+) runs (?P<product>[\w-]+) (?P<version>\d+(?:\.\d+)*)"
+    r"(?: on port (?P<port>\d+))?"
+)
+_STATUS = re.compile(r"(?P<subject>[\w -]+) is (?P<negative>not )?(?P<status>verified|enabled|disabled)")
 
 
 class LibrarianError(ValueError):
@@ -138,44 +140,53 @@ def normalize_note(note):
     return clean
 
 
-def _words(text):
-    return {w.strip(".'-").lower() for w in _WORD.findall(text)} - {""}
+def _claim(text):
+    # Preserve case, identifiers and word order. Only fold equivalent prose forms.
+    text = text.strip().removesuffix(".")
+    # A status clause can be written as a separate sentence or after a semicolon.
+    text = re.sub(r"; ([a-z])([a-z]+ is (?:not verified|unverified))(?=\. |$)",
+                  lambda match: ". " + match[1].upper() + match[2], text)
+    return re.sub(r" is unverified(?=\. |$)", " is not verified", text)
 
 
-def _differences(fact, existing):
-    """Lexical signals the embedding cannot see: numbers, negation and wording."""
-    a, b = _words(fact), _words(existing)
-    numbers = {w for w in a ^ b if any(c.isdigit() for c in w)}
-    negation = bool(a & _NEGATIONS) != bool(b & _NEGATIONS)
-    overlap = len(a & b) / len(a | b) if a | b else 1.0
-    return numbers, negation, round(overlap, 3)
+def _contradiction(old, new):
+    before, after = _STATUS.fullmatch(old), _STATUS.fullmatch(new)
+    if before and after and before["subject"] == after["subject"] and before["status"] == after["status"]:
+        if before["negative"] != after["negative"]:
+            return "negation differs for the same subject and status"
+
+    before, after = _RUNTIME.fullmatch(old), _RUNTIME.fullmatch(new)
+    if before and after and before.group("subject", "product") == after.group("subject", "product"):
+        same_fields = (before["port"] is None) == (after["port"] is None)
+        if same_fields and before.group("version", "port") != after.group("version", "port"):
+            return "numbers differ in the same runtime version or port claim"
+    return ""
 
 
 def classify(fact, rows, wing):
-    """Return (kind, reason, target_row) for one fact against same-wing candidates."""
-    rows = [r for r in rows if eligible(r) and r.get("wing") == wing and r.get("match", "semantic") == "semantic"]
-    rows.sort(key=lambda r: r["distance"])
-    if not rows or rows[0]["distance"] > SAME_SUBJECT_DISTANCE:
-        nearest = f"nearest d={rows[0]['distance']}" if rows else "no current sourced candidate"
-        return "new", (f"{nearest} in wing {wing}; above same-subject threshold "
-                       f"{SAME_SUBJECT_DISTANCE}"), None
-    top = rows[0]
-    numbers, negation, overlap = _differences(fact, top["content"])
-    signals = f"d={top['distance']}, word overlap {overlap}"
-    if top["distance"] <= DUPLICATE_DISTANCE and not numbers and not negation and overlap >= DUPLICATE_WORD_OVERLAP:
-        return "duplicate", (f"matches {top['drawer_id']} ({signals}; duplicate needs d<={DUPLICATE_DISTANCE}, "
-                             f"overlap>={DUPLICATE_WORD_OVERLAP}, same numbers and negation)"), top
-    why = []
-    if numbers:
-        why.append("numbers differ: " + ", ".join(sorted(numbers)))
-    if negation:
-        why.append("negation differs")
-    if overlap < DUPLICATE_WORD_OVERLAP:
-        why.append(f"wording overlap below {DUPLICATE_WORD_OVERLAP}")
-    if top["distance"] > DUPLICATE_DISTANCE:
-        why.append(f"d above duplicate threshold {DUPLICATE_DISTANCE}")
-    return "correction", (f"same subject as {top['drawer_id']} ({signals}; d<={SAME_SUBJECT_DISTANCE}) "
-                          f"but content differs ({'; '.join(why)})"), top
+    """Similarity retrieves candidates. Only equivalent claims or clear conflicts change filing."""
+    candidates = sorted((r for r in rows if eligible(r) and r.get("wing") == wing
+                         and r.get("match", "semantic") == "semantic"
+                         and r["distance"] <= SAME_SUBJECT_DISTANCE), key=lambda r: r["distance"])
+    if not candidates:
+        return "new", f"No eligible match within same-subject threshold {SAME_SUBJECT_DISTANCE} in {wing}", None
+
+    claim = _claim(fact)
+    conflicts = []
+    for row in candidates:
+        existing = _claim(row["content"])
+        if claim == existing:
+            return "duplicate", f"Equivalent claim in {row['drawer_id']} (d={row['distance']})", row
+        reason = _contradiction(existing, claim)
+        if reason:
+            conflicts.append((reason, row))
+    if len(conflicts) == 1:
+        reason, row = conflicts[0]
+        return "correction", f"{reason} in {row['drawer_id']} (d={row['distance']})", row
+
+    related = candidates[0]
+    reason = "Multiple possible correction targets" if conflicts else "No clear contradiction"
+    return "new", f"{reason}; related: {related['drawer_id']} (d={related['distance']})", related
 
 
 def fact_key(task_id, fact, supersedes):
@@ -207,6 +218,8 @@ def file_note(task, project, note, search, get_drawer, save):
                 raise LibrarianError(f"two learned facts correct {target['drawer_id']}; file them separately")
             targets.add(target["drawer_id"])
             entry["supersedes"] = target["drawer_id"]
+        elif target is not None:
+            entry["related"] = target["drawer_id"]
         plan.append(entry)
     for entry in plan:
         if entry["classification"] != "duplicate":

@@ -113,6 +113,34 @@ class FileTests(unittest.TestCase):
         self.assertEqual([(w[0], w[1]) for w in writes], [(facts[0], "drawer_db"), (facts[2], "")])
         self.assertTrue(all(w[2].startswith("file:task_1:") for w in writes))
 
+    def test_related_claims_are_saved_even_at_duplicate_distance(self):
+        pairs = [
+            ("media_monitor@ forwards to the media_mon@ group.",
+             "press@ forwards to the media_mon@ group."),
+            ("The notifier uses long polling.", "The notifier keeps its cursor in memory."),
+            ("Service 1 uses port 80.", "Service 2 uses port 80."),
+            ("Alice sends mail to Bob.", "Bob sends mail to Alice."),
+        ]
+        for existing, fact in pairs:
+            with self.subTest(fact=fact):
+                old = row("drawer_prior", existing, 0.05)
+                filed, writes = self.run_file([fact], {fact: [old]}, {"drawer_prior": old})
+                self.assertEqual(filed[0]["classification"], "new")
+                self.assertEqual(filed[0]["related"], "drawer_prior")
+                self.assertEqual(writes[0][:2], (fact, ""))
+
+    def test_duplicate_beats_a_nearer_correction_and_ambiguous_targets_stay_current(self):
+        fact = "The staging database runs Postgres 16."
+        old = row("drawer_old", "The staging database runs Postgres 15.", 0.02)
+        same = row("drawer_same", fact, 0.03)
+        filed, writes = self.run_file([fact], {fact: [old, same]}, {"drawer_old": old})
+        self.assertEqual(filed[0]["matched"], "drawer_same")
+        self.assertFalse(writes)
+        second = row("drawer_second", "The staging database runs Postgres 14.", 0.04)
+        filed, writes = self.run_file([fact], {fact: [old, second]})
+        self.assertEqual(filed[0]["classification"], "new")
+        self.assertEqual(writes[0][1], "")
+
     def test_negation_is_a_correction_not_a_duplicate(self):
         old = row("drawer_v", "The donor list is verified.", 0.05)
         filed, writes = self.run_file(["The donor list is not verified."],
