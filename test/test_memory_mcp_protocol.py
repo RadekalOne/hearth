@@ -97,6 +97,14 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
         return http_client, Client(transport, mode=mode)
 
     async def test_modern_and_legacy_clients_discover_bootstrap(self):
+        project = self.memory.work_store.create_project("test", True, {"title": "Acceptance", "goal": "Check retrieval"})
+        task = self.memory.work_store.create_task("test", project["id"], {
+            "title": "Confirm who is in the media_mon@ group", "acceptance": "Membership confirmed",
+        }, [])
+        reference = self.memory.add_drawer(
+            "mail-fixture", "facts", "The media_mon@ group receives forwarded mail. Membership is unverified.",
+            "test", "Isolated Librarian acceptance fixture",
+        )
         for mode in ("auto", "legacy"):
             with self.subTest(mode=mode):
                 http_client, client = await self._client(mode)
@@ -106,6 +114,16 @@ class MemoryMCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         self.assertIn("queue relay_request", client.instructions)
                         tools = await client.list_tools()
                         tool_names = {tool.name for tool in tools.tools}
+                        tool = next(item for item in tools.tools if item.name == "brief")
+                        self.assertTrue(tool.annotations.read_only_hint)
+                        result = await client.call_tool("brief", {"task_id": task["id"]})
+                        self.assertFalse(result.is_error)
+                        output = result.structured_content or json.loads(result.content[0].text)
+                        self.assertEqual(output["task"]["id"], task["id"])
+                        self.assertEqual(output["category_question"], "Personal or Climate Central?")
+                        self.assertIn("category", output["open_points"])
+                        self.assertIn(reference["drawer_id"], [row["drawer_id"] for row in output["items"]])
+                        self.assertTrue(output["not_found"])
                         tools_by_name = {tool.name: tool for tool in tools.tools}
                         self.assertIn("memory_bootstrap", tool_names)
                         self.assertTrue({"work_board", "work_context", "work_propose", "work_claim",

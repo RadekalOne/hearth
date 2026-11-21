@@ -102,6 +102,10 @@ _work_spec = importlib.util.spec_from_file_location(
 _work_module = importlib.util.module_from_spec(_work_spec)
 _work_spec.loader.exec_module(_work_module)
 work_store = _work_module.WorkStore(os.path.join(DATA_DIR, "work.sqlite3"))
+_librarian_spec = importlib.util.spec_from_file_location(
+    "hearth_librarian", os.path.join(os.path.dirname(__file__), "librarian.py"))
+_librarian = importlib.util.module_from_spec(_librarian_spec)
+_librarian_spec.loader.exec_module(_librarian)
 _commons_spec = importlib.util.spec_from_file_location(
     'hearth_commons_files', os.path.join(os.path.dirname(__file__), 'commons_files.py'))
 _commons_module = importlib.util.module_from_spec(_commons_spec)
@@ -2724,6 +2728,17 @@ def work_context(task_id: str) -> dict:
                       "Read a checkpoint before replacing it. Keep quiet ticks in checkpoints, material continuity "
                       "in diaries, and durable verified outcomes/lessons in sourced, deduplicated memory. "
                       "Task activity is bounded to the latest 200 project-wide events; fetch original evidence as needed."}
+
+
+@mcp.tool(annotations=READ_ONLY_TOOL)
+def brief(task_id: str) -> dict:
+    """Read a task and return sourced HM excerpts across wings, missing evidence and readiness questions."""
+    context = work_context(task_id)
+
+    def search(query):
+        return search_drawers(query, None, None, 8, 0.50)["results"]
+
+    return _librarian.build_brief(context, search, _drawer_detail)
 
 
 @mcp.tool(annotations=CREATE_TOOL)
