@@ -118,7 +118,9 @@ class FileTests(unittest.TestCase):
             ("media_monitor@ forwards to the media_mon@ group.",
              "press@ forwards to the media_mon@ group."),
             ("The notifier uses long polling.", "The notifier keeps its cursor in memory."),
-            ("Service 1 uses port 80.", "Service 2 uses port 80."),
+            ("Service 1 runs nginx 1.24.", "Service 2 runs nginx 1.25."),
+            ("AgentA is enabled.", "agentA is disabled."),
+            ('The path is "A  B".', 'The path is "A B".'),
             ("Alice sends mail to Bob.", "Bob sends mail to Alice."),
         ]
         for existing, fact in pairs:
@@ -140,6 +142,22 @@ class FileTests(unittest.TestCase):
         filed, writes = self.run_file([fact], {fact: [old, second]})
         self.assertEqual(filed[0]["classification"], "new")
         self.assertEqual(writes[0][1], "")
+
+    def test_opposite_activation_states_correct_the_same_subject(self):
+        for before, after in [("enabled", "disabled"), ("disabled", "enabled")]:
+            with self.subTest(before=before):
+                old = row("drawer_state", f"AgentA is {before}.", 0.05)
+                fact = f"AgentA is {after}."
+                filed, writes = self.run_file([fact], {fact: [old]}, {"drawer_state": old})
+                self.assertEqual(filed[0]["classification"], "correction")
+                self.assertEqual(writes[0][:2], (fact, "drawer_state"))
+
+    def test_prose_spacing_and_initial_article_do_not_create_another_drawer(self):
+        fact = "the notifier   uses long polling."
+        old = row("drawer_prior", "The notifier uses long polling.", 0.05)
+        filed, writes = self.run_file([fact], {fact: [old]})
+        self.assertEqual(filed[0]["classification"], "duplicate")
+        self.assertFalse(writes)
 
     def test_negation_is_a_correction_not_a_duplicate(self):
         old = row("drawer_v", "The donor list is verified.", 0.05)

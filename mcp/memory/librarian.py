@@ -143,6 +143,11 @@ def normalize_note(note):
 def _claim(text):
     # Preserve case, identifiers and word order. Only fold equivalent prose forms.
     text = text.strip().removesuffix(".")
+    # Quoted text, code and line breaks may carry significant whitespace.
+    if not any(mark in text for mark in ('"', "'", '`', "\n", "\r")):
+        text = re.sub(r"[ \t]+", " ", text)
+        if text.startswith("The "):
+            text = "the " + text[4:]
     # A status clause can be written as a separate sentence or after a semicolon.
     text = re.sub(r"; ([a-z])([a-z]+ is (?:not verified|unverified))(?=\. |$)",
                   lambda match: ". " + match[1].upper() + match[2], text)
@@ -151,9 +156,12 @@ def _claim(text):
 
 def _contradiction(old, new):
     before, after = _STATUS.fullmatch(old), _STATUS.fullmatch(new)
-    if before and after and before["subject"] == after["subject"] and before["status"] == after["status"]:
-        if before["negative"] != after["negative"]:
+    if before and after and before["subject"] == after["subject"]:
+        if before["status"] == after["status"] and before["negative"] != after["negative"]:
             return "negation differs for the same subject and status"
+        if not before["negative"] and not after["negative"]:
+            if {before["status"], after["status"]} == {"enabled", "disabled"}:
+                return "opposite activation states for the same subject"
 
     before, after = _RUNTIME.fullmatch(old), _RUNTIME.fullmatch(new)
     if before and after and before.group("subject", "product") == after.group("subject", "product"):
