@@ -1,10 +1,70 @@
 /* Durable work views. The existing dashboard owns authentication and Matrix actions. */
 "use strict";
-let selectedProject = history.state?.projectId || "";
+let selectedProject = window.history.state?.projectId || "";
 let workMode = "board";
-const workStates = ["draft", "ready", "running", "blocked", "review", "done"];
-const workLabels = { draft: "Proposed", ready: "Authorized", running: "Claimed", blocked: "Blocked", review: "Needs review", done: "Verified done" };
-const workPhases = ["idea", "design", "build", "validate", "shipped"];
+const workStates = ["draft", "ready", "running", "blocked", "review", "done", "cancelled"];
+const workLabels = { draft: "Proposed", ready: "Approved", running: "In progress", blocked: "Blocked", review: "Needs your review", done: "Done", cancelled: "Cancelled" };
+const workPhases = { idea: "Idea", design: "Design", build: "Building", validate: "Checking", shipped: "Delivered" };
+const personName = value => (value || "").replace(/^@/, "").split(":")[0];
+function isSignedInPerson(value) {
+  const viewer = state.principal;
+  return Boolean(viewer && value && (viewer === value ||
+    ((!viewer.includes(":") || !value.includes(":")) && personName(viewer) === personName(value))));
+}
+const workTaskLink = task => `#projects/${encodeURIComponent(task.project_id)}/${encodeURIComponent(task.id)}`;
+const workProjectLink = id => `#projects/${encodeURIComponent(id)}`;
+const historyActor = actor => isSignedInPerson(actor) ? "You" : personName(actor) || "Someone";
+function projectWorkForViewer(board) {
+  if (!board.can_manage || state.principal === "admin") return board;
+  const projectsOwned = new Set(board.projects.filter(p => isSignedInPerson(p.created_by)).map(p => p.id));
+  const tasks = board.tasks.filter(t => projectsOwned.has(t.project_id) ||
+    [t.created_by, t.authorized_by, t.reviewed_by].some(isSignedInPerson));
+  const joined = new Set(tasks.map(t => t.project_id));
+  const taskIds = new Set(tasks.map(t => t.id));
+  return { ...board, tasks, projects: board.projects.filter(p => projectsOwned.has(p.id) || joined.has(p.id)),
+    activity: board.activity.filter(e => e.task_id ? taskIds.has(e.task_id) : projectsOwned.has(e.project_id) || isSignedInPerson(e.actor)) };
+}
+function workPlainText(value) {
+  return (value || "").split(/^(?:--- )?Technical details?\b[^\n]*/im, 1)[0].trim();
+}
+function workSummaryLine(task) {
+  const source = workPlainText(task.state === "review" ? task.summary : task.description);
+  const first = source.split(/\r?\n/).find(line => line.trim()) || task.acceptance || "";
+  const text = first.replace(/^what(?: (?:i found|changed))?[.:]\s*/i, "").trim();
+  return text.length > 200 ? `${text.slice(0, 197).trimEnd()}…` : text;
+}
+const workEventText = {
+  task_proposed: "proposed", ready: "approved", claim: "started", review: "asked you to review",
+  accept: "accepted", revise: "asked for changes to", release: "returned to proposals",
+  block: "reported a blocker on", assign: "assigned", comment: "added a note to",
+  withdraw: "withdrew approval for", cancel: "cancelled", reopen: "reopened",
+  memory_captured: "saved a lesson from", phase: "updated the stage of",
+  project_created: "created", project_phase: "updated the stage of", project_category: "changed the category of",
+  heartbeat: "checked in on",
+};
+function workActivity(events, board) {
+  const taskTitles = new Map(board.tasks.map(t => [t.id, t.title]));
+  const projectTitles = new Map(board.projects.map(p => [p.id, p.title]));
+  const routine = new Set(["heartbeat", "phase", "project_phase"]);
+  const groups = [];
+  for (const item of events) {
+    const previous = groups.at(-1);
+    if (routine.has(item.kind) && previous && previous.item.kind === item.kind &&
+        previous.item.task_id === item.task_id && previous.item.project_id === item.project_id && previous.item.actor === item.actor) {
+      previous.count += 1;
+    } else groups.push({ item, count: 1 });
+  }
+  const recent = h("div", { class: "work-history" }, ...groups.slice(0, 12).map(({item, count}) => {
+    const title = taskTitles.get(item.task_id) || projectTitles.get(item.project_id) || "this work";
+    const sentence = `${historyActor(item.actor)} ${workEventText[item.kind] || "updated"} ${title}${count > 1 ? ` (${count} times)` : ""}.`;
+    return h("div", { class: "history-entry" }, h("p", { text: sentence }), h("small", { class: "dim", text: when(item.at) }));
+  }));
+  if (!groups.length) recent.append(h("p", { class: "empty", text: "Changes to this work will appear here." }));
+  return h("div", null, recent, h("details", null, h("summary", { text: "Show full history" }),
+    h("div", { class: "work-history" }, ...events.map(item => h("article", { class: "card" },
+      h("p", { text: `${item.actor} · ${when(item.at)} · ${item.kind}` }),
+      h("pre", { class: "work-prose", text: JSON.stringify(item, null, 2) }))))));
+}
 const workTone = s => s === "done" ? "ok" : s === "blocked" ? "bad" : s === "review" ? "warn" : "";
 const workPost = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const capabilityLabels = { coding: "Coding", design: "Design", planning: "Planning & coordination", research: "Research", review: "Review & testing", writing: "Writing" };
@@ -61,7 +121,7 @@ async function renderAgentCapabilities(view) {
       if (!p.strengths.length) card.append(h("p", { class: "dim", text: "Strengths not assessed yet" }));
       if (p.supporting.length) card.append(h("p", { class: "dim", text: `Also useful for: ${p.supporting.map(s => capabilityLabels[s]).join(", ")}` }));
       card.append(h("p", { text: `${p.updated_at ? modeLabels[p.work_mode] : "Working style unassessed"} · ${availabilityLabels[p.availability]}` }),
-        h("p", { class: "dim", text: `${p.workload.running} claimed · ${p.workload.ready} queued · ${p.workload.review} in review · ${p.workload.blocked} blocked` }));
+        h("p", { class: "dim", text: `${p.workload.running} in progress · ${p.workload.ready} approved · ${p.workload.review} need review · ${p.workload.blocked} blocked` }));
       if (p.notes) card.append(h("p", { class: "work-prose", text: p.notes }));
       if (p.updated_at) card.append(h("small", { class: "dim work-prose", text: `Assessment: ${p.source || "Not provided"} · ${p.updated_by} · ${when(p.updated_at)}` }));
       if (data.can_manage) card.append(h("button", { class: "secondary small", text: `Edit ${p.id} profile`, onClick: () => editAgentProfile(directory, p) }));
@@ -142,25 +202,31 @@ function projectCategory(project, canManage) {
   return field;
 }
 async function renderProjects(view) {
-  const board = await api("/api/work");
-  elementBase = board.element_url || elementBase;
+  const all = await api("/api/work");
+  elementBase = all.element_url || elementBase;
+  const board = projectWorkForViewer(all);
   clear(view);
+  showWorkNotice(view);
+  const [, projectFromLink, taskFromLink] = location.hash.slice(1).split("/");
   const projects = board.projects;
+  if (projectFromLink) selectedProject = decodeURIComponent(projectFromLink);
   if (!projects.some(p => p.id === selectedProject)) selectedProject = projects[0]?.id || "";
   const project = projects.find(p => p.id === selectedProject);
+  const linkedTask = taskFromLink && board.tasks.find(t => t.id === decodeURIComponent(taskFromLink) &&
+    t.project_id === decodeURIComponent(projectFromLink));
   if (project && window.history.state?.projectId !== project.id) {
     window.history.replaceState({ ...window.history.state, projectId: project.id }, "");
   }
-  const select = h("select", { "aria-label": "Project", onChange: e => { selectedProject = e.target.value; render(); } },
+  const select = h("select", { "aria-label": "Project", onChange: e => { location.hash = workProjectLink(e.target.value); } },
     ...projects.map(p => h("option", { value: p.id, selected: p.id === selectedProject, text: p.title })));
   const toolbar = h("div", { class: "work-toolbar" }, h("h1", { text: "Build together" }), select);
   if (board.can_manage) toolbar.append(h("button", { text: "New project", onClick: () => {
     const title = h("input", { required: true, maxlength: 200 });
     const goal = h("textarea", { required: true, maxlength: 12000, rows: 3 });
     const brief = h("textarea", { maxlength: 12000, rows: 3 });
-    const wing = h("input", { maxlength: 120, placeholder: "Existing HM project, e.g. hearth; blank creates a new project namespace" });
-    workForm(view, "Start with an idea", [workField("Project name", title), workField("What should this achieve?", goal), workField("Design brief and constraints", brief), workField("Shared memory project", wing)],
-      async () => { const p = await workPost("/api/work/projects", { title: title.value, goal: goal.value, brief: brief.value, memory_wing: wing.value }); selectedProject = p.id; });
+    const wing = h("input", { maxlength: 120, placeholder: "Leave blank to start a new collection" });
+    workForm(view, "Start with an idea", [workField("Project name", title), workField("What should this achieve?", goal), workField("Design brief and constraints", brief), workField("Where to save this project’s notes (optional)", wing)],
+      async () => { const p = await workPost("/api/work/projects", { title: title.value, goal: goal.value, brief: brief.value, memory_wing: wing.value }); selectedProject = p.id; location.hash = workProjectLink(p.id); });
   } }));
   view.append(toolbar);
   if (!project) {
@@ -172,8 +238,8 @@ async function renderProjects(view) {
     project.brief && h("p", { class: "dim work-prose", text: project.brief }),
     projectCategory(project, board.can_manage)));
   const phases = h("div", { class: "work-phases", "aria-label": "Project phase" });
-  workPhases.forEach(phase => {
-    const button = h("button", { class: phase === project.phase ? "" : "secondary", text: phase,
+  Object.entries(workPhases).forEach(([phase, label]) => {
+    const button = h("button", { class: phase === project.phase ? "" : "secondary", text: label,
       "aria-pressed": phase === project.phase ? "true" : "false", disabled: !board.can_manage || phase === project.phase });
     button.addEventListener("click", async () => {
       button.disabled = true;
@@ -183,36 +249,40 @@ async function renderProjects(view) {
     phases.append(button);
   });
   view.append(phases, h("div", { class: "tiles" },
-    ...[[tasks.length, "Tasks"], [tasks.filter(t => t.state === "done").length, "Reviewed complete"],
+    ...[[tasks.length, "Tasks"], [tasks.filter(t => t.state === "done").length, "Done"],
       [tasks.filter(t => t.waiting_on.length || t.state === "blocked").length, "Blocked or waiting"],
       [new Set(tasks.map(t => t.assignee).filter(Boolean)).size, "Agents involved"]].map(([value, label]) => tile(label, value))));
   const modes = h("div", { class: "work-toolbar" }, ...["board", "map", "team"].map(mode => h("button", {
     class: workMode === mode ? "" : "secondary", text: { board: "Task board", map: "Dependency map", team: "Team workload" }[mode],
     onClick: () => { workMode = mode; render(); }
-  })), h("button", { class: "secondary", text: "Propose task", onClick: () => proposeWorkTask(view, project, tasks, board.agents) }));
-  view.append(modes, h("p", { class: "dim", text: "Authorization queues work. An agent must claim it through its tools; claims expire after 15 minutes without renewal. Completion requires evidence and human review." }));
+  })));
+  view.append(h("div", { class: "work-toolbar" }, h("button", { class: "secondary", text: "Propose task",
+    onClick: () => proposeWorkTask(view, project, tasks, board.agents) }),
+    h("details", null, h("summary", { text: "Agent details" }), modes)));
+  view.append(h("p", { class: "dim", text: "Use Authorize work to let the assigned agent pick up a task. Use Accept to confirm a finished result." }));
   if (workMode === "map") view.append(workGraph(tasks, board));
   else if (workMode === "team") {
     const team = h("div", { class: "tiles" });
     [...new Set(tasks.map(t => t.assignee || "Unassigned"))].forEach(agent => {
       const assigned = tasks.filter(t => (t.assignee || "Unassigned") === agent);
       team.append(h("div", { class: "card" }, h("h3", { text: agent }),
-        h("p", { class: "dim", text: `${assigned.filter(t => t.state === "running").length} claimed · ${assigned.filter(t => t.state === "review").length} awaiting review` }),
+        h("p", { class: "dim", text: `${assigned.filter(t => t.state === "running").length} in progress · ${assigned.filter(t => t.state === "review").length} need your review` }),
         ...assigned.map(t => workTaskCard(t, board))));
     });
     view.append(team);
   } else {
-    view.append(h("div", { class: "work-board" }, ...workStates.map(s => {
+    if (board.can_manage && !tasks.length) view.append(h("p", { class: "empty", text: "No tasks in this project yet." }));
+    view.append(h("div", { class: board.can_manage ? "work-board personal-board" : "work-board" }, ...workStates
+      .filter(s => board.can_manage ? tasks.some(t => t.state === s) : s !== "cancelled" || tasks.some(t => t.state === s)).map(s => {
       const matching = tasks.filter(t => t.state === s);
       return h("section", { class: "work-column" }, h("h3", null, workLabels[s], " ", pill(matching.length)),
         ...matching.map(t => workTaskCard(t, board)), !matching.length && h("p", { class: "dim", text: "No tasks" }));
     })));
   }
-  const activity = board.activity.filter(e => e.project_id === project.id).slice(0, 15);
-  const history = h("div", { class: "work-history" }, ...activity.map(e => h("div", { class: "card" },
-    h("span", { class: "dim", text: `${when(e.at)} · ${e.actor} · ${e.kind.replaceAll("_", " ")}` }),
-    h("p", { class: "work-prose", text: e.data.body || e.data.summary || e.data.reason || e.data.title || e.data.phase || "" }))));
-  view.append(section("Work history", "Attributed changes and handoffs", activity.length, history));
+  const activity = board.activity.filter(e => e.project_id === project.id);
+  view.append(section("Work history", "", null, workActivity(activity, board)));
+  if (linkedTask) openWorkTask(linkedTask, board);
+  else if (taskFromLink) view.prepend(h("p", { class: "empty", role: "status", text: "This task is unavailable from your project view." }));
 }
 function proposeWorkTask(view, project, tasks, agents) {
   const title = h("input", { required: true, maxlength: 200 });
@@ -239,11 +309,11 @@ function proposeWorkTask(view, project, tasks, agents) {
     }));
 }
 function workTaskCard(task, board) {
-  return h("button", { class: "work-task card", onClick: () => openWorkTask(task, board) },
+  return h("a", { class: "work-task card", href: workTaskLink(task) },
     h("strong", { text: task.title }), h("span", { class: "dim", text: task.assignee || "Unassigned" }),
     task.waiting_on.length ? pill(`Waiting on ${task.waiting_on.length}`, "warn") : "",
-    task.claim_expired ? pill("Claim expired", "bad") : "",
-    task.state === "running" && !task.claim_expired ? h("span", { class: "dim", text: task.claim_surface || "surface not reported" }) : "",
+    task.claim_expired && !board.can_manage ? pill("Claim expired", "bad") : "",
+    task.state === "running" && !task.claim_expired && !board.can_manage ? h("span", { class: "dim", text: task.claim_surface || "surface not reported" }) : "",
     task.blocked_reason && h("span", { class: "bad", text: task.blocked_reason }));
 }
 function workGraph(tasks, board) {
@@ -254,7 +324,7 @@ function workGraph(tasks, board) {
   const levels = new Map();
   const byId = new Map(tasks.map(t => [t.id, t]));
   function level(t) {
-    if (!levels.has(t.id)) levels.set(t.id, t.dependencies.length ? 1 + Math.max(...t.dependencies.map(d => level(byId.get(d)))) : 0);
+    if (!levels.has(t.id)) levels.set(t.id, t.dependencies.some(d => byId.has(d)) ? 1 + Math.max(...t.dependencies.filter(d => byId.has(d)).map(d => level(byId.get(d)))) : 0);
     return levels.get(t.id);
   }
   const counts = new Map(), positions = new Map();
@@ -264,7 +334,7 @@ function workGraph(tasks, board) {
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`); svg.setAttribute("width", width); svg.setAttribute("height", height);
   svg.setAttribute("role", "group"); svg.setAttribute("aria-label", "Task dependencies. Arrows point from prerequisite to dependent task.");
   function shape(tag, attrs, content) { const el = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v)); if (content) el.textContent = content; return el; }
-  tasks.forEach(t => t.dependencies.forEach(dep => {
+  tasks.forEach(t => t.dependencies.filter(dep => positions.has(dep)).forEach(dep => {
     const [x, y] = positions.get(dep), [tx, ty] = positions.get(t.id);
     svg.append(shape("path", { d: `M${x+210} ${y+35} C${x+235} ${y+35},${tx-25} ${ty+35},${tx} ${ty+35}`, class: "work-edge" }),
       shape("path", { d: `M${tx-7} ${ty+30} L${tx} ${ty+35} L${tx-7} ${ty+40}`, class: "work-edge" }));
@@ -275,28 +345,96 @@ function workGraph(tasks, board) {
     g.append(shape("rect", { x, y, width: 210, height: 70, rx: 10, class: `work-node-${t.state}` }),
       shape("text", { x: x+12, y: y+25 }, t.title.length > 27 ? t.title.slice(0,24)+"…" : t.title),
       shape("text", { x: x+12, y: y+49, class: "work-node-meta" }, `${t.assignee || "Unassigned"} · ${workLabels[t.state]}`), shape("title", {}, t.title));
-    g.addEventListener("click", () => openWorkTask(t, board));
-    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openWorkTask(t, board); } });
+    g.addEventListener("click", () => { location.hash = workTaskLink(t); });
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); location.hash = workTaskLink(t); } });
     svg.append(g);
   });
   holder.append(svg, h("p", { class: "dim", text: "Prerequisite → dependent. Select a task to inspect context and evidence." }));
   return holder;
 }
+const taskActions = {
+  draft: [["ready", "Authorize work"]], blocked: [["ready", "Authorize work"]],
+  review: [["accept", "Accept"], ["revise", "Request changes"]],
+  ready: [["withdraw", "Withdraw approval"], ["cancel", "Cancel task"]],
+  running: [["release", "Return to proposals"]], cancelled: [["reopen", "Reopen as proposed"]],
+};
+const actionResult = {
+  ready: "Work approved. The assigned agent can now pick it up.",
+  accept: "Result accepted. This task is done.",
+  withdraw: "Approval withdrawn. The task is back in Proposed.",
+  cancel: "Task cancelled. It is still in the project history.",
+  reopen: "Task reopened as a proposal.",
+  revise: "Changes requested. The task is back in Proposed.",
+  release: "The task is back in Proposed.",
+};
+let workNotice;
+function showWorkNotice(parent) {
+  if (workNotice?.route === location.hash) parent.prepend(h("p", { class: "card work-notice", role: "status", text: workNotice.text }));
+}
+function workActionButton(task, action, label, parent) {
+  const simple = action === "ready" || action === "accept";
+  const button = h("button", { type: "button", class: simple ? "" : "secondary", text: label,
+    disabled: action === "ready" && !task.assignee });
+  async function submit(control, reason = "") {
+    control.disabled = true;
+    const route = location.hash;
+    try {
+      await workPost(`/api/work/tasks/${encodeURIComponent(task.id)}/action`, { action, reason, revision: task.revision });
+      workNotice = { route, text: actionResult[action] };
+      await render();
+    } catch (error) { workMessage(parent, error); control.disabled = false; }
+  }
+  button.addEventListener("click", () => {
+    if (simple) return submit(button);
+    parent.querySelector(".work-reason")?.remove();
+    const reason = h("textarea", { rows: 2, required: true, maxlength: 500 });
+    const confirm = h("button", { type: "submit", text: label });
+    const form = h("form", { class: "work-reason", onSubmit: event => {
+      event.preventDefault();
+      if (reason.value.trim()) submit(confirm, reason.value.trim());
+    } }, workField("Reason", reason), h("div", { class: "work-toolbar" }, confirm,
+      h("button", { type: "button", class: "secondary", text: "Go back", onClick: () => { form.remove(); startAutoRefresh(); button.focus(); } })));
+    form.addEventListener("focusin", stopAutoRefresh);
+    parent.append(form);
+    reason.focus();
+  });
+  return button;
+}
+function closeWorkTask() {
+  const parts = location.hash.slice(1).split("/");
+  if (parts[0] === "projects" && parts.length === 3) location.hash = `#projects/${parts[1]}`;
+  closeDetail();
+}
+
 function openWorkTask(task, board) {
   const detail = clear($("detail"));
   detail.classList.remove("hidden");
-  detail.append(h("button", { class: "secondary small", text: "Close", onClick: closeDetail }), h("h2", { text: task.title }),
-    pill(workLabels[task.state], workTone(task.state)), h("p", { class: "dim", text: `Assigned to ${task.assignee || "nobody"}` }),
-    h("h3", { text: "Instructions" }), h("p", { class: "work-prose", text: task.description || "No extra instructions." }),
-    h("h3", { text: "Acceptance criteria" }), h("p", { class: "work-prose", text: task.acceptance }));
-  if (task.capability) detail.append(h("p", { class: "dim", text: `${capabilityLabels[task.capability]} · ${modeLabels[task.work_mode || "either"]}` }));
-  if (task.dependencies.length) detail.append(h("h3", { text: "Dependencies" }), ...task.dependencies.map(id => {
+  showWorkNotice(detail);
+  detail.append(h("button", { class: "secondary small", text: "Close", onClick: closeWorkTask }),
+    h("h2", { text: task.title, tabindex: "-1" }),
+    pill(workLabels[task.state], workTone(task.state)), h("p", { class: "dim", text: `Assigned to ${task.assignee || "nobody"}` }));
+  if (board.can_manage && taskActions[task.state]) {
+    const actions = h("div", { class: "work-toolbar task-actions" });
+    actions.append(...taskActions[task.state].map(([action, label]) => workActionButton(task, action, label, actions)));
+    detail.append(actions);
+  }
+  detail.append(h("h3", { text: "Instructions" }), h("p", { class: "work-prose", text: workPlainText(task.description) || "No extra instructions." }),
+    h("h3", { text: "How we’ll know it’s done" }), h("p", { class: "work-prose", text: task.acceptance }));
+  const technical = h("details", null, h("summary", { text: "Details for agents" }),
+    h("a", { href: workTaskLink(task), text: "Direct link to this task" }));
+  if (task.description && task.description !== workPlainText(task.description)) {
+    technical.append(h("p", { class: "work-prose", text: task.description.slice(workPlainText(task.description).length).trim() }));
+  }
+  if (task.claim_expired) technical.append(h("p", { text: "Claim expired. The agent needs to check in before continuing." }));
+  detail.querySelector("h2").focus({preventScroll: true});
+  if (task.capability) technical.append(h("p", { class: "dim", text: `${capabilityLabels[task.capability]} · ${modeLabels[task.work_mode || "either"]}` }));
+  if (task.dependencies.length) technical.append(h("h3", { text: "Dependencies" }), ...task.dependencies.map(id => {
     const dep = board.tasks.find(t => t.id === id);
     return h("button", { class: "link", text: `${dep?.title || id} · ${workLabels[dep?.state] || "unknown"}`, onClick: () => dep && openWorkTask(dep, board) });
   }));
-  if (task.memory_ids.length) detail.append(h("h3", { text: "Shared memory" }), ...task.memory_ids.map(id => h("button", { class: "link", text: id, onClick: () => openDrawer(id) })));
+  if (task.memory_ids.length) technical.append(h("h3", { text: "Shared memory" }), ...task.memory_ids.map(id => h("button", { class: "link", text: id, onClick: () => openDrawer(id) })));
   const context = h("div");
-  detail.append(h("button", { class: "secondary", text: "Retrieve relevant HM lessons", onClick: async e => {
+  technical.append(h("button", { class: "secondary", text: "Retrieve relevant HM lessons", onClick: async e => {
     e.target.disabled = true;
     try {
       const bundle = await api(`/api/work/tasks/${task.id}/context`);
@@ -309,9 +447,11 @@ function openWorkTask(task, board) {
     } catch (err) { workMessage(context, err); }
     finally { e.target.disabled = false; }
   } }), context);
-  if (task.room_id) detail.append(h("p", null, h("a", { href: permalink(task.room_id, task.thread_root), target: "_blank", rel: "noopener", text: "Open team conversation in Hearth Chat" })));
-  if (task.summary) detail.append(h("h3", { text: "Handoff and evidence" }), h("p", { class: "work-prose", text: task.summary }),
+  if (task.room_id) technical.append(h("p", null, h("a", { href: permalink(task.room_id, task.thread_root), target: "_blank", rel: "noopener", text: "Open team conversation in Hearth Chat" })));
+  if (task.summary) detail.append(h("h3", { text: "Result" }), h("p", { class: "work-prose", text: workPlainText(task.summary) }));
+  if (task.evidence?.length) technical.append(h("h3", { text: "Evidence" }),
     ...task.evidence.map(ref => /^https?:\/\//i.test(ref) ? h("p", null, h("a", { href: ref, target: "_blank", rel: "noopener", text: ref })) : h("p", { class: "mono work-prose", text: ref })));
+  detail.append(technical);
   if (board.can_manage) {
     if (["draft", "blocked"].includes(task.state)) {
       const agent = h("select", { "aria-label": "Reassign agent" }, ...board.agents.map(a => h("option", { value: a, text: a, selected: a === task.assignee })));
@@ -324,16 +464,6 @@ function openWorkTask(task, board) {
         catch (err) { workMessage(detail, err); }
       } })));
     }
-    const actions = task.state === "draft" || task.state === "blocked" ? [["ready", "Authorize work"]]
-      : task.state === "review" ? [["accept", "Accept evidence and complete"], ["revise", "Request revision"]]
-      : task.state === "running" ? [["release", "Release claim and return to proposal"]] : [];
-    actions.forEach(([action, label]) => detail.append(h("button", { text: label, onClick: async e => {
-      let reason = "";
-      if (action === "revise" || action === "release") { reason = window.prompt("Reason for this change:") || ""; if (!reason.trim()) return; }
-      e.target.disabled = true;
-      try { await workPost(`/api/work/tasks/${task.id}/action`, { action, reason }); await render(); }
-      catch (err) { workMessage(detail, err); e.target.disabled = false; }
-    } })));
     if (task.state === "done") detail.append(h("button", { class: "secondary", text: "Capture a durable HM lesson", onClick: () => {
       const content = h("textarea", { required: true, maxlength: 12000, rows: 4 });
       const kind = h("select", null, ...["lessons", "outcomes", "decisions"].map(k => h("option", { value: k, text: k })));
@@ -350,9 +480,12 @@ function openWorkTask(task, board) {
     } }));
   }
   detail.append(h("h3", { text: "Task discussion" }), h("p", { class: "dim", text: "Board notes are shared with humans and agents. Use the linked Hearth Chat thread for messages and notifications." }));
-  const notes = board.activity.filter(e => e.task_id === task.id).slice().reverse();
-  notes.forEach(e => detail.append(h("div", { class: "work-note" }, h("small", { class: "dim", text: `${e.actor} · ${when(e.at)} · ${e.kind}` }),
-    h("p", { class: "work-prose", text: e.data.body || e.data.summary || e.data.reason || "" }))));
+  const notes = board.activity.filter(e => e.task_id === task.id);
+  for (const note of notes.filter(e => e.kind === "comment")) {
+    detail.append(h("div", { class: "work-note" }, h("small", { class: "dim", text: `${historyActor(note.actor)} · ${when(note.at)}` }),
+      h("p", { class: "work-prose", text: workPlainText(note.data.body) })));
+  }
+  detail.append(workActivity(notes, board));
   const body = h("textarea", { required: true, maxlength: 12000, rows: 3, "aria-label": "Task note" });
   const form = h("form", null, body, h("button", { type: "submit", text: "Add board note" }));
   form.addEventListener("focusin", stopAutoRefresh);

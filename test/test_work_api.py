@@ -48,6 +48,43 @@ class WorkAPITests(unittest.IsolatedAsyncioTestCase):
         board = (await self.client.get("/api/work")).json()
         self.assertTrue(any(p["id"] == "codex" and p["source"] for p in board["profiles"]))
 
+    async def test_human_can_withdraw_cancel_and_reopen_an_approved_task(self):
+        project = await self.project()
+        task = (await self.post(f'/api/work/projects/{project["id"]}/tasks',
+            {"title": "Old task", "acceptance": "Reviewed", "assignee": "codex"})).json()
+        path = f'/api/work/tasks/{task["id"]}/action'
+        ready = (await self.post(path, {"action": "ready"})).json()
+        for action in ("withdraw", "cancel", "reopen"):
+            denied = await self.post(path, {"action": action, "revision": ready["revision"],
+                                          "reason": "No longer needed"}, "codex-test-token")
+            self.assertEqual(denied.status_code, 403)
+        cancelled = {"action": "cancel", "revision": ready["revision"], "reason": "No longer needed"}
+        self.assertEqual((await self.post(path, cancelled, Origin="https://evil.test")).status_code, 403)
+        withdrawn = await self.post(path, {**cancelled, "action": "withdraw"})
+        self.assertEqual(withdrawn.status_code, 200, withdrawn.text)
+        self.assertEqual(withdrawn.json()["state"], "draft")
+        self.assertFalse(withdrawn.json().get("authorized_by"))
+        self.assertEqual((await self.post(path, {"action": "claim"}, "codex-test-token")).status_code, 409)
+        ready = (await self.post(path, {"action": "ready"})).json()
+        self.assertEqual((await self.post(path, cancelled)).status_code, 409)
+        cancelled["revision"] = ready["revision"]
+        self.assertEqual((await self.post(path, {**cancelled, "reason": ""})).status_code, 400)
+        response = await self.post(path, cancelled)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["state"], "cancelled")
+        self.assertEqual((await self.post(path, {"action": "claim"}, "codex-test-token")).status_code, 409)
+        self.assertEqual((await self.post(path, {"action": "ready"})).status_code, 409)
+        reopened = await self.post(path, {"action": "reopen", "revision": response.json()["revision"],
+                                          "reason": "Reconsider next month"})
+        self.assertEqual(reopened.status_code, 200, reopened.text)
+        self.assertEqual(reopened.json()["state"], "draft")
+        self.assertFalse(reopened.json().get("authorized_by"))
+        board = (await self.client.get("/api/work", headers={"Authorization":"Bearer admin-test-token"})).json()
+        self.assertEqual([(e["kind"], e["data"]["reason"]) for e in board["activity"]
+                          if e["task_id"] == task["id"] and e["kind"] in {"withdraw","cancel","reopen"}],
+                         [("reopen","Reconsider next month"), ("cancel","No longer needed"),
+                          ("withdraw","No longer needed")])
+
     async def test_board_requires_auth_and_agent_cannot_manage(self):
         self.assertEqual((await self.client.get("/api/work")).status_code, 401)
         denied = await self.post("/api/work/projects", {"title": "x", "goal": "y"}, "codex-test-token")

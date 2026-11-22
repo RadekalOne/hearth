@@ -48,7 +48,7 @@ textarea { background: var(--card); border: 1px solid var(--line); border-radius
 .work-board { display: grid; grid-template-columns: repeat(6, minmax(175px, 1fr)); overflow-x: auto; gap: .65rem; margin: 1rem 0; padding-bottom: .7rem; }
 .work-column { background: var(--card-2); padding: .65rem; border-radius: 12px; }
 .work-column h3 { font-size: .85rem; margin-bottom: .6rem; }
-button.work-task { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; width: 100%; margin: .5rem 0; color: var(--text); font-weight: normal; text-align: left; overflow-wrap: anywhere; }
+.work-task { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; width: 100%; margin: .5rem 0; color: var(--text); font-weight: normal; text-align: left; overflow-wrap: anywhere; }
 .work-task strong { font-size: .9rem; }
 .work-task .dim { font-size: .8rem; }
 .work-map { overflow: auto; margin: 1rem 0; border: 1px solid var(--line); border-radius: 12px; }
@@ -279,15 +279,11 @@ body { font-variant-numeric: tabular-nums; }
 .health-metric strong { font: 500 2.5rem/1.2 Georgia,serif; }
 .coverage { color: var(--dim); font-size: .85rem; margin: 1rem 0 .2rem; }
 details summary { cursor: pointer; padding: .7rem 0; color: var(--dim); }
-.workspace-tools { font-size: .85rem; }
-.workspace-tools nav { display: flex; flex-wrap: wrap; gap: .7rem; padding-bottom: .5rem; }
 :focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
 .table-wrap { max-width: 100%; overflow-x: auto; }
 @media (max-width: 650px) {
   .topbar { gap: .5rem; flex-wrap: wrap; padding: .7rem 1rem; }
   .topbar .stamp,.topbar .identity,.topbar .grow { display: none; }
-  .workspace-tools { flex-basis: 100%; }
-  .topbar .workspace-tools { order: 4; }
   .view { padding: 1rem; }
   .health-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .watcher-row { grid-template-columns: minmax(0,1fr) auto; }
@@ -314,3 +310,19 @@ button.small.secondary { background: transparent; color: var(--accent); border: 
 .agent-wait-item { padding: .8rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .attention-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
 @media (max-width:650px) { .topbar .identity[data-role="reviewer"] { display: block; flex-basis:100%; white-space:normal; overflow-wrap:anywhere; } }
+
+/* Personal work dashboard */
+.decision-list { display: grid; gap: .75rem; }
+.decision-card, .history-entry { min-width: 0; }
+.decision-card h3, .history-entry p { margin: 0 0 .35rem; overflow-wrap: anywhere; }
+.decision-card .work-toolbar, .task-actions { gap: .6rem; }
+.decision-card p { margin: .35rem 0 .75rem; overflow-wrap: anywhere; }
+.work-notice { border-inline-start: 3px solid var(--accent); }
+.history-entry { border-bottom: 1px solid var(--line); padding: .4rem 0; }
+.work-task.card { color: inherit; text-decoration: none; }
+.work-task.card:hover strong { text-decoration: underline; }
+.work-board.personal-board { grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); overflow: visible; }
+.work-reason { flex-basis: 100%; width: 100%; }
+.work-reason textarea { width: 100%; }
+.maintenance-nav { display: flex; flex-wrap: wrap; gap: .6rem 1rem; margin: 0 0 1rem; }
+.maintenance-link { white-space: nowrap; }

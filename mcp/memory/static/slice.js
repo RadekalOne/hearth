@@ -1,6 +1,7 @@
 /* Dashboard first slice. Read-only projections; existing human actions remain intact. */
 'use strict';
-const stateName = s => ({'on-demand':'Event-driven',ok:'On schedule',queued:'Queued',claimed:'Claimed',running:'Running',review:'Review',blocked:'Blocked',done:'Done',proposed:'Proposed',failed:'Failed',stalled:'Stalled',late:'Late',unknown:'Unconfirmed',claim_expired:'Claim expired'})[s] || s;
+const stateName = s => workLabels[({queued:'ready',claimed:'running',proposed:'draft'})[s]||s] ||
+  ({'on-demand':'Event-driven',ok:'On schedule',failed:'Failed',stalled:'Stalled',late:'Late',unknown:'Unconfirmed',claim_expired:'Claim expired'})[s] || s;
 const stateTone = s => ['failed','stalled','blocked'].includes(s) ? 'bad' : s==='late' ? 'warn' : '';
 const sliceResult = promise => promise.then(value=>({ok:true,value}), error=>{if(error instanceof AuthRequired)throw error;return {ok:false};});
 function sliceHeading(view,title,note) {
@@ -105,6 +106,62 @@ function watcherRow(w) {
     h('span',{class:'watcher-age',text:w.state==='on-demand'?'Event-driven':`${minutes(w.age_minutes)} since receipt`}),sourceLinks(w.source_refs,w));
 }
 async function renderNow(view) {
+  const result = await sliceResult(api('/api/work'));
+  if (!result.ok) {
+    clear(view).append(h('h1',{text:'Now'}), h('p',{role:'status',text:'Failed to load'}));
+    return;
+  }
+  const board = result.value;
+  if (!board.can_manage) return renderAgentAttention(view);
+
+  const visible = projectWorkForViewer(board);
+  const owners = new Map(visible.projects.map(project => [project.id, project.created_by]));
+  const assignedToViewer = task => state.principal === 'admin' ||
+    (task.state === 'review' && task.authorized_by ? isSignedInPerson(task.authorized_by) :
+      [task.created_by, owners.get(task.project_id)].some(isSignedInPerson));
+  const decisions = visible.tasks.filter(task => assignedToViewer(task) &&
+    (task.state === 'review' || (task.state === 'draft' && task.assignee)));
+  const inbox = await sliceResult(api('/api/inbox'));
+  const handoffs = inbox.ok ? inbox.value.items.filter(item =>
+    item.kind !== 'approval' && item.party_kind === 'human' && isSignedInPerson(item.party_id) &&
+    item.human_action && !item.acknowledged) : [];
+
+  clear(view).append(h('h1', {text:'Now'}));
+  showWorkNotice(view);
+  const cards = h('div', {class:'decision-list'});
+  view.append(section('Waiting on you', '', null, cards));
+  for (const task of decisions) {
+    const [action, label] = taskActions[task.state][0];
+    const card = h('article', {class:'card decision-card'});
+    card.append(h('h3', {text:task.state === 'review' ? `Review “${task.title}”` : `Decide whether to start “${task.title}”`}),
+      h('p', {text:workSummaryLine(task)}), h('div', {class:'work-toolbar'},
+        workActionButton(task, action, label, card),
+        h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`})));
+    cards.append(card);
+  }
+  for (const item of handoffs) {
+    const task = visible.tasks.find(row => row.id === item.id || item.source_refs?.includes(row.id));
+    const name = task?.title || 'A teammate needs your input';
+    const actions = h('div', {class:'work-toolbar'}, h('button', {text:'See what to do',onClick:() => {
+      const {panel} = inspectionPanel(name);
+      panel.lastChild.remove();
+      panel.append(humanActionBlock(item.human_action));
+      if (task) panel.append(h('a', {href:workTaskLink(task),text:'Open task'}));
+      else if (item.room_id && item.event_id) panel.append(h('a', {href:permalink(item.room_id,item.event_id),target:'_blank',rel:'noopener',text:'Open conversation'}));
+    }}));
+    if (task) actions.append(h('a', {class:'link',href:workTaskLink(task),text:'Open details'}));
+    cards.append(h('article', {class:'card decision-card'}, h('h3', {text:name}),
+      h('p', {text:item.human_action.steps?.[0] || 'Read what your teammate needs from you.'}), actions));
+  }
+  if (!inbox.ok) view.append(h('p', {role:'status',text:'Could not check for other requests. Try refreshing.'}));
+  if (!decisions.length && !handoffs.length && inbox.ok) cards.append(h('p', {class:'empty',text:'Nothing is waiting on you right now.'}));
+
+  const activity = visible.activity.filter(item => !['heartbeat','phase','project_phase'].includes(item.kind));
+  view.append(section('What changed', '', null, workActivity(activity.slice(0, 12), visible)));
+  view.append(h('a', {class:'utility-link',href:'#projects',text:'See your projects'}));
+}
+
+async function renderAgentAttention(view) {
   sliceHeading(view,'Now','Checking what needs your attention.');
   const waiting=section('Waiting on you','Failures first, then oldest. Every item links to its evidence.',null,h('div',{class:'reserved-body'}));
   const awake=section('Who is awake','Active declared monitors only. Runner results fold into their parent; probes and one-shot records are excluded.',null,h('div',{class:'reserved-body'}));
@@ -122,7 +179,7 @@ async function renderNow(view) {
       const card=['approval','blocked','question','unclaimed_task'].includes(item.kind)?inboxRow(item):durableAttentionRow(item);
       const evidence=sourceLinks(item.source_refs||[item.event_id],item);evidence.prepend(h('span',{class:'dim',text:'Evidence ids:'}));
       const result=h('div',{class:'inbox-with-source'},card,humanActionBlock(item.human_action),evidence);
-      const controls=attentionControls(item,inbox.value,async()=>{clear(view);await renderNow(view);});
+      const controls=attentionControls(item,inbox.value,async()=>{clear(view);await renderAgentAttention(view);});
       if(controls) {
         const actions=card.querySelector('.actions');
         if(actions)actions.append(...controls.childNodes);else card.append(h('div',{class:'actions-row'},controls));
@@ -132,7 +189,7 @@ async function renderNow(view) {
           button.disabled=true;
           try {
             await api('/api/inbox/acknowledgement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:item.kind,item_id:item.id||item.event_id,state_key:item.state_key,acknowledged:!item.acknowledged})});
-            clear(view);await renderNow(view);
+            clear(view);await renderAgentAttention(view);
           }catch(error){button.disabled=false;view.querySelector('.load-status').textContent=error.status===409?'This item changed. Refresh before acknowledging or reopening it.':'Could not update the item. Refresh and try again.';}
         }});
         let actions=card.querySelector('.actions');
@@ -149,7 +206,7 @@ async function renderNow(view) {
     inboxBody.append(...open.map(row));
     if(acknowledged.length)inboxBody.append(h('details',{class:'acknowledged-items'},h('summary',{text:`Acknowledged (${acknowledged.length})`}),...acknowledged.map(row)));
   }
-  if(inbox.ok)agentWaitingSections(view,inbox.value,async()=>{clear(view);await renderNow(view);});
+  if(inbox.ok)agentWaitingSections(view,inbox.value,async()=>{clear(view);await renderAgentAttention(view);});
   const watcherBody=clear(awake.querySelector('.reserved-body'));
   if(surfaces.ok) {
     watcherBody.append(...attention.map(watcherRow));
@@ -162,22 +219,23 @@ async function renderNow(view) {
 }
 async function renderWorkSlice(view) {
   sliceHeading(view,'Work','Checking the work lifecycle.');
-  const card=section('Work lifecycle','Queued work has not started. The current work store records claims; execution is unverified.',null,h('div',{class:'reserved-body'}));
+  const card=section('Work lifecycle','Approved work is available to the assigned agent. A claim records who picked it up.',null,h('div',{class:'reserved-body'}));
   view.append(card,h('a',{class:'utility-link',href:'#projects',text:'Open project workspace'}));
   const [result,inbox]=await Promise.all([sliceResult(api('/api/dashboard/work')),sliceResult(api('/api/inbox'))]);loadFailure(view,[result,inbox]);
   if(!result.ok)return;
   const items=result.value.items;
-  const open=items.filter(i=>i.state!=='done'),done=items.filter(i=>i.state==='done');
-  view.querySelector('.takeaway').textContent=`${plural(open.length,'open item')} · ${plural(done.length,'done item')}.`;
+  const open=items.filter(i=>!['done','cancelled'].includes(i.state)),done=items.filter(i=>['done','cancelled'].includes(i.state));
+  view.querySelector('.takeaway').textContent=`${plural(open.length,'open item')} · ${plural(done.length,'closed item')}.`;
   const body=clear(card.querySelector('.reserved-body'));
-  const stages=['queued','claimed','running','review','blocked','done'];
-  for(const stage of Object.keys(result.value.counts||{}))if(!stages.includes(stage))stages.push(stage);
+  const stages=['proposed','queued','running','review','blocked','done','cancelled'];
+  const stageOf = item => item.state === 'claimed' ? 'running' : item.state;
+  for(const stage of new Set(items.map(stageOf)))if(!stages.includes(stage))stages.push(stage);
   const counts=h('div',{class:'stage-counts','aria-label':'Lifecycle stage counts'});
   for(const stage of stages) {
-    const count=result.value.counts?.[stage]??items.filter(i=>i.state===stage).length;
+    const count=items.filter(i=>stageOf(i)===stage).length;
     counts.append(h('button',{class:'stage-count','aria-label':`${stateName(stage)}: ${count}`,onClick:()=>{
       const {panel}=inspectionPanel(stateName(stage)+' sources');panel.lastChild.remove();
-      const sources=items.filter(i=>i.state===stage);if(!sources.length)panel.append(h('p',{text:'No items in this stage.'}));
+      const sources=items.filter(i=>stageOf(i)===stage);if(!sources.length)panel.append(h('p',{text:'No items in this stage.'}));
       for(const item of sources)panel.append(h('p',{text:item.title}),sourceLinks(item.source_refs,item));
     }},h('span',{text:stateName(stage)}),h('strong',{text:count.toLocaleString()})));
   }
@@ -191,7 +249,7 @@ async function renderWorkSlice(view) {
   ],rows);
   if(open.length)body.append(workTable(open));
   else body.append(h('p',{class:'empty',text:items.length?'No open work is recorded.':'No work is recorded.'}));
-  if(done.length)body.append(h('details',{class:'completed-work'},h('summary',{text:plural(done.length,'done item')}),workTable(done)));
+  if(done.length)body.append(h('details',{class:'completed-work'},h('summary',{text:plural(done.length,'closed item')}),workTable(done)));
   if(inbox.ok)agentWaitingSections(view,inbox.value,async()=>{clear(view);await renderWorkSlice(view);});
 }
 async function renderMemorySlice(view) {
@@ -217,7 +275,15 @@ async function renderMemorySlice(view) {
   const browser=h('div',{class:'memory-browser'});view.append(browser);
   try {await renderMemory(browser);}catch(error){if(error instanceof AuthRequired)throw error;view.querySelector('.load-status').textContent='Failed to load';}
 }
-VIEWS.now=renderNow;VIEWS.overview=renderNow;VIEWS.work=renderWorkSlice;VIEWS.memory=renderMemorySlice;
+async function renderMaintenance(view) {
+  await renderAgents(view);
+  view.prepend(h('nav', {class:'maintenance-nav','aria-label':'Agent and maintenance tools'},
+    ...[['#attention','Agent attention'],['#work','Work queue'],['#memory','Memory health and map'],
+      ['#communication','Team communication'],['#relays','Agent handoffs'],['/glossary','Commons glossary'],
+      ['/journal','Decision journal']].map(([href,text]) => h('a',{href,text}))));
+}
+VIEWS.now=renderNow;VIEWS.overview=renderNow;VIEWS.attention=renderAgentAttention;
+VIEWS.work=renderWorkSlice;VIEWS.memory=renderMemorySlice;VIEWS.agents=renderMaintenance;
 const sliceTabs=[...document.querySelectorAll('#tabs a')];
 for(const tab of sliceTabs) {
   tab.setAttribute('role','tab');tab.setAttribute('aria-controls','view');

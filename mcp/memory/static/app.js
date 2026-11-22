@@ -291,9 +291,9 @@ function tile(label, value, tone, sub) {
     h("div", { class: `value ${tone || ""}`, text: value }), sub ? h("div", { class: "sub", text: sub }) : null);
 }
 function inboxRow(i) {
-  const kindText = { approval: "Approve", blocked: "Blocked", question: "Question", unclaimed_task: "Unclaimed" }[i.kind] || i.kind;
+  const kindText = { approval: "Old chat plan", blocked: "Blocked", question: "Question", unclaimed_task: "Unclaimed" }[i.kind] || i.kind;
   return h("div", { class: `inbox-item ${i.kind}` },
-    h("div", { class: "kind" }, kindText, h("small", { text: i.label })),
+    h("div", { class: "kind" }, kindText, h("small", { text: i.kind === "approval" ? "Discussion" : i.label })),
     h("div", null,
       h("div", { class: "who" }, h("b", { text: i.sender }), i.surface ? ` @ ${i.surface}` : "", ` in ${i.room}`, i.tag ? [" · ", pill(i.tag)] : ""),
       h("button", { class: "link inspect-link body", text: i.body, onClick: () => openActivity(i.room_id, i.event_id), "aria-label": `Read ${kindText.toLowerCase()} details from ${i.sender}` })),
@@ -314,7 +314,7 @@ function setMatrixSession(v) {
   try { if (v) sessionStorage.setItem(MATRIX_KEY, JSON.stringify(v)); else sessionStorage.removeItem(MATRIX_KEY); } catch { /* ignore */ }
 }
 const ACTIONS_BY_KIND = {
-  approval: [["approve", "Approve", "primary"], ["reject", "Reject", ""], ["reply", "Reply", ""]],
+  approval: [["reply", "Reply", ""]],
   blocked: [["reply", "Reply", "primary"], ["dismiss", "Dismiss", ""]],
   question: [["reply", "Reply", "primary"], ["dismiss", "Dismiss", ""]],
   unclaimed_task: [["dismiss", "Dismiss", ""], ["reply", "Reply", ""]],
@@ -774,7 +774,11 @@ $("logout").addEventListener("click", async () => {
 });
 $("refresh").addEventListener("click", () => { taxonomyCache = null; render(); });
 window.addEventListener("hashchange", render);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || $("detail").classList.contains("hidden")) return;
+  if (currentRoute() === "projects" && location.hash.split("/").length === 3) closeWorkTask();
+  else closeDetail();
+});
 
 document.addEventListener('DOMContentLoaded', () => fetch("/api/auth/status")
   .then((res) => res.json())

@@ -175,8 +175,8 @@ def coordination_items(parties, now):
 
 def work_items(board, relays, now):
     items = []
-    transitions = {'draft': {'task_proposed', 'revise', 'release'}, 'ready': {'ready'},
-                   'running': {'claim'}, 'review': {'review'}, 'blocked': {'block'}, 'done': {'accept'}}
+    transitions = {'draft': {'task_proposed', 'revise', 'release', 'withdraw', 'reopen'}, 'ready': {'ready'},
+                   'running': {'claim'}, 'review': {'review'}, 'blocked': {'block'}, 'done': {'accept'}, 'cancelled': {'cancel'}}
     for task in board.get('tasks', []):
         state = task.get('state', 'unknown')
         events = [e for e in board.get('activity', []) if e.get('task_id') == task['id']
@@ -202,7 +202,7 @@ def work_items(board, relays, now):
                       'age_minutes': round((now - ts) / 60, 1) if ts is not None and ts <= now else None,
                       'age_basis': 'relay state update', 'source_refs': [relay['relay_id']],
                       'source': relay.get('source', ''),'required_surface':relay.get('required_surface','interactive')})
-    items.sort(key=lambda i: (i['state'] == 'done', -(i.get('age_minutes') or 0), i['id']))
+    items.sort(key=lambda i: (i['state'] in {'done', 'cancelled'}, -(i.get('age_minutes') or 0), i['id']))
     return items
 
 

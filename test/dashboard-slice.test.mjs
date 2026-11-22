@@ -34,6 +34,15 @@ let taxonomyWings = [];
 let ackItems;let staleAck=false;
 const instructions={steps:['Open Codex on the laptop and paste: drain your inbox.'],after:'Codex will pick up the queued review.',ask:'Ask Codex in Agent Tasks.'};
 let usabilityItems;let waitingAgents;let staleAction=false;
+const humanProject = {id:'project_fixture_human',title:'Hearth operations',goal:'Keep Hearth easy to use.',
+  brief:'',phase:'build',category:'Personal',created_by:'@fixture-human:test'};
+const otherProject = {...humanProject,id:'project_other',title:'Unrelated project',created_by:'@someone-else:test'};
+let humanBoard;
+const demoTask = (id,title,state,description,extra={}) => ({
+  id, title, state, description, project_id:humanProject.id, acceptance:'Confirm the result is easy to understand.',
+  assignee:'codex', created_by:'codex', authorized_by:state === 'draft' ? '' : '@fixture-human:test',
+  dependencies:[], waiting_on:[], evidence:[], memory_ids:[], revision:2,...extra,
+});
 const server = createServer(async (req,res) => {
   const path = new URL(req.url, 'http://local').pathname;
   if(path==='/api/activity/event')eventRoom=new URL(req.url,'http://local').searchParams.get('room_id');
@@ -43,12 +52,25 @@ const server = createServer(async (req,res) => {
     '/api/surfaces': {surfaces:[],watchers:mode==='empty'?[]:watchers},
     '/api/dashboard/work': {can_manage_attention:mode==='usability',agents:['codex','claude'],humans:['rad'],items:mode==='empty'?[]:items.map(i=>({...i,kind:'work_item',state_key:'work-fixture'})),counts:Object.fromEntries(['queued','claimed','running','review','blocked','done'].map(s=>[s,mode==='empty'?0:items.filter(i=>i.state===s).length]))},
     '/api/dashboard/memory-health': mode==='empty'?{...health,knowledge_count:0,total_count:0,noise_ratio:0,superseded_count:0,near_duplicate_pair_count:0,duplicate_coverage:{complete:true,scanned:0,total:0},source_refs:[]}:health,
+    '/api/work': mode === 'human' ? humanBoard : {can_manage:false,projects:[],tasks:[],activity:[]},
+    '/api/work/agents': {can_manage:false,profiles:[]}, '/api/agents': {agents:[]},
     '/api/taxonomy': {total_drawers:741,wings:taxonomyWings},
     '/api/recent': {entries:mode==='empty'?[]:[drawer]}, '/api/health': {},
     '/api/drawer/drawer_fixture':drawer,
     '/api/activity/event':{event:{room_id:'!fixture:test',event_id:'$fixture',body:'Blocked item evidence',sender:'fixture'},related:[]},
   };
   if (path.startsWith('/api/')) {
+    if (mode === 'human' && path.startsWith('/api/work/tasks/') && req.method === 'POST') {
+      let body='';for await(const chunk of req)body+=chunk;
+      const update=JSON.parse(body);
+      const task=humanBoard.tasks.find(t=>t.id===path.split('/')[4]);
+      assert.equal(update.revision,task.revision);
+      task.state={ready:'ready',accept:'done',withdraw:'draft',cancel:'cancelled',reopen:'draft'}[update.action];
+      task.revision++;
+      humanBoard.activity.unshift({kind:update.action,project_id:task.project_id,task_id:task.id,actor:'fixture-human',
+        at:'2026-11-22T16:00:00Z',data:{reason:update.reason}});
+      res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(task));return;
+    }
     if(path==='/api/inbox/action'&&req.method==='POST'){
       let body='';for await(const chunk of req)body+=chunk;
       const update=JSON.parse(body);assert.equal(update.reason,'Please pick up this review.');
@@ -101,13 +123,13 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
           await page.getByText('mention listener',{exact:true}).waitFor();
         }
         if(route==='work') {
-          await page.getByRole('button',{name:'Queued: 3',exact:true}).waitFor();
+          await page.getByRole('button',{name:'Approved: 3',exact:true}).waitFor();
           await page.getByText('Investigate authorization receipts',{exact:true}).waitFor();
-          assert.equal(await page.locator('.stage-counts button').count(),6);
+          assert.equal(await page.locator('.stage-counts button').count(),7);
           assert.equal(await page.getByText('Source reconciliation',{exact:true}).isVisible(),false);
-          await page.getByText('1 done item',{exact:true}).click();
+          await page.getByText('1 closed item',{exact:true}).click();
           await page.getByText('Source reconciliation',{exact:true}).waitFor();
-          await page.getByText('1 done item',{exact:true}).click();
+          await page.getByText('1 closed item',{exact:true}).click();
         }
         if(route==='memory') await page.getByText('Knowledge only',{exact:true}).waitFor();
         const contrast=await page.evaluate(()=>{
@@ -138,9 +160,9 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
     inbox.items[1].title=originalTitle;
     await page.getByRole('tab',{name:'Now',exact:true}).focus();
     await page.keyboard.press('ArrowRight');
-    assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Work');
+    assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Projects');
     await page.keyboard.press('Enter');
-    await page.getByRole('heading',{name:'Work',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Build together',exact:true}).waitFor();
     // Immediate authentication must wait for delayed route registration.
     await page.route('**/static/slice.js',async route=>{await new Promise(r=>setTimeout(r,500));await route.continue();});
     await page.goto(`http://127.0.0.1:${server.address().port}/#now`);
@@ -256,6 +278,120 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
         if(process.env.SCREENSHOT_DIR) await page.screenshot({path:resolve(process.env.SCREENSHOT_DIR,`${route}-${mode}.png`),fullPage:true});
       }
     }
+    assert.deepEqual(errors,[]);
+  } finally {if(browser)await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));mode='normal';}
+});
+
+test('personal decisions, direct task links, withdrawal and maintenance', async () => {
+  const task = demoTask('task_memory_count', 'Check that one approval is enough', 'review',
+    'Check a small task using the board.', {summary:'What I found. Hearth Memory contains 3,792 records.',evidence:['drawer_internal123']});
+  const proposal = demoTask('task_first_round','Improve the project screens','draft','What. Make task buttons easy to find.');
+  const approved = demoTask('task_old_video','Make a video about Hearth','ready','Plan a brief introduction to Hearth.');
+  const paused = demoTask('task_agent_paused','Organize the team’s notes','running','Organize shared notes.',{claim_expired:true});
+  const foreign = demoTask('task_private','Unrelated proposal','draft','For another person.',{project_id:otherProject.id});
+  const event = (kind,seq,taskId=approved.id,actor='fixture-human') => ({
+    kind,seq,task_id:taskId,project_id:humanProject.id,actor,at:'2026-11-22T15:49:00Z',data:{}
+  });
+  humanBoard = {can_manage:true,agents:['codex','claude'],projects:[humanProject,otherProject],
+    tasks:[task,proposal,approved,paused,foreign],activity:[event('ready',3),event('heartbeat',2,paused.id,'codex'),event('heartbeat',1,paused.id,'codex')]};
+  mode='human';
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  let browser;
+  try {
+    browser=await chromium.launch({headless:true});
+    const page=await browser.newPage({colorScheme:'light'});
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const origin=`http://127.0.0.1:${server.address().port}`;
+    const audit = async (name, width=1280) => {
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,name+' overflows');
+      await page.addScriptTag({content:axe.source});
+      const violations=await page.evaluate(async()=> (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>v.id));
+      assert.deepEqual(violations,[],name+' accessibility');
+      if(process.env.HUMAN_PREVIEW_DIR) {
+        await mkdir(process.env.HUMAN_PREVIEW_DIR,{recursive:true});
+        await page.screenshot({path:resolve(process.env.HUMAN_PREVIEW_DIR,`${name}-${width}.png`),fullPage:!name.endsWith('-task')});
+      }
+    };
+    const goto = async (hash, width=1280) => {
+      await page.setViewportSize({width,height:900});
+      await page.goto(origin+hash);
+    };
+    for(const width of [400,1280]) {
+      await goto('/#now',width);
+      await page.getByRole('heading',{name:'Waiting on you',exact:true}).waitFor();
+      assert.equal(await page.locator('.decision-card').count(),2);
+      assert.equal(await page.getByRole('button',{name:'Authorize work',exact:true}).count(),1);
+      assert.equal(await page.getByRole('button',{name:'Accept',exact:true}).count(),1);
+      assert.equal(await page.getByText('Unrelated proposal',{exact:true}).count(),0);
+      assert.equal(await page.getByText('Overdue queue',{exact:true}).count(),0);
+      assert.equal(await page.getByText('Claim expired',{exact:true}).isVisible(),false);
+      await audit('now',width);
+    }
+    const taskLink=await page.getByRole('link',{name:'Open details for '+task.title,exact:true}).getAttribute('href');
+    await page.getByRole('link',{name:'Open details for '+task.title,exact:true}).click();
+    const details=page.locator('#detail');
+    await details.getByRole('heading',{name:task.title,exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Project',{exact:true}).inputValue(),humanProject.id);
+    assert.equal(await page.getByRole('option',{name:otherProject.title,exact:true}).count(),0);
+    assert.equal(await details.getByRole('button',{name:'Accept',exact:true}).isVisible(),true);
+    assert.equal(await details.getByText('drawer_internal123',{exact:true}).isVisible(),false);
+    await audit('review-task');
+    await page.reload();
+    await details.getByRole('heading',{name:task.title,exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Project',{exact:true}).inputValue(),humanProject.id);
+    assert.equal(new URL(page.url()).hash,taskLink);
+    await page.keyboard.press('Escape');
+    await details.waitFor({state:'hidden'});
+    await page.getByText('You approved Make a video about Hearth.',{exact:true}).waitFor();
+    await page.getByText('codex checked in on Organize the team’s notes (2 times).',{exact:true}).waitFor();
+    await audit('projects');
+    await page.setViewportSize({width:400,height:900});
+    await audit('projects',400);
+    await page.setViewportSize({width:1280,height:900});
+    await page.getByRole('button',{name:'New project',exact:true}).click();
+    await page.getByLabel('Where to save this project’s notes (optional)',{exact:true}).waitFor();
+    await audit('new-project');
+    await page.getByRole('button',{name:'Cancel',exact:true}).click();
+    await page.getByText('Show full history',{exact:true}).click();
+    await page.locator('.work-history pre').first().waitFor();
+    await audit('full-history');
+    await page.getByRole('link',{name:new RegExp(approved.title)}).click();
+    await details.getByRole('heading',{name:approved.title,exact:true}).waitFor();
+    await audit('approved-task');
+    await page.setViewportSize({width:400,height:900});
+    await audit('approved-task',400);
+    await details.getByRole('button',{name:'Withdraw approval',exact:true}).click();
+    await details.getByLabel('Reason',{exact:true}).fill('Review the scope first.');
+    await details.locator('form.work-reason').getByRole('button',{name:'Withdraw approval',exact:true}).click();
+    await details.getByText('Approval withdrawn. The task is back in Proposed.',{exact:true}).waitFor();
+    await details.getByRole('button',{name:'Authorize work',exact:true}).click();
+    await details.getByText('Work approved. The assigned agent can now pick it up.',{exact:true}).waitFor();
+    await details.getByRole('button',{name:'Cancel task',exact:true}).click();
+    await details.getByLabel('Reason',{exact:true}).fill('This project was dropped.');
+    await audit('cancel-task',400);
+    await details.locator('form.work-reason').getByRole('button',{name:'Cancel task',exact:true}).click();
+    await details.getByRole('button',{name:'Reopen as proposed',exact:true}).waitFor();
+    await goto('/#now');
+    await page.getByRole('button',{name:'Accept',exact:true}).click();
+    await page.getByText('Result accepted. This task is done.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Authorize work',exact:true}).click();
+    await page.getByText('Nothing is waiting on you right now.',{exact:true}).waitFor();
+    await audit('now-empty');
+    await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
+    await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();
+    assert.equal(await page.getByRole('link',{name:'Agent attention',exact:true}).count(),1);
+    await audit('maintenance');
+    await page.getByRole('link',{name:'Work queue',exact:true}).click();
+    await page.getByRole('button',{name:'Approved: 3',exact:true}).waitFor();
+    await audit('agent-work');
+    await goto('/#attention');
+    await page.getByText('Who is awake',{exact:true}).waitFor();
+    await audit('agent-attention');
+    await goto('/#agents');
+    await page.getByRole('link',{name:'Memory health and map',exact:true}).click();
+    await page.getByRole('heading',{name:'Memory health',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Palace map',exact:true}).waitFor();
+    await audit('memory-maintenance');
     assert.deepEqual(errors,[]);
   } finally {if(browser)await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));mode='normal';}
 });

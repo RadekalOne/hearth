@@ -259,7 +259,7 @@ class WorkStore:
             state = task["state"]
             stamp = time.time()
             evidence = {}
-            if action in {"ready", "accept", "revise", "release", "assign"}:
+            if action in {"ready", "accept", "revise", "release", "assign", "withdraw", "cancel", "reopen"}:
                 self.human(human)
             if action == "assign":
                 if state not in {"draft", "blocked"}:
@@ -275,6 +275,17 @@ class WorkStore:
                 if not task["assignee"]:
                     raise WorkError("assign an agent before authorizing work", 409)
                 task.update(state="ready", blocked_reason="", authorized_by=actor)
+            elif action in {"withdraw", "cancel", "reopen"}:
+                expected = "cancelled" if action == "reopen" else "ready"
+                revision = payload.get("revision")
+                if type(revision) is not int:
+                    raise WorkError("task revision is required")
+                if state != expected or revision != task["revision"]:
+                    raise WorkError("This task changed. Refresh and try again.", 409)
+                reason = text(payload.get("reason", ""), "reason", required=True)
+                task.update(state="cancelled" if action == "cancel" else "draft",
+                            authorized_by="", claim_id="", claim_until=0, claim_surface="", blocked_reason="")
+                evidence = {"reason": reason}
             elif action == "claim":
                 if human or actor != task["assignee"]:
                     raise WorkError("only the assigned agent can claim a task", 403)
@@ -355,8 +366,8 @@ class WorkStore:
                 tasks = [t for t in tasks if t["project_id"] == project_id]
             history = db.execute("SELECT * FROM activity WHERE (?='' OR project_id=?) ORDER BY seq DESC LIMIT 200",
                                  (project_id, project_id)).fetchall()
-            transitions = {'draft': ('task_proposed', 'revise', 'release'), 'ready': ('ready',),
-                           'running': ('claim',), 'review': ('review',), 'blocked': ('block',), 'done': ('accept',)}
+            transitions = {'draft': ('task_proposed', 'revise', 'release', 'withdraw', 'reopen'), 'ready': ('ready',),
+                           'running': ('claim',), 'review': ('review',), 'blocked': ('block',), 'done': ('accept',), 'cancelled': ('cancel',)}
             for task in tasks:
                 kinds = transitions.get(task['state'], ())
                 if kinds:
