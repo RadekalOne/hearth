@@ -1,6 +1,6 @@
 /* Durable work views. The existing dashboard owns authentication and Matrix actions. */
 "use strict";
-let selectedProject = "";
+let selectedProject = history.state?.projectId || "";
 let workMode = "board";
 const workStates = ["draft", "ready", "running", "blocked", "review", "done"];
 const workLabels = { draft: "Proposed", ready: "Authorized", running: "Claimed", blocked: "Blocked", review: "Needs review", done: "Verified done" };
@@ -114,6 +114,33 @@ function workForm(parent, title, fields, submit) {
   parent.prepend(form);
   form.querySelector("input,textarea,select")?.focus();
 }
+function projectCategory(project, canManage) {
+  let saved = project.category || "";
+  if (!canManage) return h("p", { text: `Category: ${saved || "Not set"}` });
+
+  const select = h("select", null, ...["", "Personal", "Climate Central"].map(value =>
+    h("option", { value, text: value || "Not set", selected: value === saved })));
+  const field = workField("Category", select);
+  const status = h("small", { role: "status" });
+  field.append(status);
+  select.addEventListener("change", async () => {
+    select.disabled = true;
+    status.textContent = "Saving…";
+    field.querySelector(".work-error")?.remove();
+    try {
+      const updated = await workPost(`/api/work/projects/${encodeURIComponent(project.id)}/category`, { category: select.value });
+      saved = updated.category;
+      status.textContent = "Category saved";
+    } catch (err) {
+      status.textContent = "";
+      workMessage(field, err);
+    } finally {
+      select.value = saved;
+      select.disabled = false;
+    }
+  });
+  return field;
+}
 async function renderProjects(view) {
   const board = await api("/api/work");
   elementBase = board.element_url || elementBase;
@@ -121,6 +148,9 @@ async function renderProjects(view) {
   const projects = board.projects;
   if (!projects.some(p => p.id === selectedProject)) selectedProject = projects[0]?.id || "";
   const project = projects.find(p => p.id === selectedProject);
+  if (project && window.history.state?.projectId !== project.id) {
+    window.history.replaceState({ ...window.history.state, projectId: project.id }, "");
+  }
   const select = h("select", { "aria-label": "Project", onChange: e => { selectedProject = e.target.value; render(); } },
     ...projects.map(p => h("option", { value: p.id, selected: p.id === selectedProject, text: p.title })));
   const toolbar = h("div", { class: "work-toolbar" }, h("h1", { text: "Build together" }), select);
@@ -139,7 +169,8 @@ async function renderProjects(view) {
   }
   const tasks = board.tasks.filter(t => t.project_id === project.id);
   view.append(h("div", { class: "card project-brief" }, h("h2", { text: project.title }), h("p", { text: project.goal }),
-    project.brief && h("p", { class: "dim work-prose", text: project.brief })));
+    project.brief && h("p", { class: "dim work-prose", text: project.brief }),
+    projectCategory(project, board.can_manage)));
   const phases = h("div", { class: "work-phases", "aria-label": "Project phase" });
   workPhases.forEach(phase => {
     const button = h("button", { class: phase === project.phase ? "" : "secondary", text: phase,
