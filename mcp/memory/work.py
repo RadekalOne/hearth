@@ -16,6 +16,8 @@ from pathlib import Path
 CAPABILITIES = {"coding": "Coding", "design": "Design", "planning": "Planning & coordination",
                 "research": "Research", "review": "Review & testing", "writing": "Writing"}
 WORK_MODES = {"either": "Either", "interactive": "Interactive", "background": "Background"}
+# Blank means unknown; the Librarian asks once instead of guessing. Tasks inherit it.
+PROJECT_CATEGORIES = ("", "Personal", "Climate Central")
 
 
 def choice(value, name, options):
@@ -113,6 +115,7 @@ class WorkStore:
         item = {"id": "project_" + uuid.uuid4().hex, "title": text(payload.get("title", ""), "title", 200, True),
                 "goal": text(payload.get("goal", ""), "goal", required=True),
                 "brief": text(payload.get("brief", ""), "brief"), "phase": "idea",
+                "category": choice(payload.get("category", ""), "category", PROJECT_CATEGORIES),
                 "created_by": actor, "created_at": now(), "updated_at": now(), "revision": 1}
         wing = text(payload.get("memory_wing", ""), "memory_wing", 120) or item["id"]
         if not re.fullmatch(r"[A-Za-z0-9_./-]+", wing):
@@ -137,6 +140,29 @@ class WorkStore:
             self.save(db, "projects", item)
             self.event(db, project_id, "", actor, "phase_changed", {"phase": phase})
         return item
+
+    def project_category(self, actor, human, project_id, category):
+        self.human(human)
+        category = choice(category, "category", PROJECT_CATEGORIES)
+        with self.transaction() as db:
+            item = self.get(db, "projects", project_id)
+            previous = item.get("category", "")
+            item["category"] = category
+            self.save(db, "projects", item)
+            self.event(db, project_id, "", actor, "category_changed",
+                       {"category": category, "previous": previous})
+        return item
+
+    def progress_note(self, actor, human, task_id, note):
+        """Replace a task's progress note. Only its assignee or a human may write it."""
+        with self.transaction() as db:
+            task = self.get(db, "tasks", task_id)
+            if not human and actor != task["assignee"]:
+                raise WorkError("only the task owner or a human can file its progress note", 403)
+            task["progress_note"] = {**note, "updated_by": actor, "updated_at": now()}
+            self.save(db, "tasks", task)
+            self.event(db, task["project_id"], task_id, actor, "progress_noted", note)
+        return task
 
     def create_task(self, actor, project_id, payload, roster):
         assignee = text(payload.get("assignee", ""), "assignee", 200)
@@ -339,7 +365,12 @@ class WorkStore:
                                       (task['id'], *kinds)).fetchone()
                     task['state_since'] = last[0] if last else None
         by_id = {t["id"]: t for t in tasks}
+        categories = {p["id"]: p.get("category", "") for p in projects}
+        for project in projects:
+            project.setdefault("category", "")
         for task in tasks:
+            # Inherited on read; tasks never store their own copy.
+            task["category"] = categories.get(task["project_id"], "")
             task["waiting_on"] = [d for d in task["dependencies"] if by_id[d]["state"] != "done"]
             task["claim_expired"] = task["state"] == "running" and task["claim_until"] <= time.time()
             # Claim tokens go only to the claiming worker, never the shared board.

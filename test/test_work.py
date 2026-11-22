@@ -208,6 +208,40 @@ class WorkTests(unittest.TestCase):
         self.assertEqual(board["tasks"][0]["output_memory_ids"], ["drawer_output"])
         self.assertEqual(sum(e["kind"] == "memory_captured" for e in board["activity"]), 1)
 
+    def test_project_category_persists_is_validated_and_inherited_without_copy(self):
+        self.assertEqual(self.project["category"], "")
+        known = self.store.create_project("@rad:test", True, {"title": "Ad", "goal": "Ship", "category": "Climate Central"})
+        task = self.store.create_task("codex", known["id"], {"title": "Cut", "acceptance": "Done"}, set())
+        self.assertNotIn("category", task)
+        reopened = work.WorkStore(self.path).board_for_task(task["id"])
+        self.assertEqual(reopened["projects"][0]["category"], "Climate Central")
+        self.assertEqual(reopened["tasks"][0]["category"], "Climate Central")
+        for bad in ("climate central", "Work", None):
+            with self.assertRaises(work.WorkError):
+                self.store.create_project("@rad:test", True, {"title": "x", "goal": "y", "category": bad})
+        with self.assertRaises(work.WorkError):
+            self.store.project_category("codex", False, self.project["id"], "Personal")
+        with self.assertRaises(work.WorkError):
+            self.store.project_category("@rad:test", True, self.project["id"], "Hobby")
+        self.store.project_category("@rad:test", True, self.project["id"], "Personal")
+        board = work.WorkStore(self.path).snapshot(self.project["id"])
+        self.assertEqual(board["projects"][0]["category"], "Personal")
+        event = next(e for e in board["activity"] if e["kind"] == "category_changed")
+        self.assertEqual(event["data"], {"category": "Personal", "previous": ""})
+
+    def test_progress_note_is_owner_or_human_only_and_replaced(self):
+        task = self.task()
+        with self.assertRaises(work.WorkError) as caught:
+            self.store.progress_note("claude", False, task["id"], {"did": "x"})
+        self.assertEqual(caught.exception.status, 403)
+        self.store.progress_note("codex", False, task["id"], {"did": "first", "learned": [], "left": "", "files_touched": []})
+        self.store.progress_note("@rad:test", True, task["id"], {"did": "second", "learned": [], "left": "more", "files_touched": []})
+        board = work.WorkStore(self.path).board_for_task(task["id"])
+        note = board["tasks"][0]["progress_note"]
+        self.assertEqual((note["did"], note["left"], note["updated_by"]), ("second", "more", "@rad:test"))
+        self.assertEqual(sum(e["kind"] == "progress_noted" for e in board["activity"]), 2)
+        self.assertEqual(board["tasks"][0]["state"], "draft")
+
 
 if __name__ == "__main__":
     unittest.main()

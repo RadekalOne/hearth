@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.version=$HEARTH_MEMORY_VERSION \
       org.opencontainers.image.revision=$HEARTH_MEMORY_BUILD_COMMIT
 COPY app.py work.py dashboard.py coordination.py inbox_ack.py .
 COPY app.py work.py dashboard.py coordination.py reviewers.py .
-COPY commons_files.py .
+COPY commons_files.py librarian.py .
 COPY glossary.py .
 COPY journal.py .
 COPY dashboard-watchers.json .
