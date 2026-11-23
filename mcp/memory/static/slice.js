@@ -114,13 +114,8 @@ async function renderNow(view) {
   const board = result.value;
   if (!board.can_manage) return renderAgentAttention(view);
 
-  const visible = projectWorkForViewer(board);
-  const owners = new Map(visible.projects.map(project => [project.id, project.created_by]));
-  const assignedToViewer = task => state.principal === 'admin' ||
-    (task.state === 'review' && task.authorized_by ? isSignedInPerson(task.authorized_by) :
-      [task.created_by, owners.get(task.project_id)].some(isSignedInPerson));
-  const decisions = visible.tasks.filter(task => assignedToViewer(task) &&
-    (task.state === 'review' || (task.state === 'draft' && task.assignee)));
+  const decisions = decisionTasks(board);
+  const visible = projectWorkForViewer(board, decisions);
   const inbox = await sliceResult(api('/api/inbox'));
   const handoffs = inbox.ok ? inbox.value.items.filter(item =>
     item.kind !== 'approval' && item.party_kind === 'human' && isSignedInPerson(item.party_id) &&
@@ -130,14 +125,15 @@ async function renderNow(view) {
   showWorkNotice(view);
   const cards = h('div', {class:'decision-list'});
   view.append(section('Waiting on you', '', null, cards));
+  const entries = [];
   for (const task of decisions) {
-    const [action, label] = taskActions[task.state][0];
+    const actions = task.state === 'draft' ? taskActions.draft : [taskActions.review[0]];
     const card = h('article', {class:'card decision-card'});
     card.append(h('h3', {text:task.state === 'review' ? `Review “${task.title}”` : `Decide whether to start “${task.title}”`}),
       h('p', {text:workSummaryLine(task)}), h('div', {class:'work-toolbar'},
-        workActionButton(task, action, label, card),
+        ...actions.map(([action, label]) => workActionButton(task, action, label, card)),
         h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`})));
-    cards.append(card);
+    entries.push({ item: task, card });
   }
   for (const item of handoffs) {
     const task = visible.tasks.find(row => row.id === item.id || item.source_refs?.includes(row.id));
@@ -150,13 +146,15 @@ async function renderNow(view) {
       else if (item.room_id && item.event_id) panel.append(h('a', {href:permalink(item.room_id,item.event_id),target:'_blank',rel:'noopener',text:'Open conversation'}));
     }}));
     if (task) actions.append(h('a', {class:'link',href:workTaskLink(task),text:'Open details'}));
-    cards.append(h('article', {class:'card decision-card'}, h('h3', {text:name}),
-      h('p', {text:item.human_action.steps?.[0] || 'Read what your teammate needs from you.'}), actions));
+    const card = h('article', {class:'card decision-card'}, h('h3', {text:name}),
+      h('p', {text:item.human_action.steps?.[0] || 'Read what your teammate needs from you.'}), actions);
+    entries.push({ item, card });
   }
+  cards.append(...entries.sort((a, b) => newestWorkFirst(a.item, b.item)).map(entry => entry.card));
   if (!inbox.ok) view.append(h('p', {role:'status',text:'Could not check for other requests. Try refreshing.'}));
   if (!decisions.length && !handoffs.length && inbox.ok) cards.append(h('p', {class:'empty',text:'Nothing is waiting on you right now.'}));
 
-  const activity = visible.activity.filter(item => !['heartbeat','phase','project_phase'].includes(item.kind));
+  const activity = visible.activity.filter(item => !['heartbeat','phase','project_phase'].includes(item.kind)).sort(newestWorkFirst);
   view.append(section('What changed', '', null, workActivity(activity.slice(0, 12), visible)));
   view.append(h('a', {class:'utility-link',href:'#projects',text:'See your projects'}));
 }
@@ -223,7 +221,7 @@ async function renderWorkSlice(view) {
   view.append(card,h('a',{class:'utility-link',href:'#projects',text:'Open project workspace'}));
   const [result,inbox]=await Promise.all([sliceResult(api('/api/dashboard/work')),sliceResult(api('/api/inbox'))]);loadFailure(view,[result,inbox]);
   if(!result.ok)return;
-  const items=result.value.items;
+  const items=[...result.value.items].sort(newestWorkFirst);
   const open=items.filter(i=>!['done','cancelled'].includes(i.state)),done=items.filter(i=>['done','cancelled'].includes(i.state));
   view.querySelector('.takeaway').textContent=`${plural(open.length,'open item')} · ${plural(done.length,'closed item')}.`;
   const body=clear(card.querySelector('.reserved-body'));

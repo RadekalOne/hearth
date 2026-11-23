@@ -276,16 +276,21 @@ class WorkStore:
                     raise WorkError("assign an agent before authorizing work", 409)
                 task.update(state="ready", blocked_reason="", authorized_by=actor)
             elif action in {"withdraw", "cancel", "reopen"}:
-                expected = "cancelled" if action == "reopen" else "ready"
+                allowed = {"withdraw": {"ready"}, "cancel": {"draft", "blocked", "ready"},
+                           "reopen": {"cancelled"}}
                 revision = payload.get("revision")
                 if type(revision) is not int:
                     raise WorkError("task revision is required")
-                if state != expected or revision != task["revision"]:
+                if state not in allowed[action] or revision != task["revision"]:
                     raise WorkError("This task changed. Refresh and try again.", 409)
                 reason = text(payload.get("reason", ""), "reason", required=True)
                 task.update(state="cancelled" if action == "cancel" else "draft",
                             authorized_by="", claim_id="", claim_until=0, claim_surface="", blocked_reason="")
-                evidence = {"reason": reason}
+                if action == "cancel":
+                    task["cancelled_by"] = actor
+                elif action == "reopen":
+                    task.pop("cancelled_by", None)
+                evidence = {"reason": reason, "from_state": state}
             elif action == "claim":
                 if human or actor != task["assignee"]:
                     raise WorkError("only the assigned agent can claim a task", 403)

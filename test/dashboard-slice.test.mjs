@@ -65,10 +65,14 @@ const server = createServer(async (req,res) => {
       const update=JSON.parse(body);
       const task=humanBoard.tasks.find(t=>t.id===path.split('/')[4]);
       assert.equal(update.revision,task.revision);
+      const fromState=task.state;
       task.state={ready:'ready',accept:'done',withdraw:'draft',cancel:'cancelled',reopen:'draft'}[update.action];
       task.revision++;
+      if (update.action === 'cancel') task.cancelled_by = 'fixture-human';
+      if (update.action === 'ready') task.authorized_by = 'fixture-human';
+      if (update.action === 'accept') task.reviewed_by = 'fixture-human';
       humanBoard.activity.unshift({kind:update.action,project_id:task.project_id,task_id:task.id,actor:'fixture-human',
-        at:'2026-11-22T16:00:00Z',data:{reason:update.reason}});
+        at:'2026-11-22T16:00:00Z',data:{reason:update.reason,from_state:fromState}});
       res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(task));return;
     }
     if(path==='/api/inbox/action'&&req.method==='POST'){
@@ -285,15 +289,28 @@ test('Now/Work/Memory fixtures, keyboard tabs and responsive layouts', async () 
 test('personal decisions, direct task links, withdrawal and maintenance', async () => {
   const task = demoTask('task_memory_count', 'Check that one approval is enough', 'review',
     'Check a small task using the board.', {summary:'What I found. Hearth Memory contains 3,792 records.',evidence:['drawer_internal123']});
-  const proposal = demoTask('task_first_round','Improve the project screens','draft','What. Make task buttons easy to find.');
+  const proposal = demoTask('task_first_round','Improve the project screens','draft','What. Make task buttons easy to find.',
+    {updated_at:'2026-11-22T15:52:00Z'});
+  const mail = {...humanProject,id:'project_mail',title:'Mail delivery',created_by:'codex'};
+  const adminProject = {...humanProject,id:'project_admin',title:'Shared maintenance',created_by:'admin'};
+  const sharedProposal = demoTask('task_mail','Check the mail delivery setup','draft','What. Check whether team messages arrive.',
+    {project_id:mail.id,created_at:'2026-11-22T15:20:00Z',updated_at:'2026-11-22T15:54:00Z'});
+  const sharedReview = demoTask('task_admin','Review the shared maintenance check','review','Check the logs.',
+    {project_id:adminProject.id,state_since:'2026-11-22T15:53:00Z',authorized_by:'admin',summary:'The scheduled check is working.'});
+  const newerApproved = demoTask('task_new_approved','Write the project summary','ready','Draft a short summary.',
+    {state_since:'2026-11-22T15:59:00Z'});
   const approved = demoTask('task_old_video','Make a video about Hearth','ready','Plan a brief introduction to Hearth.');
   const paused = demoTask('task_agent_paused','Organize the team’s notes','running','Organize shared notes.',{claim_expired:true});
   const foreign = demoTask('task_private','Unrelated proposal','draft','For another person.',{project_id:otherProject.id});
   const event = (kind,seq,taskId=approved.id,actor='fixture-human') => ({
     kind,seq,task_id:taskId,project_id:humanProject.id,actor,at:'2026-11-22T15:49:00Z',data:{}
   });
-  humanBoard = {can_manage:true,agents:['codex','claude'],projects:[humanProject,otherProject],
-    tasks:[task,proposal,approved,paused,foreign],activity:[event('ready',3),event('heartbeat',2,paused.id,'codex'),event('heartbeat',1,paused.id,'codex')]};
+  const oldNote = {...event('comment',4,task.id),at:'2026-11-22T15:48:00Z',data:{body:'Earlier update'}};
+  const newNote = {...event('comment',5,task.id),at:'2026-11-22T15:55:00Z',data:{body:'Latest update'}};
+  humanBoard = {can_manage:true,agents:['codex','claude'],humans:['fixture-human','someone-else','second-manager'],
+    projects:[humanProject,otherProject,mail,adminProject],
+    tasks:[task,proposal,approved,paused,foreign,sharedReview,sharedProposal,newerApproved],
+    activity:[event('ready',3),event('heartbeat',2,paused.id,'codex'),event('heartbeat',1,paused.id,'codex'),oldNote,newNote]};
   mode='human';
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   let browser;
@@ -319,14 +336,45 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     for(const width of [400,1280]) {
       await goto('/#now',width);
       await page.getByRole('heading',{name:'Waiting on you',exact:true}).waitFor();
-      assert.equal(await page.locator('.decision-card').count(),2);
-      assert.equal(await page.getByRole('button',{name:'Authorize work',exact:true}).count(),1);
-      assert.equal(await page.getByRole('button',{name:'Accept',exact:true}).count(),1);
+      assert.deepEqual(await page.locator('.decision-card h3').allTextContents(), [
+        'Decide whether to start “Check the mail delivery setup”', 'Review “Review the shared maintenance check”',
+        'Decide whether to start “Improve the project screens”', 'Review “Check that one approval is enough”']);
+      assert.equal(await page.getByRole('button',{name:'Authorize work',exact:true}).count(),2);
+      assert.equal(await page.getByRole('button',{name:'Decline',exact:true}).count(),2);
+      assert.equal(await page.getByRole('button',{name:'Accept',exact:true}).count(),2);
       assert.equal(await page.getByText('Unrelated proposal',{exact:true}).count(),0);
       assert.equal(await page.getByText('Overdue queue',{exact:true}).count(),0);
       assert.equal(await page.getByText('Claim expired',{exact:true}).isVisible(),false);
       await audit('now',width);
     }
+    const secondManager = await browser.newPage();
+    await secondManager.route('**/api/auth/status', route => route.fulfill({json:{
+      authenticated:true,principal:'second-manager',role:'existing',auth_enabled:false
+    }}));
+    await secondManager.goto(origin+'/#now');
+    await secondManager.getByRole('heading',{name:'Waiting on you',exact:true}).waitFor();
+    assert.deepEqual(await secondManager.locator('.decision-card h3').allTextContents(), [
+      'Decide whether to start “Check the mail delivery setup”', 'Review “Review the shared maintenance check”']);
+    await secondManager.close();
+    await page.getByRole('link',{name:'Open details for '+sharedProposal.title,exact:true}).click();
+    const sharedDetails=page.locator('#detail');
+    await sharedDetails.getByRole('heading',{name:sharedProposal.title,exact:true}).waitFor();
+    await sharedDetails.getByRole('button',{name:'Decline',exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Project',{exact:true}).inputValue(),mail.id);
+    await audit('proposal-task');
+    await goto('/#now');
+    const sharedCard=page.locator('.decision-card').filter({hasText:sharedProposal.title});
+    await sharedCard.getByRole('button',{name:'Decline',exact:true}).click();
+    await sharedCard.getByLabel('Reason',{exact:true}).fill('We no longer need this check.');
+    await audit('decline-proposal');
+    await sharedCard.locator('form').getByRole('button',{name:'Decline',exact:true}).click();
+    await page.getByText('Proposal declined. It is still in the project history.',{exact:true}).waitFor();
+    assert.equal(await sharedCard.count(),0);
+    await page.goto(origin+`/#projects/${mail.id}/${sharedProposal.id}`);
+    await sharedDetails.getByRole('button',{name:'Reopen as proposed',exact:true}).waitFor();
+    await goto('/#now');
+    await page.locator('.decision-card').filter({hasText:sharedReview.title}).getByRole('button',{name:'Accept',exact:true}).click();
+    await page.getByText('Result accepted. This task is done.',{exact:true}).waitFor();
     const taskLink=await page.getByRole('link',{name:'Open details for '+task.title,exact:true}).getAttribute('href');
     await page.getByRole('link',{name:'Open details for '+task.title,exact:true}).click();
     const details=page.locator('#detail');
@@ -335,6 +383,7 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     assert.equal(await page.getByRole('option',{name:otherProject.title,exact:true}).count(),0);
     assert.equal(await details.getByRole('button',{name:'Accept',exact:true}).isVisible(),true);
     assert.equal(await details.getByText('drawer_internal123',{exact:true}).isVisible(),false);
+    assert.deepEqual(await details.locator('.work-note p').allTextContents(), ['Latest update','Earlier update']);
     await audit('review-task');
     await page.reload();
     await details.getByRole('heading',{name:task.title,exact:true}).waitFor();
@@ -344,6 +393,8 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await details.waitFor({state:'hidden'});
     await page.getByText('You approved Make a video about Hearth.',{exact:true}).waitFor();
     await page.getByText('codex checked in on Organize the team’s notes (2 times).',{exact:true}).waitFor();
+    const approvedColumn=page.locator('.work-column').filter({has:page.getByRole('heading',{name:'Approved 2',exact:true})});
+    assert.deepEqual(await approvedColumn.locator('.work-task strong').allTextContents(), [newerApproved.title,approved.title]);
     await audit('projects');
     await page.setViewportSize({width:400,height:900});
     await audit('projects',400);

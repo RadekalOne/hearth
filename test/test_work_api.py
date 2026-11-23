@@ -85,6 +85,30 @@ class WorkAPITests(unittest.IsolatedAsyncioTestCase):
                          [("reopen","Reconsider next month"), ("cancel","No longer needed"),
                           ("withdraw","No longer needed")])
 
+    async def test_decline_proposed_and_blocked_tasks_is_human_only_and_audited(self):
+        project = await self.project()
+        for state in ("draft", "blocked"):
+            task = (await self.post(f'/api/work/projects/{project["id"]}/tasks',
+                {"title": f"{state} work", "acceptance": "Reviewed", "assignee": "codex"})).json()
+            path = f'/api/work/tasks/{task["id"]}/action'
+            if state == "blocked":
+                self.assertEqual((await self.post(path, {"action": "ready"})).status_code, 200)
+                claim = (await self.post(path, {"action": "claim"}, "codex-test-token")).json()
+                task = (await self.post(path, {"action": "block", "claim_id": claim["claim_id"],
+                    "reason": "Needs input"}, "codex-test-token")).json()
+            decline = {"action": "cancel", "revision": task["revision"], "reason": "No longer needed"}
+            self.assertEqual((await self.post(path, decline, "codex-test-token")).status_code, 403)
+            self.assertEqual((await self.post(path, {**decline, "revision": task["revision"] - 1})).status_code, 409)
+            self.assertEqual((await self.post(path, {**decline, "reason": " "})).status_code, 400)
+            cancelled = await self.post(path, decline)
+            self.assertEqual(cancelled.status_code, 200, cancelled.text)
+            self.assertEqual(cancelled.json()["state"], "cancelled")
+            self.assertEqual(cancelled.json()["cancelled_by"], "admin")
+            self.assertEqual((await self.post(path, {"action": "claim"}, "codex-test-token")).status_code, 409)
+            board = (await self.client.get("/api/work", headers={"Authorization":"Bearer admin-test-token"})).json()
+            event = next(e for e in board["activity"] if e["task_id"] == task["id"] and e["kind"] == "cancel")
+            self.assertEqual(event["data"], {"reason": "No longer needed", "from_state": state})
+
     async def test_board_requires_auth_and_agent_cannot_manage(self):
         self.assertEqual((await self.client.get("/api/work")).status_code, 401)
         denied = await self.post("/api/work/projects", {"title": "x", "goal": "y"}, "codex-test-token")

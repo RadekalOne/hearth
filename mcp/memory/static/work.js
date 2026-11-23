@@ -14,11 +14,38 @@ function isSignedInPerson(value) {
 const workTaskLink = task => `#projects/${encodeURIComponent(task.project_id)}/${encodeURIComponent(task.id)}`;
 const workProjectLink = id => `#projects/${encodeURIComponent(id)}`;
 const historyActor = actor => isSignedInPerson(actor) ? "You" : personName(actor) || "Someone";
-function projectWorkForViewer(board) {
-  if (!board.can_manage || state.principal === "admin") return board;
+function workChangedAt(item) {
+  return Math.max(...[item.updated_at, item.state_since, item.at, item.since, item.created_at]
+    .map(value => toMs(value) || 0));
+}
+function newestWorkFirst(left, right) {
+  return workChangedAt(right) - workChangedAt(left) || (right.seq || 0) - (left.seq || 0);
+}
+function decisionTasks(board) {
+  if (!board.can_manage) return [];
+  const owners = new Map(board.projects.map(project => [project.id, project.created_by]));
+  const humans = new Set(board.humans || []);
+  const agents = new Set(board.agents || []);
+  function namedHuman(value) {
+    const id = personName(value).toLowerCase();
+    return id && id !== "admin" && id !== "anonymous" && !agents.has(id) &&
+      (!humans.size || humans.has(id));
+  }
+  return board.tasks.filter(task => {
+    if (task.state !== "review" && !(task.state === "draft" && task.assignee)) return false;
+    if (state.principal === "admin") return true;
+    if (task.state === "review" && namedHuman(task.authorized_by)) return isSignedInPerson(task.authorized_by);
+    const linked = [task.created_by, owners.get(task.project_id)].filter(namedHuman);
+    return !linked.length || linked.some(isSignedInPerson);
+  }).sort(newestWorkFirst);
+}
+function projectWorkForViewer(board, decisions = decisionTasks(board)) {
+  const sortedTasks = [...board.tasks].sort(newestWorkFirst);
+  if (!board.can_manage || state.principal === "admin") return { ...board, tasks: sortedTasks };
+  const sharedTasks = new Set(decisions.map(task => task.id));
   const projectsOwned = new Set(board.projects.filter(p => isSignedInPerson(p.created_by)).map(p => p.id));
-  const tasks = board.tasks.filter(t => projectsOwned.has(t.project_id) ||
-    [t.created_by, t.authorized_by, t.reviewed_by].some(isSignedInPerson));
+  const tasks = sortedTasks.filter(t => sharedTasks.has(t.id) || projectsOwned.has(t.project_id) ||
+    [t.created_by, t.authorized_by, t.reviewed_by, t.cancelled_by].some(isSignedInPerson));
   const joined = new Set(tasks.map(t => t.project_id));
   const taskIds = new Set(tasks.map(t => t.id));
   return { ...board, tasks, projects: board.projects.filter(p => projectsOwned.has(p.id) || joined.has(p.id)),
@@ -47,7 +74,8 @@ function workActivity(events, board) {
   const projectTitles = new Map(board.projects.map(p => [p.id, p.title]));
   const routine = new Set(["heartbeat", "phase", "project_phase"]);
   const groups = [];
-  for (const item of events) {
+  const newest = [...events].sort(newestWorkFirst);
+  for (const item of newest) {
     const previous = groups.at(-1);
     if (routine.has(item.kind) && previous && previous.item.kind === item.kind &&
         previous.item.task_id === item.task_id && previous.item.project_id === item.project_id && previous.item.actor === item.actor) {
@@ -56,12 +84,14 @@ function workActivity(events, board) {
   }
   const recent = h("div", { class: "work-history" }, ...groups.slice(0, 12).map(({item, count}) => {
     const title = taskTitles.get(item.task_id) || projectTitles.get(item.project_id) || "this work";
-    const sentence = `${historyActor(item.actor)} ${workEventText[item.kind] || "updated"} ${title}${count > 1 ? ` (${count} times)` : ""}.`;
+    const verb = item.kind === "cancel" && ["draft", "blocked"].includes(item.data?.from_state)
+      ? "declined" : workEventText[item.kind] || "updated";
+    const sentence = `${historyActor(item.actor)} ${verb} ${title}${count > 1 ? ` (${count} times)` : ""}.`;
     return h("div", { class: "history-entry" }, h("p", { text: sentence }), h("small", { class: "dim", text: when(item.at) }));
   }));
   if (!groups.length) recent.append(h("p", { class: "empty", text: "Changes to this work will appear here." }));
   return h("div", null, recent, h("details", null, h("summary", { text: "Show full history" }),
-    h("div", { class: "work-history" }, ...events.map(item => h("article", { class: "card" },
+    h("div", { class: "work-history" }, ...newest.map(item => h("article", { class: "card" },
       h("p", { text: `${item.actor} · ${when(item.at)} · ${item.kind}` }),
       h("pre", { class: "work-prose", text: JSON.stringify(item, null, 2) }))))));
 }
@@ -353,7 +383,8 @@ function workGraph(tasks, board) {
   return holder;
 }
 const taskActions = {
-  draft: [["ready", "Authorize work"]], blocked: [["ready", "Authorize work"]],
+  draft: [["ready", "Authorize work"], ["cancel", "Decline"]],
+  blocked: [["ready", "Authorize work"], ["cancel", "Decline"]],
   review: [["accept", "Accept"], ["revise", "Request changes"]],
   ready: [["withdraw", "Withdraw approval"], ["cancel", "Cancel task"]],
   running: [["release", "Return to proposals"]], cancelled: [["reopen", "Reopen as proposed"]],
@@ -380,7 +411,8 @@ function workActionButton(task, action, label, parent) {
     const route = location.hash;
     try {
       await workPost(`/api/work/tasks/${encodeURIComponent(task.id)}/action`, { action, reason, revision: task.revision });
-      workNotice = { route, text: actionResult[action] };
+      const message = label === "Decline" ? "Proposal declined. It is still in the project history." : actionResult[action];
+      workNotice = { route, text: message };
       await render();
     } catch (error) { workMessage(parent, error); control.disabled = false; }
   }
@@ -480,7 +512,7 @@ function openWorkTask(task, board) {
     } }));
   }
   detail.append(h("h3", { text: "Task discussion" }), h("p", { class: "dim", text: "Board notes are shared with humans and agents. Use the linked Hearth Chat thread for messages and notifications." }));
-  const notes = board.activity.filter(e => e.task_id === task.id);
+  const notes = board.activity.filter(e => e.task_id === task.id).sort(newestWorkFirst);
   for (const note of notes.filter(e => e.kind === "comment")) {
     detail.append(h("div", { class: "work-note" }, h("small", { class: "dim", text: `${historyActor(note.actor)} · ${when(note.at)}` }),
       h("p", { class: "work-prose", text: workPlainText(note.data.body) })));

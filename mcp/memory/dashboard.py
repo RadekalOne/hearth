@@ -186,7 +186,7 @@ def work_items(board, relays, now):
         items.append({'id': task['id'], 'revision':task.get('revision',0), 'title': task.get('title', task['id']),
                       'state': {'ready': 'queued', 'draft': 'proposed', 'running': 'claimed'}.get(state, state),
                       'source_state': state, 'execution_verified': False,
-                      'owner': task.get('assignee', ''), 'state_since': since,
+                      'owner': task.get('assignee', ''), 'state_since': since, 'updated_at': task.get('updated_at'),
                       'age_minutes': round((now - ts) / 60, 1) if ts is not None and ts <= now else None,
                       'age_basis': 'transition' if task.get('state_since') or events else 'last update; transition unavailable',
                       'project_id': task.get('project_id'), 'source_refs': [task['id']]})

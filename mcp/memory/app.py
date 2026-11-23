@@ -3822,7 +3822,7 @@ def api_work(project_id: str = ""):
     board = _coordination_board(_work_call(work_store.snapshot, project_id))
     return {**board, **_work_call(work_store.agent_directory, _roster()),
             "can_manage": _work_human(), "agents": sorted(_roster()),
-            "element_url": ELEMENT_WEB_URL}
+            "humans": sorted(HUMAN_IDS - _roster()), "element_url": ELEMENT_WEB_URL}
 
 
 @app.get("/api/work/agents")
