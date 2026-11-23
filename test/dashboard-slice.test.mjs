@@ -470,21 +470,39 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.evaluate(() => { document.execCommand = () => false; });
     await copyPrompt.click();
     await copyStatus.getByText('Could not copy. Select and copy the prompt above.', {exact:true}).waitFor();
+    const claudeTask = demoTask('task_claude_desktop','Preview "Claude" & copy #1 — café','ready',
+      'Inspect a local workspace.',{assignee:'claude',work_mode:'interactive',authorization_revision:2});
     humanBoard.tasks.push(
-      demoTask('task_claude_desktop','Read the workspace in Claude','ready','Inspect a local workspace.',
-        {assignee:'claude',work_mode:'interactive',authorization_revision:2}),
-      demoTask('task_codex_background','Read a background report','ready','Inspect a report.',
-        {work_mode:'background',authorization_revision:2}),
-      demoTask('task_codex_unapproved','Propose desktop work','draft','Propose a local task.',
-        {work_mode:'interactive'})
+      claudeTask,
+      demoTask('task_claude_background','Read a background report','ready','Inspect a report.',
+        {assignee:'claude',work_mode:'background',authorization_revision:2}),
+      demoTask('task_claude_unapproved','Propose desktop work','draft','Propose a local task.',
+        {assignee:'claude',work_mode:'interactive'}),
+      demoTask('task_mavis_desktop','Read the workspace in Mavis','ready','Inspect a workspace.',
+        {assignee:'mavis',work_mode:'interactive',authorization_revision:2})
     );
     await page.reload();
-    const claudeCard = pickup.filter({hasText:'Read the workspace in Claude'});
-    await claudeCard.getByRole('button',{name:'Copy prompt',exact:true}).waitFor();
+    const claudePrompt = `Pick up your approved task '${claudeTask.title}'`;
+    const claudeCard = pickup.filter({hasText:claudeTask.title});
+    await claudeCard.getByText(claudePrompt, {exact:true}).waitFor();
+    const claudeLink = claudeCard.getByRole('link',{name:'Open in Claude',exact:true});
+    const claudeUrl = new URL(await claudeLink.getAttribute('href'));
+    assert.equal(claudeUrl.protocol, 'claude:');
+    assert.equal(claudeUrl.hostname, 'claude.ai');
+    assert.equal(claudeUrl.pathname, '/new');
+    assert.equal(claudeUrl.hash, '');
+    assert.deepEqual([...claudeUrl.searchParams], [['q', claudePrompt]]);
     assert.equal(await claudeCard.getByRole('link',{name:'Open in Codex',exact:true}).count(),0);
     assert.equal(await page.getByRole('link',{name:'Open in Codex',exact:true}).count(),1);
-    humanBoard.tasks.splice(-3);
+    assert.equal(await page.getByRole('link',{name:'Open in Claude',exact:true}).count(),1);
+    await pickup.filter({hasText:'Read the workspace in Mavis'}).getByRole('button',{name:'Copy prompt',exact:true}).waitFor();
+    await audit('claude-pickup',400);
     await page.setViewportSize({width:1280,height:900});
+    await audit('claude-pickup');
+    await claudeCard.getByRole('button',{name:'Copy prompt',exact:true}).click();
+    await claudeCard.getByRole('status').getByText('Copied.', {exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),claudePrompt);
+    humanBoard.tasks.splice(-4);
     await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
     await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();
     assert.equal(await page.getByRole('link',{name:'Agent attention',exact:true}).count(),1);
