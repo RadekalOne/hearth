@@ -428,6 +428,21 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.getByRole('button',{name:'Authorize work',exact:true}).click();
     await page.getByText('Nothing is waiting on you right now.',{exact:true}).waitFor();
     await audit('now-empty');
+    const interactive = demoTask('task_desktop','Read a local project file','ready','Inspect the laptop.', {
+      work_mode:'interactive', authorization_revision:2
+    });
+    humanBoard.background_agents = ['codex'];
+    humanBoard.tasks.push(interactive, demoTask('task_automatic','Read the current Hearth Memory count','ready','Read the live count.',{
+      work_mode:'background', authorization_revision:2, background_action:'memory_count'
+    }));
+    await page.reload();
+    await page.getByText('Codex needs its desktop app open to start this.',{exact:true}).waitFor();
+    assert.equal(await page.locator('.decision-card').count(),1);
+    assert.equal(await page.locator('.decision-card a').getAttribute('href'), `#projects/${humanProject.id}/${interactive.id}`);
+    await audit('interactive-pickup');
+    await page.setViewportSize({width:400,height:900});
+    await audit('interactive-pickup',400);
+    await page.setViewportSize({width:1280,height:900});
     await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
     await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();
     assert.equal(await page.getByRole('link',{name:'Agent attention',exact:true}).count(),1);

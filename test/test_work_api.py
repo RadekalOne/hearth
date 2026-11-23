@@ -109,6 +109,54 @@ class WorkAPITests(unittest.IsolatedAsyncioTestCase):
             event = next(e for e in board["activity"] if e["task_id"] == task["id"] and e["kind"] == "cancel")
             self.assertEqual(event["data"], {"reason": "No longer needed", "from_state": state})
 
+    async def test_board_notice_fenced_to_one_human_authorization_and_supported_work(self):
+        project = await self.project()
+        source = f'/api/work/projects/{project["id"]}/tasks'
+        recipe = self.memory._work_module.BACKGROUND_ACTIONS["memory_count"]
+        payload = {"title": recipe["title"], "acceptance": recipe["acceptance"],
+                   "assignee": "codex", "work_mode": "either", "background_action": "memory_count"}
+        feed = "/api/work/ready-notices"
+        headers = {"Authorization": "Bearer codex-test-token"}
+        with patch.object(self.memory, "BOARD_NOTIFY_AGENTS", {"codex"}):
+            task = (await self.post(source, payload, "codex-test-token")).json()
+            self.assertEqual((await self.client.get(feed, headers=headers)).json()["notices"], [])
+            human_feed = await self.client.get(feed, headers={"Authorization": "Bearer admin-test-token"})
+            self.assertEqual(human_feed.status_code, 403)
+            malformed = await self.post(source, {**payload, "description": "Run arbitrary work"}, "codex-test-token")
+            self.assertEqual(malformed.status_code, 400)
+            interactive = await self.post(source, {**payload, "work_mode": "interactive"}, "codex-test-token")
+            self.assertEqual(interactive.status_code, 400)
+            manual = (await self.post(source, {"title": "Open desktop", "acceptance": "Read the result",
+                "assignee": "codex", "work_mode": "interactive"}, "codex-test-token")).json()
+            await self.post(f'/api/work/tasks/{manual["id"]}/action', {"action": "ready"})
+            path = f'/api/work/tasks/{task["id"]}/action'
+            self.assertEqual((await self.post(path, {"action": "ready"}, "codex-test-token")).status_code, 403)
+            first = (await self.post(path, {"action": "ready"})).json()
+            first_notice = {"id": f'{task["id"]}:{first["revision"]}', "task_id": task["id"],
+                "authorization_revision": first["revision"], "background_action": "memory_count"}
+            for _ in range(2):
+                self.assertEqual((await self.client.get(feed, headers=headers)).json()["notices"], [first_notice])
+            self.assertEqual((await self.post(path, {"action": "ready"})).status_code, 409)
+            withdrawn = await self.post(path, {"action": "withdraw", "reason": "Reschedule it", "revision": first["revision"]})
+            self.assertEqual(withdrawn.status_code, 200)
+            self.assertEqual((await self.client.get(feed, headers=headers)).json()["notices"], [])
+            next_auth = (await self.post(path, {"action": "ready"})).json()
+            request = {"action": "claim", "surface": "laptop (board notifier)", "ready_notice_revision": first["revision"]}
+            self.assertEqual((await self.post(path, request, "codex-test-token")).status_code, 409)
+            request["ready_notice_revision"] = next_auth["revision"]
+            claim = await self.post(path, request, "codex-test-token")
+            self.assertEqual(claim.status_code, 200, claim.text)
+            self.assertEqual((await self.post(path, request, "codex-test-token")).status_code, 409)
+            self.assertEqual((await self.client.get(feed, headers=headers)).json()["notices"], [])
+            completed = await self.post(path, {"action": "review", "claim_id": claim.json()["claim_id"],
+               "summary": "The count was read.", "evidence": ["Receipt"]}, "codex-test-token")
+            self.assertEqual(completed.json()["state"], "review")
+            self.assertEqual((await self.client.get(feed, headers=headers)).json()["notices"], [])
+            board = (await self.client.get("/api/work", headers=headers)).json()
+            revisions = [e["data"]["authorization_revision"] for e in board["activity"]
+                         if e["task_id"] == task["id"] and e["kind"] == "ready"]
+            self.assertEqual(revisions, [next_auth["revision"], first["revision"]])
+
     async def test_board_requires_auth_and_agent_cannot_manage(self):
         self.assertEqual((await self.client.get("/api/work")).status_code, 401)
         denied = await self.post("/api/work/projects", {"title": "x", "goal": "y"}, "codex-test-token")

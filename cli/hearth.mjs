@@ -903,6 +903,77 @@ Then: hearth agent add <name>, hearth user add <name>, hearth status.`);
   }
 }
 
+// Board pickup uses this notifier's own agent credential and never invokes its
+// Matrix command handler. Only built-in, model-free actions are supported.
+function boardPickup(agent, agentEnv) {
+  if (!agentEnv.HEARTH_MEMORY_URL || !agentEnv.HEARTH_MEMORY_TOKEN) {
+    die("--board requires this agent's existing Hearth Memory URL and token");
+  }
+  const base = new URL(agentEnv.HEARTH_MEMORY_URL);
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname);
+  if (base.username || base.password || (base.protocol !== "https:" && !(local && base.protocol === "http:"))) {
+    die("--board requires HTTPS or a loopback Hearth Memory URL");
+  }
+  const headers = { Authorization: `Bearer ${agentEnv.HEARTH_MEMORY_TOKEN}`, "Content-Type": "application/json" };
+  async function request(route, body) {
+    const response = await fetch(new URL(route, base), {
+      headers, redirect: "error", signal: AbortSignal.timeout(10000),
+      ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }),
+    });
+    if (!response.ok) return { status: response.status };
+    return { status: response.status, data: await response.json() };
+  }
+  return async function poll() {
+    const feed = await request("/api/work/ready-notices");
+    if (feed.status !== 200 || feed.data?.agent !== agent || !Array.isArray(feed.data.notices)) {
+      throw new Error(`board notice feed unavailable (HTTP ${feed.status})`);
+    }
+    for (const notice of feed.data.notices) {
+      const { task_id: id, authorization_revision: revision, background_action: action } = notice;
+      if (action !== "memory_count" || !/^task_[a-f0-9]{32}$/.test(id) ||
+          !Number.isSafeInteger(revision) || revision < 2 || notice.id !== `${id}:${revision}`) continue;
+      const path = `/api/work/tasks/${id}/action`;
+      try {
+        const result = await request(path, {
+          action: "claim", surface: "laptop (board notifier)", ready_notice_revision: revision,
+        });
+        if (result.status === 409) continue;
+        const claimed = result.data;
+        if (result.status !== 200 || claimed?.id !== id || claimed.assignee !== agent ||
+            claimed.state !== "running" || claimed.authorization_revision !== revision ||
+            claimed.background_action !== action || !claimed.claim_id) {
+          throw new Error(`board claim could not be confirmed (HTTP ${result.status})`);
+        }
+        const health = await request("/health");
+        const count = health.data?.drawers;
+        if (health.status !== 200 || health.data?.memory !== "ok" || !Number.isSafeInteger(count) || count < 0) {
+          throw new Error("the live Hearth Memory count was unavailable");
+        }
+        const summary = `Hearth Memory contains ${count.toLocaleString("en-US")} records. ` +
+          "The laptop picked up this approved task and read the count without starting a model or changing Memory.";
+        const review = await request(path, {
+          action: "review", claim_id: claimed.claim_id, summary,
+          evidence: [`Live Hearth Memory health reported ${count} records after board authorization ${notice.id}.`],
+        });
+        if (review.status !== 200 || review.data?.state !== "review") {
+          throw new Error(`board review could not be confirmed (HTTP ${review.status})`);
+        }
+        console.log(`Board pickup completed ${id}.`);
+      } catch (err) {
+        console.error(`Board pickup for ${id}: ${err.message}`);
+      }
+    }
+  };
+}
+
+async function watchBoard(poll) {
+  for (;;) {
+    try { await poll(); }
+    catch (err) { console.error(`Board pickup: ${err.message}`); }
+    await new Promise(resolve => setTimeout(resolve, 15000));
+  }
+}
+
 // Long-poll /sync as the agent; when someone mentions it, run a command.
 // This is what turns the "mailbox" into a "phone that rings".
 async function cmdNotify(name, rest) {
@@ -910,6 +981,8 @@ async function cmdNotify(name, rest) {
   if (!agentEnv.MATRIX_ACCESS_TOKEN) die(`no credentials for '${name}' — run: hearth agent add ${name}`);
   const execIdx = rest.indexOf("--exec");
   const command = execIdx >= 0 ? rest.slice(execIdx + 1).join(" ") : null;
+  const enableBoard = rest.slice(0, execIdx === -1 ? rest.length : execIdx).includes("--board");
+  const pollBoard = enableBoard ? boardPickup(name, agentEnv) : null;
 
   const base = agentEnv.MATRIX_HOMESERVER_URL.replace(/\/$/, "");
   const uid = agentEnv.MATRIX_USER_ID;
@@ -956,6 +1029,7 @@ async function cmdNotify(name, rest) {
     since = (await syncOnce(null)).next_batch;
     writeCursor(since);
   }
+  if (pollBoard) void watchBoard(pollBoard);
   for (;;) {
     let data;
     try {
@@ -1104,7 +1178,7 @@ try {
   hearth dashboard configure configure/recover the dashboard Matrix observer
   hearth link [code]          no code: print a hub link code for another machine
                               with code: link this machine to a remote hub
-  hearth notify <agent> [--exec "<command>"]
+  hearth notify <agent> [--board] [--exec "<command>"]
                               watch for @mentions of an agent; run a command on
                               each (env: HEARTH_ROOM_ID/EVENT_ID/SENDER/BODY)
   hearth status               health-check everything`);

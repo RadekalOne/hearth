@@ -164,3 +164,61 @@ test("notify discards a cursor the server rejects and starts fresh", async (t) =
   assert.deepEqual(seen.slice(0, 2), ["stale", null]);
   assert.match(run.output(), /saved cursor rejected/);
 });
+
+test("board notifier claims and finishes one approved memory count without invoking the mention handler", async t => {
+  const root = fixture();
+  const matrix = fakeSync({ initial: { next_batch: "s1" } });
+  const matrixUrl = await matrix.start();
+  t.after(() => matrix.stop());
+
+  const id = "task_" + "a".repeat(32);
+  const notice = { id: id + ":2", task_id: id, authorization_revision: 2, background_action: "memory_count" };
+  const seen = [];
+  let claimed = false;
+  let reviewed = false;
+  const memory = http.createServer(async (req, res) => {
+    assert.equal(req.headers.authorization, "Bearer fixture-agent");
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const payload = body && JSON.parse(body);
+    seen.push(req.url === "/health" ? "count" : payload?.action || "feed");
+    if (req.url === "/api/work/ready-notices") {
+      res.end(JSON.stringify({ agent: "claude", notices: [notice, notice, {...notice, background_action:"shell"}] }));
+    } else if (req.url === "/health") {
+      assert.equal(claimed, true);
+      res.end(JSON.stringify({ memory:"ok", drawers:3794 }));
+    } else {
+      assert.equal(req.url, `/api/work/tasks/${id}/action`);
+      if (payload.action === "claim") {
+        assert.equal(payload.ready_notice_revision,2);
+        assert.equal(payload.surface,"laptop (board notifier)");
+        if (claimed) { res.writeHead(409).end(); return; }
+        claimed = true;
+        res.end(JSON.stringify({ id, state:"running", assignee:"claude", claim_id:"fixture-claim",
+          authorization_revision:2, background_action:"memory_count" }));
+      } else {
+        assert.equal(payload.action,"review");
+        assert.equal(payload.claim_id,"fixture-claim");
+        assert.match(payload.summary,/3,794 records/);
+        assert.equal(reviewed,false);
+        reviewed = true;
+        res.end(JSON.stringify({ state:"review" }));
+      }
+    }
+  });
+  await new Promise(resolve => memory.listen(0,"127.0.0.1",resolve));
+  t.after(() => {memory.closeAllConnections();memory.close();});
+  fs.writeFileSync(path.join(root,"secrets","agents","claude.env"), [
+    `MATRIX_HOMESERVER_URL=${matrixUrl}`, `MATRIX_USER_ID=${USER}`, "MATRIX_ACCESS_TOKEN=tok",
+    `HEARTH_MEMORY_URL=http://127.0.0.1:${memory.address().port}`, "HEARTH_MEMORY_TOKEN=fixture-agent", "",
+  ].join("\n"));
+  const handlerLog = path.join(root,"handled.log");
+  const child = spawn(process.execPath,[path.join(root,"cli","hearth.mjs"),"notify","claude","--board","--exec",
+    `"${process.execPath}" "${path.join(root,"handler.mjs")}" "${handlerLog}"`], {
+      env:{...process.env,HEARTH_ROOT:root},stdio:["ignore","pipe","pipe"]
+    });
+  t.after(() => child.kill());
+  assert.ok(await waitFor(() => reviewed && seen.length === 5));
+  assert.deepEqual(seen,["feed","claim","count","review","claim"]);
+  assert.equal(fs.existsSync(handlerLog),false);
+});

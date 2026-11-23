@@ -102,6 +102,9 @@ _work_spec = importlib.util.spec_from_file_location(
 _work_module = importlib.util.module_from_spec(_work_spec)
 _work_spec.loader.exec_module(_work_module)
 work_store = _work_module.WorkStore(os.path.join(DATA_DIR, "work.sqlite3"))
+BOARD_NOTIFY_AGENTS = frozenset(
+    name.strip() for name in os.environ.get("HEARTH_BOARD_NOTIFY_AGENTS", "").split(",") if name.strip()
+)
 _librarian_spec = importlib.util.spec_from_file_location(
     "hearth_librarian", os.path.join(os.path.dirname(__file__), "librarian.py"))
 _librarian = importlib.util.module_from_spec(_librarian_spec)
@@ -2638,14 +2641,14 @@ def work_board(project_id: str = "", capability: str = "", work_mode: str = "eit
 def work_propose(project_id: str, title: str, acceptance: str, description: str = "",
                  assignee: str = "", dependencies: list[str] | None = None,
                  memory_ids: list[str] | None = None, room_id: str = "", thread_root: str = "",
-                 capability: str = "", work_mode: str = "either") -> dict:
+                 capability: str = "", work_mode: str = "either", background_action: str = "") -> dict:
     """Propose a draft task. A human authorizes it before the assigned agent claims it.
     Link an existing Matrix thread and current HM drawers for shared context.
     """
     return _work_create_task(project_id, dict(title=title, acceptance=acceptance,
         description=description, assignee=assignee, dependencies=dependencies or [],
         memory_ids=memory_ids or [], room_id=room_id, thread_root=thread_root,
-        capability=capability, work_mode=work_mode))
+        capability=capability, work_mode=work_mode, background_action=background_action))
 
 
 @mcp.tool(annotations=CREATE_TOOL)
@@ -3822,7 +3825,8 @@ def api_work(project_id: str = ""):
     board = _coordination_board(_work_call(work_store.snapshot, project_id))
     return {**board, **_work_call(work_store.agent_directory, _roster()),
             "can_manage": _work_human(), "agents": sorted(_roster()),
-            "humans": sorted(HUMAN_IDS - _roster()), "element_url": ELEMENT_WEB_URL}
+            "humans": sorted(HUMAN_IDS - _roster()), "element_url": ELEMENT_WEB_URL,
+            "background_agents": sorted(BOARD_NOTIFY_AGENTS & _roster())}
 
 
 @app.get("/api/work/agents")
@@ -3936,12 +3940,27 @@ async def api_work_task(project_id: str, request: Request):
     return _work_create_task(project_id, await request.json())
 
 
+def _board_notice_agent():
+    agent = _principal()
+    if agent not in BOARD_NOTIFY_AGENTS or agent not in _roster() or _work_human():
+        raise HTTPException(403, "This agent is not configured for board notices")
+    return agent
+
+
+@app.get("/api/work/ready-notices")
+def api_ready_notices():
+    agent = _board_notice_agent()
+    return {"agent": agent, "notices": _work_call(work_store.ready_notices, agent)}
+
+
 @app.post("/api/work/tasks/{task_id}/action")
 async def api_work_action(task_id: str, request: Request):
     if not _same_origin(request):
         raise HTTPException(403, "cross-site request rejected")
-    return _work_call(work_store.action, _principal(), _work_human(), task_id,
-                      _work_payload(await request.json()), _roster())
+    payload = _work_payload(await request.json())
+    if "ready_notice_revision" in payload:
+        _board_notice_agent()
+    return _work_call(work_store.action, _principal(), _work_human(), task_id, payload, _roster())
 
 
 @app.get("/api/work/tasks/{task_id}/context")

@@ -16,6 +16,28 @@ from pathlib import Path
 CAPABILITIES = {"coding": "Coding", "design": "Design", "planning": "Planning & coordination",
                 "research": "Research", "review": "Review & testing", "writing": "Writing"}
 WORK_MODES = {"either": "Either", "interactive": "Interactive", "background": "Background"}
+BOARD_NOTICE_SURFACE = "laptop (board notifier)"
+BACKGROUND_ACTIONS = {
+    "memory_count": {
+        "title": "Read the current Hearth Memory count",
+        "description": (
+            "What. Read the current number of records in Hearth Memory.\n"
+            "Why. Check that approved work can start without a nudge.\n"
+            "What changes. The assigned agent puts the count on this card.\n"
+            "What stays as it is. The count reads Memory without editing it or starting a model.\n"
+            "How you'll know. The count appears in Needs your review."
+        ),
+        "acceptance": "The live memory count is visible on this card for review.",
+    },
+}
+
+
+def has_background_action(task):
+    recipe = BACKGROUND_ACTIONS.get(task.get("background_action"))
+    return task.get("work_mode") in {"background", "either"} and bool(
+        recipe and all(task.get(field) == value for field, value in recipe.items())
+    )
+
 # Blank means unknown; the Librarian asks once instead of guessing. Tasks inherit it.
 PROJECT_CATEGORIES = ("", "Personal", "Climate Central")
 
@@ -185,6 +207,15 @@ class WorkStore:
                 "room_id": room, "thread_root": root, "state": "draft", "claim_id": "",
                 "claim_until": 0, "claim_surface": "", "summary": "", "evidence": [],
                 "blocked_reason": "", "created_by": actor, "created_at": now(), "updated_at": now(), "revision": 1}
+        background_action = choice(payload.get("background_action", ""), "background_action",
+                                   {"", *BACKGROUND_ACTIONS})
+        if background_action:
+            item["background_action"] = background_action
+            recipe = BACKGROUND_ACTIONS[background_action]
+            if not item["description"]:
+                item["description"] = recipe["description"]
+            if not has_background_action(item):
+                raise WorkError("automatic work requires its exact title, description, acceptance and a background-capable mode")
         with self.transaction() as db:
             project = self.get(db, "projects", project_id)
             if project["phase"] == "shipped":
@@ -252,6 +283,29 @@ class WorkStore:
                 "work_modes": WORK_MODES,
                 "guidance": "Human-maintained assessments, not benchmark rankings. Workload is board state; availability is declared, not runtime liveness."}
 
+    @staticmethod
+    def background_can_claim(task, stamp):
+        return task.get("state") == "ready" or (
+            task.get("state") == "running" and task.get("claim_until", 0) <= stamp
+            and task.get("claim_surface") == BOARD_NOTICE_SURFACE
+        )
+
+    def ready_notices(self, agent):
+        """Return stable authorization notices for this agent's supported work."""
+        stamp = time.time()
+        with self.transaction() as db:
+            tasks = {row["id"]: json.loads(row["data"]) for row in db.execute("SELECT id, data FROM tasks")}
+            notices = []
+            for task in tasks.values():
+                revision = task.get("authorization_revision")
+                if (task["assignee"] != agent or not revision or not task.get("authorized_by")
+                    or not has_background_action(task) or not self.background_can_claim(task, stamp)
+                    or any(tasks[dep]["state"] != "done" for dep in task["dependencies"])):
+                    continue
+                notices.append({"id": f'{task["id"]}:{revision}', "task_id": task["id"],
+                                "authorization_revision": revision, "background_action": task["background_action"]})
+            return notices
+
     def action(self, actor, human, task_id, payload, roster=None):
         action = text(payload.get("action", ""), "action", 40, True)
         with self.transaction() as db:
@@ -274,7 +328,9 @@ class WorkStore:
                     raise WorkError("only draft or blocked tasks can be authorized", 409)
                 if not task["assignee"]:
                     raise WorkError("assign an agent before authorizing work", 409)
-                task.update(state="ready", blocked_reason="", authorized_by=actor)
+                revision = task["revision"] + 1
+                task.update(state="ready", blocked_reason="", authorized_by=actor, authorization_revision=revision)
+                evidence = {"authorization_revision": revision}
             elif action in {"withdraw", "cancel", "reopen"}:
                 allowed = {"withdraw": {"ready"}, "cancel": {"draft", "blocked", "ready"},
                            "reopen": {"cancelled"}}
@@ -294,13 +350,20 @@ class WorkStore:
             elif action == "claim":
                 if human or actor != task["assignee"]:
                     raise WorkError("only the assigned agent can claim a task", 403)
+                surface = text(payload.get("surface", ""), "surface", 200)
+                if "ready_notice_revision" in payload:
+                    revision = payload["ready_notice_revision"]
+                    if (type(revision) is not int or revision != task.get("authorization_revision")
+                        or surface != BOARD_NOTICE_SURFACE or not task.get("authorized_by")
+                        or not has_background_action(task) or not self.background_can_claim(task, stamp)):
+                        raise WorkError("the board notice is no longer available for automatic pickup", 409)
                 if state != "ready" and not (state == "running" and task["claim_until"] <= stamp):
                     raise WorkError("task is not ready or already has a live claim", 409)
                 open_deps = [dep for dep in task["dependencies"] if self.get(db, "tasks", dep)["state"] != "done"]
                 if open_deps:
                     raise WorkError("dependencies still need review: " + ", ".join(open_deps), 409)
                 task.update(state="running", claim_id=uuid.uuid4().hex, claim_until=stamp + 900,
-                            claim_surface=text(payload.get("surface", ""), "surface", 200), blocked_reason="")
+                            claim_surface=surface, blocked_reason="")
             elif action in {"heartbeat", "review", "block"}:
                 if state != "running" or actor != task["assignee"] or task["claim_until"] <= stamp:
                     raise WorkError("a live claim owned by the assigned agent is required", 409)

@@ -116,6 +116,10 @@ async function renderNow(view) {
 
   const decisions = decisionTasks(board);
   const visible = projectWorkForViewer(board, decisions);
+  const approvedThatNeedHelp = visible.tasks.filter(task =>
+    task.state === 'ready' && task.authorization_revision && !task.waiting_on?.length &&
+    (state.principal === 'admin' || isSignedInPerson(task.authorized_by)) &&
+    (task.work_mode === 'interactive' || !task.background_action || !board.background_agents?.includes(task.assignee)));
   const inbox = await sliceResult(api('/api/inbox'));
   const handoffs = inbox.ok ? inbox.value.items.filter(item =>
     item.kind !== 'approval' && item.party_kind === 'human' && isSignedInPerson(item.party_id) &&
@@ -150,9 +154,17 @@ async function renderNow(view) {
       h('p', {text:item.human_action.steps?.[0] || 'Read what your teammate needs from you.'}), actions);
     entries.push({ item, card });
   }
+  for (const task of approvedThatNeedHelp) {
+    const agent = (task.assignee || 'agent').replace(/^./, initial => initial.toUpperCase());
+    const text = task.work_mode === 'background'
+      ? `${agent} has no automatic pickup for this task.` : `${agent} needs its desktop app open to start this.`;
+    const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}), h('p', {text}),
+      h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`}));
+    entries.push({ item: task, card });
+  }
   cards.append(...entries.sort((a, b) => newestWorkFirst(a.item, b.item)).map(entry => entry.card));
   if (!inbox.ok) view.append(h('p', {role:'status',text:'Could not check for other requests. Try refreshing.'}));
-  if (!decisions.length && !handoffs.length && inbox.ok) cards.append(h('p', {class:'empty',text:'Nothing is waiting on you right now.'}));
+  if (!entries.length && inbox.ok) cards.append(h('p', {class:'empty',text:'Nothing is waiting on you right now.'}));
 
   const activity = visible.activity.filter(item => !['heartbeat','phase','project_phase'].includes(item.kind)).sort(newestWorkFirst);
   view.append(section('What changed', '', null, workActivity(activity.slice(0, 12), visible)));
