@@ -428,7 +428,7 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.getByRole('button',{name:'Authorize work',exact:true}).click();
     await page.getByText('Nothing is waiting on you right now.',{exact:true}).waitFor();
     await audit('now-empty');
-    const interactive = demoTask('task_desktop','Make "start this" cards obvious, and look into a one-click start','ready','Inspect the laptop.', {
+    const interactive = demoTask('task_desktop','Review "R&D" #1 + 50%? café','ready','Inspect the laptop.', {
       work_mode:'interactive', authorization_revision:2
     });
     humanBoard.background_agents = ['codex'];
@@ -439,10 +439,17 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     const prompt = `Pick up your approved task '${interactive.title}'`;
     const pickup = page.locator('.decision-card');
     await pickup.getByText('Codex needs you to start this task.', {exact:true}).waitFor();
-    await pickup.getByText('Click Copy prompt, then open the Codex app, paste the prompt and send it.', {exact:true}).waitFor();
+    await pickup.getByText('Click Open in Codex, then press Send. If the app does not open, use Copy prompt and paste it into Codex.', {exact:true}).waitFor();
     await pickup.getByText(prompt, {exact:true}).waitFor();
     assert.equal(await pickup.count(),1);
-    assert.equal(await pickup.getByRole('link').getAttribute('href'), `#projects/${humanProject.id}/${interactive.id}`);
+    assert.equal(await pickup.getByRole('link', {name:'Open details for ' + interactive.title}).getAttribute('href'),
+      `#projects/${humanProject.id}/${interactive.id}`);
+    const launch = pickup.getByRole('link', {name:'Open in Codex', exact:true});
+    const href = new URL(await launch.getAttribute('href'));
+    assert.equal(href.protocol, 'codex:');
+    assert.equal(href.hostname, 'new');
+    assert.equal(href.hash, '');
+    assert.deepEqual([...href.searchParams], [['prompt', prompt]]);
     await audit('interactive-pickup');
     await page.setViewportSize({width:400,height:900});
     await audit('interactive-pickup',400);
@@ -463,6 +470,20 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.evaluate(() => { document.execCommand = () => false; });
     await copyPrompt.click();
     await copyStatus.getByText('Could not copy. Select and copy the prompt above.', {exact:true}).waitFor();
+    humanBoard.tasks.push(
+      demoTask('task_claude_desktop','Read the workspace in Claude','ready','Inspect a local workspace.',
+        {assignee:'claude',work_mode:'interactive',authorization_revision:2}),
+      demoTask('task_codex_background','Read a background report','ready','Inspect a report.',
+        {work_mode:'background',authorization_revision:2}),
+      demoTask('task_codex_unapproved','Propose desktop work','draft','Propose a local task.',
+        {work_mode:'interactive'})
+    );
+    await page.reload();
+    const claudeCard = pickup.filter({hasText:'Read the workspace in Claude'});
+    await claudeCard.getByRole('button',{name:'Copy prompt',exact:true}).waitFor();
+    assert.equal(await claudeCard.getByRole('link',{name:'Open in Codex',exact:true}).count(),0);
+    assert.equal(await page.getByRole('link',{name:'Open in Codex',exact:true}).count(),1);
+    humanBoard.tasks.splice(-3);
     await page.setViewportSize({width:1280,height:900});
     await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
     await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();

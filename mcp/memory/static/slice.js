@@ -186,14 +186,22 @@ async function renderNow(view) {
     const actions = h('div', {class:'work-toolbar'});
     const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}));
     if (needsDesktop) {
+      const opensInCodex = task.assignee === 'codex';
       const promptText = h('p', {text:prompt});
       const status = h('span', {class:'dim',role:'status'});
-      const copyButton = h('button', {text:'Copy prompt',onClick:async () => {
+      const copyButton = h('button', {class:opensInCodex ? 'secondary' : undefined, text:'Copy prompt',onClick:async () => {
         status.textContent = await copyPickupPrompt(promptText, copyButton)
           ? 'Copied.' : 'Could not copy. Select and copy the prompt above.';
       }});
+      const instructions = opensInCodex
+        ? 'Click Open in Codex, then press Send. If the app does not open, use Copy prompt and paste it into Codex.'
+        : `Click Copy prompt, then open the ${agent} app, paste the prompt and send it.`;
       card.append(h('p', {}, h('strong', {text:`${agent} needs you to start this task.`})),
-        h('p', {text:`Click Copy prompt, then open the ${agent} app, paste the prompt and send it.`}), promptText);
+        h('p', {text:instructions}), promptText);
+      if (opensInCodex) {
+        actions.append(h('a', {class:'primary-action',text:'Open in Codex',
+          href:`codex://new?prompt=${encodeURIComponent(prompt)}`}));
+      }
       actions.append(copyButton, status);
     } else {
       card.append(h('p', {text:`${agent} has no automatic pickup for this task.`}));
