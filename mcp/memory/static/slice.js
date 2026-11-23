@@ -105,6 +105,31 @@ function watcherRow(w) {
     h('span',{class:`pill ${stateTone(w.state)}`,text:stateName(w.state)}),
     h('span',{class:'watcher-age',text:w.state==='on-demand'?'Event-driven':`${minutes(w.age_minutes)} since receipt`}),sourceLinks(w.source_refs,w));
 }
+async function copyPickupPrompt(promptText, button) {
+  try {
+    await navigator.clipboard.writeText(promptText.textContent);
+    return true;
+  } catch {
+    // Some embedded browsers block the Clipboard API but permit copying a selection.
+    const selection = window.getSelection();
+    if (!selection || typeof document.execCommand !== 'function' || !promptText.isConnected) return false;
+    const previousRanges = Array.from({length:selection.rangeCount}, (_, index) => selection.getRangeAt(index));
+    const range = document.createRange();
+    range.selectNodeContents(promptText);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      selection.removeAllRanges();
+      previousRanges.forEach(previousRange => selection.addRange(previousRange));
+      if (button.isConnected) button.focus({preventScroll:true});
+    }
+  }
+}
+
 async function renderNow(view) {
   const result = await sliceResult(api('/api/work'));
   if (!result.ok) {
@@ -158,22 +183,23 @@ async function renderNow(view) {
     const agent = (task.assignee || 'agent').replace(/^./, initial => initial.toUpperCase());
     const needsDesktop = task.work_mode !== 'background';
     const prompt = `Pick up your approved task '${task.title}'`;
-    const text = needsDesktop ? `To start this, open the ${agent} app and say: ${prompt}`
-      : `${agent} has no automatic pickup for this task.`;
     const actions = h('div', {class:'work-toolbar'});
+    const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}));
     if (needsDesktop) {
+      const promptText = h('p', {text:prompt});
       const status = h('span', {class:'dim',role:'status'});
-      actions.append(h('button', {class:'secondary',text:'Copy prompt',onClick:async () => {
-        try {
-          await navigator.clipboard.writeText(prompt);
-          status.textContent = 'Copied.';
-        } catch {
-          status.textContent = 'Could not copy. Select and copy the prompt above.';
-        }
-      }}), status);
+      const copyButton = h('button', {text:'Copy prompt',onClick:async () => {
+        status.textContent = await copyPickupPrompt(promptText, copyButton)
+          ? 'Copied.' : 'Could not copy. Select and copy the prompt above.';
+      }});
+      card.append(h('p', {}, h('strong', {text:`${agent} needs you to start this task.`})),
+        h('p', {text:`Click Copy prompt, then open the ${agent} app, paste the prompt and send it.`}), promptText);
+      actions.append(copyButton, status);
+    } else {
+      card.append(h('p', {text:`${agent} has no automatic pickup for this task.`}));
     }
     actions.append(h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`}));
-    const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}), h('p', {text}), actions);
+    card.append(actions);
     entries.push({ item: task, card });
   }
   cards.append(...entries.sort((a, b) => newestWorkFirst(a.item, b.item)).map(entry => entry.card));

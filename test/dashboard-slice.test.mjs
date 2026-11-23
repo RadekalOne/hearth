@@ -428,7 +428,7 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.getByRole('button',{name:'Authorize work',exact:true}).click();
     await page.getByText('Nothing is waiting on you right now.',{exact:true}).waitFor();
     await audit('now-empty');
-    const interactive = demoTask('task_desktop','Read a local project file','ready','Inspect the laptop.', {
+    const interactive = demoTask('task_desktop','Make "start this" cards obvious, and look into a one-click start','ready','Inspect the laptop.', {
       work_mode:'interactive', authorization_revision:2
     });
     humanBoard.background_agents = ['codex'];
@@ -438,16 +438,31 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     await page.reload();
     const prompt = `Pick up your approved task '${interactive.title}'`;
     const pickup = page.locator('.decision-card');
-    await pickup.getByText(`To start this, open the Codex app and say: ${prompt}`,{exact:true}).waitFor();
+    await pickup.getByText('Codex needs you to start this task.', {exact:true}).waitFor();
+    await pickup.getByText('Click Copy prompt, then open the Codex app, paste the prompt and send it.', {exact:true}).waitFor();
+    await pickup.getByText(prompt, {exact:true}).waitFor();
     assert.equal(await pickup.count(),1);
     assert.equal(await pickup.getByRole('link').getAttribute('href'), `#projects/${humanProject.id}/${interactive.id}`);
     await audit('interactive-pickup');
     await page.setViewportSize({width:400,height:900});
     await audit('interactive-pickup',400);
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin});
-    await pickup.getByRole('button',{name:'Copy prompt',exact:true}).click();
-    await pickup.getByRole('status').filter({hasText:'Copied.'}).waitFor();
+    const copyPrompt = pickup.getByRole('button',{name:'Copy prompt',exact:true});
+    const copyStatus = pickup.getByRole('status');
+    await copyPrompt.click();
+    await copyStatus.getByText('Copied.', {exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),prompt);
+    await page.evaluate(async () => {
+      await navigator.clipboard.writeText('before fallback');
+      navigator.clipboard.writeText = async () => { throw new DOMException('Copy blocked', 'NotAllowedError'); };
+    });
+    await copyPrompt.click();
+    await copyStatus.getByText('Copied.', {exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),prompt);
+    assert.equal(await copyPrompt.evaluate(button => button === document.activeElement), true);
+    await page.evaluate(() => { document.execCommand = () => false; });
+    await copyPrompt.click();
+    await copyStatus.getByText('Could not copy. Select and copy the prompt above.', {exact:true}).waitFor();
     await page.setViewportSize({width:1280,height:900});
     await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
     await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();
