@@ -436,12 +436,18 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
       work_mode:'background', authorization_revision:2, background_action:'memory_count'
     }));
     await page.reload();
-    await page.getByText('Codex needs its desktop app open to start this.',{exact:true}).waitFor();
-    assert.equal(await page.locator('.decision-card').count(),1);
-    assert.equal(await page.locator('.decision-card a').getAttribute('href'), `#projects/${humanProject.id}/${interactive.id}`);
+    const prompt = `Pick up your approved task '${interactive.title}'`;
+    const pickup = page.locator('.decision-card');
+    await pickup.getByText(`To start this, open the Codex app and say: ${prompt}`,{exact:true}).waitFor();
+    assert.equal(await pickup.count(),1);
+    assert.equal(await pickup.getByRole('link').getAttribute('href'), `#projects/${humanProject.id}/${interactive.id}`);
     await audit('interactive-pickup');
     await page.setViewportSize({width:400,height:900});
     await audit('interactive-pickup',400);
+    await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin});
+    await pickup.getByRole('button',{name:'Copy prompt',exact:true}).click();
+    await pickup.getByRole('status').filter({hasText:'Copied.'}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),prompt);
     await page.setViewportSize({width:1280,height:900});
     await page.getByRole('link',{name:'Agents & maintenance',exact:true}).click();
     await page.getByRole('heading',{name:'Agent strengths',exact:true}).waitFor();

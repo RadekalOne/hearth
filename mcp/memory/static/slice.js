@@ -156,10 +156,24 @@ async function renderNow(view) {
   }
   for (const task of approvedThatNeedHelp) {
     const agent = (task.assignee || 'agent').replace(/^./, initial => initial.toUpperCase());
-    const text = task.work_mode === 'background'
-      ? `${agent} has no automatic pickup for this task.` : `${agent} needs its desktop app open to start this.`;
-    const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}), h('p', {text}),
-      h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`}));
+    const needsDesktop = task.work_mode !== 'background';
+    const prompt = `Pick up your approved task '${task.title}'`;
+    const text = needsDesktop ? `To start this, open the ${agent} app and say: ${prompt}`
+      : `${agent} has no automatic pickup for this task.`;
+    const actions = h('div', {class:'work-toolbar'});
+    if (needsDesktop) {
+      const status = h('span', {class:'dim',role:'status'});
+      actions.append(h('button', {class:'secondary',text:'Copy prompt',onClick:async () => {
+        try {
+          await navigator.clipboard.writeText(prompt);
+          status.textContent = 'Copied.';
+        } catch {
+          status.textContent = 'Could not copy. Select and copy the prompt above.';
+        }
+      }}), status);
+    }
+    actions.append(h('a', {class:'link',href:workTaskLink(task),text:'Open details','aria-label':`Open details for ${task.title}`}));
+    const card = h('article', {class:'card decision-card'}, h('h3', {text:task.title}), h('p', {text}), actions);
     entries.push({ item: task, card });
   }
   cards.append(...entries.sort((a, b) => newestWorkFirst(a.item, b.item)).map(entry => entry.card));
