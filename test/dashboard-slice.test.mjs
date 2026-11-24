@@ -485,6 +485,7 @@ test('personal decisions, direct task links, withdrawal and maintenance', async 
     const claudePrompt = `Pick up your approved task '${claudeTask.title}'`;
     const claudeCard = pickup.filter({hasText:claudeTask.title});
     await claudeCard.getByText(claudePrompt, {exact:true}).waitFor();
+    await claudeCard.getByText(/Check the message box holds only this prompt, then press Send\./).waitFor();
     const claudeLink = claudeCard.getByRole('link',{name:'Open in Claude',exact:true});
     const claudeUrl = new URL(await claudeLink.getAttribute('href'));
     assert.equal(claudeUrl.protocol, 'claude:');

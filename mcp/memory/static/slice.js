@@ -195,9 +195,11 @@ async function renderNow(view) {
         status.textContent = await copyPickupPrompt(promptText, copyButton)
           ? 'Copied.' : 'Could not copy. Select and copy the prompt above.';
       }});
-      const instructions = draftBase
-        ? `Click ${openLabel}, then press Send. If the app does not open, use Copy prompt and paste it into ${agent}.`
-        : `Click Copy prompt, then open the ${agent} app, paste the prompt and send it.`;
+      const instructions = task.assignee === 'claude'
+        ? 'Click Open in Claude. Check the message box holds only this prompt, then press Send. If the app does not open, use Copy prompt and paste it into Claude.'
+        : draftBase
+          ? 'Click Open in Codex, then press Send. If the app does not open, use Copy prompt and paste it into Codex.'
+          : `Click Copy prompt, then open the ${agent} app, paste the prompt and send it.`;
       card.append(h('p', {}, h('strong', {text:`${agent} needs you to start this task.`})),
         h('p', {text:instructions}), promptText);
       if (draftBase) {
