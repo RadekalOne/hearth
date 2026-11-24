@@ -14,11 +14,17 @@ class AccountStatusTests(unittest.TestCase):
         self.call = Mock(return_value={'account': {'type': 'chatgpt', 'email': 'trial@example.test',
                                                   'planType': 'business'}, 'requiresOpenaiAuth': True})
 
-    def test_exact_binding_and_fixed_no_refresh_status(self):
+    def test_reports_native_status_and_controller_attestation_separately(self):
         result = account_status(self.call, 'account/read', {'refreshToken': False},
                                 expected=self.expected, attested=self.expected)
         self.call.assert_called_once_with('account/read', {'refreshToken': False})
-        self.assertEqual(result, {'auth_method': 'chatgpt', 'workspace_verified': True, 'seat_verified': True})
+        self.assertEqual(result, {
+            'auth_method': 'chatgpt',
+            'email_matched': True,
+            'plan': 'business',
+            'workspace_binding': 'controller_attested',
+            'seat': 'controller_attested',
+        })
 
     def test_rejects_other_calls_before_transport(self):
         for method, params in [('thread/start', {}), ('turn/start', {}), ('model/list', {}),

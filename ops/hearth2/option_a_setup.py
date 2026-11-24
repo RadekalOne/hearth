@@ -65,7 +65,13 @@ def account_status(call, method, params, *, expected, attested):
             or account.get('email') != expected.email or account.get('planType') != 'business'
             or result.get('requiresOpenaiAuth') is not True):
         raise SetupRefused('chatgpt_account_unverified')
-    return {'auth_method': 'chatgpt', 'workspace_verified': True, 'seat_verified': True}
+    return {
+        'auth_method': 'chatgpt',
+        'email_matched': True,
+        'plan': 'business',
+        'workspace_binding': 'controller_attested',
+        'seat': 'controller_attested',
+    }
 
 
 def _pinned_file(path, digest):
