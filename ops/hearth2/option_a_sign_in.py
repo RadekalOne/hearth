@@ -1,7 +1,6 @@
 """Closed-by-default path gate for one pinned Codex device login.
 
-The caller supplies a bounded, trusted transport. There is no external
-forwarder or CLI activation in this candidate. The trial proof uses loopback.
+The caller supplies a bounded, trusted transport. The trial proof uses loopback.
 """
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -52,13 +51,19 @@ def _values(fields, *names):
 class SignInRoute:
     """A single device authorization, with no tunneling or alternate origin."""
 
-    def __init__(self, client_id, exchange, *, monotonic=time.monotonic):
+    def __init__(self, client_id, exchange, *, window_seconds=60, max_polls=20,
+                 monotonic=time.monotonic):
         if type(client_id) is not str or not client_id or len(client_id) > 128:
             raise ValueError('fixed OAuth client ID required')
+        if (type(window_seconds) is not int or not 1 <= window_seconds <= 900
+                or type(max_polls) is not int or not 1 <= max_polls <= 600):
+            raise ValueError('bounded device authentication policy required')
         self._client_id = client_id
         self._exchange = exchange
         self._monotonic = monotonic
-        self._deadline = monotonic() + 60
+        self._window = window_seconds
+        self._max_polls = max_polls
+        self._deadline = None
         self._lock = threading.Lock()
         self._stage = 'initial'
         self._device = None
@@ -95,14 +100,17 @@ class SignInRoute:
         except (ValueError, RecursionError):
             return DENIED
         with self._lock:
-            if self._monotonic() >= self._deadline:
+            now = self._monotonic()
+            if self._deadline is not None and now >= self._deadline:
                 self._close()
                 return DENIED
             if not self._allowed(path, fields):
                 return DENIED
+            if self._deadline is None:
+                self._deadline = now + self._window
             if path == POLL:
                 self._polls += 1
-                if self._polls > 20:
+                if self._polls > self._max_polls:
                     self._close()
                     return DENIED
             try:

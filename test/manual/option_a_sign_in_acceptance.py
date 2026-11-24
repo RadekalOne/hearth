@@ -10,20 +10,26 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 
 from option_a_sign_in import AUTH_HOST, EXCHANGE, POLL, USERCODE, SignInRoute, loopback_tls_server
+from option_a_live_sign_in import (
+    CLIENT_ID, MAX_POLLS, WINDOW_SECONDS, UnixSignInPort, login_command, private_sign_in_socket,
+    login_status_command,
+)
 
 
-CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 WORKSPACE = '00000000-0000-4000-8000-000000000001'
 
 
 def _fake_token():
     def segment(value):
         return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip('=')
+    now = int(time.time())
     return '.'.join((segment({'alg': 'none', 'typ': 'JWT'}),
-                     segment({'email': 'fixture@example.test',
+                     segment({'email': 'fixture@example.test', 'sub': 'fixture-user',
+                              'iat': now, 'exp': now + 3600,
                               'https://api.openai.com/auth': {'chatgpt_account_id': WORKSPACE,
                                                               'chatgpt_plan_type': 'business'}}),
                      'Zml4dHVyZQ'))
@@ -42,7 +48,7 @@ def serving(server):
 
 
 def run():
-    if os.getenv('HEARTH_OPTION_A_FIXTURE') != '1' or len(socket.if_nameindex()) != 1:
+    if os.getenv('HEARTH_OPTION_A_FIXTURE') != '1' or [name for _, name in socket.if_nameindex()] != ['lo']:
         raise SystemExit('requires an opted-in loopback-only fixture')
     assert socket.gethostbyname(AUTH_HOST) == '127.0.0.1'
     with socket.socket() as probe:
@@ -82,7 +88,7 @@ def run():
             finally:
                 conn.close()
 
-        route = SignInRoute(CLIENT_ID, exchange)
+        route = SignInRoute(CLIENT_ID, exchange, window_seconds=WINDOW_SECONDS, max_polls=MAX_POLLS)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain('/fixture/tls/server.pem', '/fixture/tls/server.key')
         client = ssl.create_default_context(cafile='/fixture/tls/ca.pem')
@@ -96,39 +102,45 @@ def run():
             finally:
                 conn.close()
 
-        with serving(loopback_tls_server(route, context)):
-            denied('/v1/responses')
-            denied('/backend-api/codex/responses')
-            denied(USERCODE,host='api.openai.com')
-            denied(USERCODE,headers={'Authorization':'Bearer fake'})
-            denied(USERCODE + '?upstream=other.test')
-            denied('https://auth.openai.com' + USERCODE)
-            denied(AUTH_HOST + ':443',method='CONNECT')
-            denied(EXCHANGE,headers={'Content-Type':'application/x-www-form-urlencoded'},
-                   body=b'grant_type=refresh_token')
-            denied(EXCHANGE,headers={'Content-Type':'application/x-www-form-urlencoded'},
-                   body=b'grant_type=urn:ietf:params:oauth:grant-type:token-exchange&requested_token=openai-api-key')
-            assert not forwarded
-            with tempfile.TemporaryDirectory(dir='/tmp') as home:
-                env = {'HOME':home, 'CODEX_HOME':home, 'PATH':'/usr/bin:/bin',
-                       'CODEX_CA_CERTIFICATE':'/fixture/tls/ca.pem',
-                       'SSL_CERT_FILE':'/fixture/tls/ca.pem'}
-                command = ['/opt/codex','-c','forced_login_method="chatgpt"',
-                           '-c','forced_chatgpt_workspace_id="' + WORKSPACE + '"',
-                           '-c','cli_auth_credentials_store="file"']
-                login = subprocess.run([*command, 'login','--device-auth'],env=env,
-                                       capture_output=True,text=True,timeout=16)
-                if login.returncode:
-                    # The child sees only synthetic values. Emit no codes or token bodies.
-                    raise AssertionError(f'pinned fixture login failed (exit {login.returncode}; paths={forwarded})')
-                assert Path(home,'auth.json').is_file()
-                status = subprocess.run([*command,'login','status'],env=env,check=True,
-                                        capture_output=True,text=True,timeout=8)
-                assert 'chatgpt' in (status.stdout + status.stderr).lower()
-            route.close()
-            denied(USERCODE,body=json.dumps({'client_id':CLIENT_ID}).encode())
+        with tempfile.TemporaryDirectory(dir='/tmp') as home, tempfile.TemporaryDirectory(dir='/tmp') as private:
+            with private_sign_in_socket(route, Path(private)) as path:
+                port = UnixSignInPort(path)
+                assert port.request('POST', AUTH_HOST, '/backend-api/codex/responses',
+                                    'application/json', b'{}')[0] == 403
+                assert port.request('POST', 'api.openai.com', USERCODE, 'application/json',
+                                    json.dumps({'client_id':CLIENT_ID}).encode())[0] == 403
+                with serving(loopback_tls_server(port, context)):
+                    denied('/v1/responses')
+                    denied('/backend-api/codex/responses')
+                    denied(USERCODE,host='api.openai.com')
+                    denied(USERCODE,headers={'Authorization':'Bearer fake'})
+                    denied(USERCODE + '?upstream=other.test')
+                    denied('https://auth.openai.com' + USERCODE)
+                    denied(AUTH_HOST + ':443',method='CONNECT')
+                    denied(EXCHANGE,headers={'Content-Type':'application/x-www-form-urlencoded'},
+                           body=b'grant_type=refresh_token')
+                    denied(EXCHANGE,headers={'Content-Type':'application/x-www-form-urlencoded'},
+                           body=b'grant_type=urn:ietf:params:oauth:grant-type:token-exchange&requested_token=openai-api-key')
+                    assert not forwarded
+                    env = {'HOME':home, 'CODEX_HOME':home, 'PATH':'/usr/bin:/bin',
+                           'CODEX_CA_CERTIFICATE':'/fixture/tls/ca.pem',
+                           'SSL_CERT_FILE':'/fixture/tls/ca.pem'}
+                    login = subprocess.run(login_command(WORKSPACE),env=env,
+                                           capture_output=True,text=True,timeout=16)
+                    if login.returncode:
+                        raise AssertionError(f'pinned fixture login failed (exit {login.returncode}; paths={forwarded})')
+                    assert Path(home,'auth.json').is_file()
+                    denied(USERCODE,body=json.dumps({'client_id':CLIENT_ID}).encode())
+            assert not path.exists()
+            assert port.request('POST', AUTH_HOST, USERCODE, 'application/json',
+                                json.dumps({'client_id':CLIENT_ID}).encode())[0] == 502
+            status = subprocess.run(login_status_command(WORKSPACE),
+                                    env={'HOME':home, 'CODEX_HOME':home, 'PATH':'/usr/bin:/bin'},
+                                    capture_output=True, text=True, timeout=8)
+            assert status.returncode == 0 and 'chatgpt' in (status.stdout + status.stderr).lower()
             assert forwarded == [USERCODE, POLL, EXCHANGE]
-        print('Pinned default-issuer device sign-in and local ChatGPT status passed with fake credentials.')
+        print('Pinned sign-in passed through TLS and the Unix gate with fake credentials.')
+        print('After both listeners closed, Codex login status passed on the same home with network disabled.')
         print('Exactly three auth requests reached the mock. Model, alternate, tunneling and fallback probes reached none.')
         print('Route closed, loopback listeners stopped, and temporary login state removed.')
 

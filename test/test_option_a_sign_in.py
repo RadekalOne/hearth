@@ -74,8 +74,40 @@ class SignInTests(unittest.TestCase):
         self.route.close()
         self.assertEqual(self.request(USERCODE, {'client_id':'fixture-client'})[0], 403)
         self.exchange.assert_not_called()
-        clock = Mock(side_effect=[10, 71])
+        clock = Mock(return_value=10)
+        self.exchange.side_effect = [(200, b'{"device_auth_id":"device","user_code":"CODE"}')]
         expired = SignInRoute('fixture-client', self.exchange, monotonic=clock)
         self.assertEqual(expired.request('POST', AUTH_HOST, USERCODE, 'application/json',
-                                         b'{"client_id":"fixture-client"}')[0], 403)
-        self.exchange.assert_not_called()
+                                         b'{"client_id":"fixture-client"}')[0], 200)
+        clock.return_value = 70
+        self.assertEqual(expired.request('POST', AUTH_HOST, POLL, 'application/json',
+                                         b'{"device_auth_id":"device","user_code":"CODE"}')[0], 403)
+        self.exchange.assert_called_once()
+
+    def test_long_window_starts_at_first_valid_request_and_expires_at_boundary(self):
+        clock = Mock(return_value=100)
+        self.exchange.side_effect = [(200, b'{"device_auth_id":"device","user_code":"CODE"}'),
+                                     (403, b'{}')]
+        self.route = SignInRoute('fixture-client', self.exchange, monotonic=clock,
+                                 window_seconds=480, max_polls=180)
+        clock.return_value = 1200
+        self.assertEqual(self.request(USERCODE, {'client_id':'wrong'})[0], 403)
+        clock.return_value = 1300
+        self.assertEqual(self.request(USERCODE, {'client_id':'fixture-client'})[0], 200)
+        fields = {'device_auth_id':'device','user_code':'CODE'}
+        clock.return_value = 1779
+        self.assertEqual(self.request(POLL, fields)[0], 403)  # Mock's pending response
+        clock.return_value = 1780
+        self.assertEqual(self.request(POLL, fields)[0], 403)  # Refused before transport
+        self.assertEqual(self.exchange.call_count, 2)
+
+    def test_poll_cap_closes_before_next_upstream_request(self):
+        self.exchange.side_effect = [(200, b'{"device_auth_id":"device","user_code":"CODE"}'),
+                                     (403, b'{}'), (404, b'{}')]
+        self.route = SignInRoute('fixture-client', self.exchange, window_seconds=480, max_polls=2)
+        self.assertEqual(self.request(USERCODE, {'client_id':'fixture-client'})[0], 200)
+        fields = {'device_auth_id':'device','user_code':'CODE'}
+        self.assertEqual(self.request(POLL, fields)[0], 403)
+        self.assertEqual(self.request(POLL, fields)[0], 404)
+        self.assertEqual(self.request(POLL, fields)[0], 403)
+        self.assertEqual(self.exchange.call_count, 3)
