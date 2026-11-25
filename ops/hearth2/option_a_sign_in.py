@@ -52,18 +52,23 @@ class SignInRoute:
     """A single device authorization, with no tunneling or alternate origin."""
 
     def __init__(self, client_id, exchange, *, window_seconds=60, max_polls=20,
-                 monotonic=time.monotonic):
+                 idle_seconds=None, accept_tokens=None, monotonic=time.monotonic):
         if type(client_id) is not str or not client_id or len(client_id) > 128:
             raise ValueError('fixed OAuth client ID required')
         if (type(window_seconds) is not int or not 1 <= window_seconds <= 900
                 or type(max_polls) is not int or not 1 <= max_polls <= 600):
             raise ValueError('bounded device authentication policy required')
+        if idle_seconds is not None and (type(idle_seconds) is not int or not 1 <= idle_seconds <= 60):
+            raise ValueError('bounded idle timeout required')
         self._client_id = client_id
         self._exchange = exchange
         self._monotonic = monotonic
         self._window = window_seconds
         self._max_polls = max_polls
         self._deadline = None
+        self._idle_deadline = None if idle_seconds is None else monotonic() + idle_seconds
+        self._idle_expired = False
+        self._accept_tokens = accept_tokens
         self._lock = threading.Lock()
         self._stage = 'initial'
         self._device = None
@@ -77,6 +82,16 @@ class SignInRoute:
     def close(self):
         with self._lock:
             self._close()
+
+    def _expire_idle(self, now):
+        if self._stage == 'initial' and self._idle_deadline is not None and now >= self._idle_deadline:
+            self._idle_expired = True
+            self._close()
+        return self._idle_expired
+
+    def expire_idle(self):
+        with self._lock:
+            return self._expire_idle(self._monotonic())
 
     def _allowed(self, path, fields):
         if self._stage == 'initial' and path == USERCODE:
@@ -101,6 +116,8 @@ class SignInRoute:
             return DENIED
         with self._lock:
             now = self._monotonic()
+            if self._expire_idle(now):
+                return DENIED
             if self._deadline is not None and now >= self._deadline:
                 self._close()
                 return DENIED
@@ -132,6 +149,8 @@ class SignInRoute:
                     self._device = None
                     self._stage = 'exchange'
                 else:
+                    if self._accept_tokens is not None and self._accept_tokens(response) is not True:
+                        raise ValueError('sign-in binding refused')
                     _values(response, 'id_token', 'access_token', 'refresh_token')
                     self._close()
                 return status, result

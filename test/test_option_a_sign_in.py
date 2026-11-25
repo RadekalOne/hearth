@@ -111,3 +111,24 @@ class SignInTests(unittest.TestCase):
         self.assertEqual(self.request(POLL, fields)[0], 404)
         self.assertEqual(self.request(POLL, fields)[0], 403)
         self.assertEqual(self.exchange.call_count, 3)
+
+    def test_idle_window_starts_at_activation_and_ignores_invalid_request(self):
+        clock = Mock(return_value=10)
+        self.route = SignInRoute('fixture-client', self.exchange, monotonic=clock,
+                                 idle_seconds=30, window_seconds=480, max_polls=180)
+        clock.return_value = 39
+        self.assertEqual(self.request(USERCODE, {'client_id':'invalid'})[0], 403)
+        self.assertFalse(self.route.expire_idle())
+        clock.return_value = 40
+        self.assertTrue(self.route.expire_idle())
+        self.assertEqual(self.request(USERCODE, {'client_id':'fixture-client'})[0], 403)
+        self.exchange.assert_not_called()
+
+    def test_first_code_switches_from_idle_to_sign_in_window(self):
+        clock = Mock(return_value=10)
+        self.route = SignInRoute('fixture-client', self.exchange, monotonic=clock,
+                                 idle_seconds=30, window_seconds=480, max_polls=180)
+        clock.return_value = 39
+        self.assertEqual(self.request(USERCODE, {'client_id':'fixture-client'})[0], 200)
+        clock.return_value = 40
+        self.assertFalse(self.route.expire_idle())

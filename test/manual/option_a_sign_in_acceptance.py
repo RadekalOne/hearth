@@ -12,11 +12,11 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
+from unittest.mock import patch
 
 from option_a_sign_in import AUTH_HOST, EXCHANGE, POLL, USERCODE, SignInRoute, loopback_tls_server
 from option_a_live_sign_in import (
-    CLIENT_ID, MAX_POLLS, WINDOW_SECONDS, UnixSignInPort, login_command, private_sign_in_socket,
-    login_status_command,
+    CLIENT_ID, UnixSignInPort, live_sign_in_socket, login_status_command, private_sign_in_socket,
 )
 
 
@@ -55,6 +55,18 @@ def run():
         probe.settimeout(.5)
         assert probe.connect_ex(('192.0.2.1', 443)) != 0
 
+    idle_calls = []
+    idle = SignInRoute(CLIENT_ID, lambda *args: idle_calls.append(args), idle_seconds=1)
+    with tempfile.TemporaryDirectory(dir='/tmp') as private:
+        with private_sign_in_socket(idle, Path(private)) as expired:
+            end = time.monotonic() + 4
+            while expired.exists() and time.monotonic() < end:
+                time.sleep(.05)
+            assert not expired.exists()
+            assert UnixSignInPort(expired).request(
+                'POST', AUTH_HOST, USERCODE, 'application/json', b'{}')[0] == 502
+        assert not idle_calls
+
     forwarded = []
     token = _fake_token()
     replies = {
@@ -88,7 +100,6 @@ def run():
             finally:
                 conn.close()
 
-        route = SignInRoute(CLIENT_ID, exchange, window_seconds=WINDOW_SECONDS, max_polls=MAX_POLLS)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain('/fixture/tls/server.pem', '/fixture/tls/server.key')
         client = ssl.create_default_context(cafile='/fixture/tls/ca.pem')
@@ -103,7 +114,8 @@ def run():
                 conn.close()
 
         with tempfile.TemporaryDirectory(dir='/tmp') as home, tempfile.TemporaryDirectory(dir='/tmp') as private:
-            with private_sign_in_socket(route, Path(private)) as path:
+            with patch('option_a_live_sign_in.OpenAIAuthTransport', return_value=exchange), \
+                    live_sign_in_socket(Path(private), WORKSPACE, 'fixture@example.test') as (path, command):
                 port = UnixSignInPort(path)
                 assert port.request('POST', AUTH_HOST, '/backend-api/codex/responses',
                                     'application/json', b'{}')[0] == 403
@@ -125,7 +137,7 @@ def run():
                     env = {'HOME':home, 'CODEX_HOME':home, 'PATH':'/usr/bin:/bin',
                            'CODEX_CA_CERTIFICATE':'/fixture/tls/ca.pem',
                            'SSL_CERT_FILE':'/fixture/tls/ca.pem'}
-                    login = subprocess.run(login_command(WORKSPACE),env=env,
+                    login = subprocess.run(command,env=env,
                                            capture_output=True,text=True,timeout=16)
                     if login.returncode:
                         raise AssertionError(f'pinned fixture login failed (exit {login.returncode}; paths={forwarded})')
@@ -139,6 +151,12 @@ def run():
                                     capture_output=True, text=True, timeout=8)
             assert status.returncode == 0 and 'chatgpt' in (status.stdout + status.stderr).lower()
             assert forwarded == [USERCODE, POLL, EXCHANGE]
+            receipt_path = Path(private, 'sign-in-receipt.json')
+            receipt = receipt_path.read_text(encoding='utf-8')
+            assert receipt_path.stat().st_mode & 0o777 == 0o600
+            assert json.loads(receipt)['workspace_binding'] == 'matched'
+            assert all(secret not in receipt for secret in (WORKSPACE, 'fixture@example.test', token, 'TEST-CODE'))
+        print('Unused Unix route closed on idle without sending a request.')
         print('Pinned sign-in passed through TLS and the Unix gate with fake credentials.')
         print('After both listeners closed, Codex login status passed on the same home with network disabled.')
         print('Exactly three auth requests reached the mock. Model, alternate, tunneling and fallback probes reached none.')
